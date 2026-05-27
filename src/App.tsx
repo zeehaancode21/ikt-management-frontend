@@ -36,7 +36,7 @@ function App() {
   return (
     <AuthProvider>
       <WebSocketProvider>
-        <BrowserRouter basename="/work-weaver">
+      <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<Navigate to="/login" replace />} />
