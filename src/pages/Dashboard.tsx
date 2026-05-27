@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // ─── API CONFIG ──────────────────────────────────────────────────────────────
-const API_BASE = "http://localhost:8080";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 // const API_BASE = `http://${window.location.hostname}:8080`;
 // Helper to get token from localStorage
 const getToken = () => localStorage.getItem("token");
