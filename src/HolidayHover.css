@@ -1,0 +1,276 @@
+/* ===== HOLIDAY BUTTON ===== */
+
+.holiday-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.holiday-trigger:hover {
+  transform: scale(1.05);
+}
+
+.holiday-logo {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+  border-radius: 12px;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.12));
+}
+
+/* ===== OVERLAY ===== */
+
+.holiday-overlay {
+  position: fixed;
+  inset: 0;
+
+  background: rgba(15, 23, 42, 0.45);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  z-index: 99999;
+  padding: 20px;
+
+  backdrop-filter: blur(4px);
+}
+
+/* ===== MODAL ===== */
+
+.holiday-modal {
+  width: 100%;
+  max-width: 760px;
+
+  background: #ffffff;
+
+  border-radius: 24px;
+
+  overflow: hidden;
+
+  box-shadow:
+    0 20px 45px rgba(0, 0, 0, 0.18);
+
+  animation: modalShow 0.25s ease;
+}
+
+/* ===== HEADER ===== */
+
+.holiday-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 22px 26px;
+
+  border-bottom: 1px solid #e5e7eb;
+
+  background: #f8fafc;
+}
+
+.holiday-header h2 {
+  margin: 0;
+
+  font-size: 1.4rem;
+  font-weight: 700;
+
+  color: #0f172a;
+}
+
+/* ===== CLOSE BUTTON ===== */
+
+.close-btn {
+  width: 40px;
+  height: 40px;
+
+  border: none;
+  border-radius: 999px;
+
+  background: #e0e7ff;
+
+  color: #1d4ed8;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+
+  transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+  background: #c7d2fe;
+  transform: rotate(90deg);
+}
+
+/* ===== BODY ===== */
+
+.holiday-body {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+/* ===== HOLIDAY ITEM ===== */
+
+.holiday-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 18px;
+
+  padding: 20px 26px;
+
+  border-bottom: 1px solid #f1f5f9;
+
+  transition: background 0.2s ease;
+}
+
+.holiday-item:hover {
+  background: #f8fafc;
+}
+
+/* ===== INFO ===== */
+
+.holiday-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  min-width: 0;
+}
+
+.holiday-info strong {
+  font-size: 1rem;
+  font-weight: 700;
+
+  color: #111827;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.holiday-info p {
+  margin: 0;
+
+  font-size: 0.85rem;
+  font-weight: 500;
+
+  color: #64748b;
+}
+
+/* ===== DATE BADGE ===== */
+
+.holiday-item span {
+  flex-shrink: 0;
+
+  min-width: 150px;
+
+  padding: 10px 16px;
+
+  border-radius: 999px;
+
+  background: #2563eb;
+
+  color: #ffffff;
+
+  font-size: 0.9rem;
+  font-weight: 700;
+
+  text-align: center;
+}
+
+/* ===== LOADING ===== */
+
+.loading-text {
+  padding: 30px;
+  text-align: center;
+
+  font-size: 1rem;
+  font-weight: 600;
+
+  color: #2563eb;
+}
+
+/* ===== EMPTY ===== */
+
+.empty-text {
+  padding: 40px 20px;
+
+  text-align: center;
+
+  color: #64748b;
+
+  font-size: 0.95rem;
+}
+
+/* ===== SCROLLBAR ===== */
+
+.holiday-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.holiday-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+.holiday-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ===== ANIMATION ===== */
+
+@keyframes modalShow {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ===== RESPONSIVE ===== */
+
+@media (max-width: 640px) {
+  .holiday-modal {
+    max-width: 100%;
+    border-radius: 18px;
+  }
+
+  .holiday-header {
+    padding: 18px;
+  }
+
+  .holiday-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .holiday-item {
+    padding: 16px 18px;
+    gap: 12px;
+  }
+
+  .holiday-item span {
+    min-width: 110px;
+
+    font-size: 0.75rem;
+
+    padding: 8px 10px;
+  }
+
+  .holiday-info strong {
+    font-size: 0.9rem;
+  }
+
+  .holiday-info p {
+    font-size: 0.72rem;
+  }
+}
