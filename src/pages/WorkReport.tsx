@@ -825,7 +825,7 @@ const EmployeeView = () => {
                   className="w-36 h-8 text-sm border-slate-200 focus:border-indigo-400 focus:ring-indigo-100"
                   value={date}
                   onChange={(e) => handleDateChange(e.target.value)}
-                  min={today}
+                  max={today}
                 />
               </div>
             </div>
