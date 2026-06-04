@@ -6,7 +6,8 @@ import NotificationBell from "./NotificationBell";
 
 export const AppLayout = () => {
   const location = useLocation();
-  const { name } = useAuth();
+  const user = useAuth(); 
+  const isOwner = user?.role === "OWNER"; 
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -21,7 +22,7 @@ export const AppLayout = () => {
 
         {/* HEADER */}
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background px-6">
-          <h1 className="text-sm font-semibold">Welcome, {name || "User"} 👋</h1>
+          <h1 className="text-sm font-semibold">Welcome, {user?.name || "User"} 👋</h1>
 
           <div className="flex items-center gap-4">
             {location.pathname.includes("leave") && (
@@ -30,7 +31,7 @@ export const AppLayout = () => {
             {location.pathname.includes("progress") && (
               <HolidayHover showOnlyBell={true} />
             )}
-            <NotificationBell />
+            {!isOwner && <NotificationBell />}
           </div>
         </header>
 
