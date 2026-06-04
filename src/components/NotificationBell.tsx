@@ -18,7 +18,7 @@ export default function NotificationBell() {
   // Only fetch UNREAD notifications
   const fetchNotifications = async () => {
     try {
-      const res = await api.get<Notification[]>("/notifications/announcements?unread=true");
+      const res = await api.get<Notification[]>("/notifications/announcements");
       setNotifications(res.data);
     } catch {
       // silently ignore
