@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
-  base: "/ikt-management-frontend/",
+  base: "/",
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   define: {
     // sockjs-client references Node's `global`; this polyfills it for the browser
