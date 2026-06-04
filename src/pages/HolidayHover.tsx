@@ -170,7 +170,7 @@ const HolidayHover = ({
           <img
             src={
               window.location.origin +
-              "/work-weaver/holidays.png"
+              "/holidays.png"
             }
             alt="Holiday"
             className="holiday-logo"
