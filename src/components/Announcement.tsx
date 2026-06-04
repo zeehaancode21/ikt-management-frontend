@@ -73,7 +73,7 @@ export default function Announcements() {
 
   const fmt = (d: string) => {
     try {
-      const date = new Date(d);
+      const date = new Date(d.endsWith("Z") ? d : d + "Z");
       return date.toLocaleString([], {
         month: "short",
         day: "numeric",
@@ -88,7 +88,7 @@ export default function Announcements() {
 
   const fmtRelative = (d: string) => {
     try {
-      const date = new Date(d);
+      const date = new Date(d.endsWith("Z") ? d : d + "Z");
       const now = new Date();
       const diffMs = now.getTime() - date.getTime();
       const diffMins = Math.floor(diffMs / 60000);

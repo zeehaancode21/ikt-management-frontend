@@ -18,7 +18,7 @@ export default function NotificationBell() {
   // Only fetch UNREAD notifications
   const fetchNotifications = async () => {
     try {
-      const res = await api.get<Notification[]>("/notifications");
+      const res = await api.get<Notification[]>("/notifications/announcements?unread=true");
       setNotifications(res.data);
     } catch {
       // silently ignore
@@ -66,7 +66,7 @@ export default function NotificationBell() {
 
   const fmt = (d: string) => {
     try {
-      const date = new Date(d);
+      const date = new Date(d.endsWith("Z") ? d : d + "Z");
       const now = new Date();
       const diffMs = now.getTime() - date.getTime();
       const diffMins = Math.floor(diffMs / 60000);
