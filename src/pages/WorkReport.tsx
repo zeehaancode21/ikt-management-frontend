@@ -38,6 +38,7 @@ import {
   Tag,
   FileText,
   GraduationCap,
+  Pencil,
 } from "lucide-react";
 
 /* ─── Types ─────────────────────────────────────────────── */
@@ -291,6 +292,15 @@ const animationStyles = `
     border-radius: 4px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+  /* ── Edit mode banner ── */
+  @keyframes editBannerIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .edit-mode-banner {
+    animation: editBannerIn 0.22s ease-out forwards;
+  }
 `;
 
 if (typeof document !== "undefined") {
@@ -302,79 +312,6 @@ if (typeof document !== "undefined") {
     document.head.appendChild(s);
   }
 }
-
-/* =========================================================
-   Compact Conflict Dialog
-========================================================= */
-const ConflictDialog = ({
-  open,
-  onClose,
-  date,
-}: {
-  open: boolean;
-  onClose: () => void;
-  date: string;
-}) => {
-  useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [open]);
-
-  if (!open) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="conflict-dialog-title"
-    >
-      <div
-        className="absolute inset-0 bg-black/20 backdrop-blur-sm animate-backdrop"
-        onClick={onClose}
-      />
-      <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full mx-4 animate-conflict-modal overflow-hidden"
-        style={{ maxWidth: 380 }}
-      >
-        <div className="h-[3px] bg-gradient-to-r from-amber-400 to-rose-400 rounded-t-2xl" />
-        <div className="p-5">
-          <div className="flex items-start gap-3">
-            <div className="bg-amber-50 border border-amber-100 rounded-xl p-2 flex-shrink-0 subtle-pulse">
-              <AlertCircle className="h-5 w-5 text-amber-500" />
-            </div>
-            <div className="flex-1">
-              <h3
-                id="conflict-dialog-title"
-                className="text-sm font-semibold text-slate-900 mb-1"
-              >
-                Date Already Submitted
-              </h3>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                A report already exists for{" "}
-                <span className="font-semibold text-amber-700">
-                  {date ? fmt(date) : "this date"}
-                </span>
-                .
-              </p>
-              <p className="text-xs text-slate-400 mt-1">
-                Please choose a different date or contact your manager.
-              </p>
-            </div>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <button
-              onClick={onClose}
-              className="px-4 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all duration-150 btn-hover-scale"
-            >
-              Got it
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 /* =========================================================
    Date Detail Modal
@@ -531,14 +468,14 @@ const DateDetailModal = ({
 /* =========================================================
    EMPLOYEE VIEW
 ========================================================= */
-/* =========================================================
-   EMPLOYEE VIEW
-========================================================= */
 const EmployeeView = () => {
   const today = format(new Date(), "yyyy-MM-dd");
 
   const [date, setDate] = useState("");
   const [entries, setEntries] = useState<WorkEntry[]>([createEntry()]);
+
+  // ── Edit mode state ──
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const [clients, setClients] = useState<string[]>([]);
   const [projectsCache, setProjectsCache] = useState<Record<string, string[]>>({});
@@ -547,9 +484,6 @@ const EmployeeView = () => {
   const [reports, setReports] = useState<Report[]>([]);
   const [loadingReports, setLoadingReports] = useState(true);
   const [reportsError, setReportsError] = useState<string | null>(null);
-
-  const [conflictOpen, setConflictOpen] = useState(false);
-  const [conflictDate, setConflictDate] = useState("");
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailDate, setDetailDate] = useState("");
@@ -571,7 +505,6 @@ const EmployeeView = () => {
     acc[k].push(r);
     return acc;
   }, {});
-  // Fixed: Changed to ascending order (oldest first)
   const groupedDates = Object.keys(reportsByDate).sort((a, b) => a.localeCompare(b));
 
   // Helper function to check if work type requires client/project
@@ -586,7 +519,6 @@ const EmployeeView = () => {
       .get<{ success: boolean; data: string[] }>("/project-status")
       .then(({ data }) => {
         if (!cancelled) {
-          // Ensure we access the nested data array and check success flag
           const clientsArray = data?.success && Array.isArray(data?.data) ? data.data : [];
           setClients(clientsArray);
           setClientsError(false);
@@ -596,7 +528,7 @@ const EmployeeView = () => {
         if (!cancelled) {
           console.error("Failed to load clients:", err);
           setClientsError(true);
-          setClients([]); // Set to empty array on error
+          setClients([]);
           toast({ title: "Failed to load clients", description: "Please refresh the page.", variant: "destructive" });
         }
       });
@@ -621,7 +553,7 @@ const EmployeeView = () => {
     } catch (err) {
       setReportsError(getErrorMessage(err));
       setDate((prevDate) => prevDate || today);
-      setReports([]); // Set to empty array on error
+      setReports([]);
     } finally {
       setLoadingReports(false);
     }
@@ -633,73 +565,80 @@ const EmployeeView = () => {
   const fetchProjects = useCallback(
     async (client: string) => {
       if (!client || projectsCache[client] !== undefined) return;
-  
-      setLoadingProjects((prev) => ({
-        ...prev,
-        [client]: true,
-      }));
-  
+
+      setLoadingProjects((prev) => ({ ...prev, [client]: true }));
+
       try {
-        const response = await api.get<{
-          success: boolean;
-          data: string[];
-        }>(
+        const response = await api.get<{ success: boolean; data: string[] }>(
           `/project-status/client/${encodeURIComponent(client)}`
         );
-  
         const projectsArray: string[] = response.data.data || [];
-  
-        setProjectsCache((prev) => ({
-          ...prev,
-          [client]: projectsArray,
-        }));
-  
+        setProjectsCache((prev) => ({ ...prev, [client]: projectsArray }));
       } catch (error) {
-  
-        setProjectsCache((prev) => ({
-          ...prev,
-          [client]: [],
-        }));
-  
+        setProjectsCache((prev) => ({ ...prev, [client]: [] }));
         toast({
           title: "Failed to load projects",
           description: `Could not load projects for ${client}.`,
           variant: "destructive",
         });
-  
       } finally {
-  
-        setLoadingProjects((prev) => ({
-          ...prev,
-          [client]: false,
-        }));
+        setLoadingProjects((prev) => ({ ...prev, [client]: false }));
       }
     },
     [projectsCache]
   );
 
-  /* Date picker */
+  /* ── Date picker — now supports edit mode ── */
   const handleDateChange = (newDate: string) => {
     if (!newDate) return;
-    const conflict = reports.some((r) => toDateKey(r.date) === newDate);
-    if (conflict) {
-      setConflictDate(newDate);
-      setConflictOpen(true);
-      return;
+
+    const existingReports = reports.filter((r) => toDateKey(r.date) === newDate);
+
+    if (existingReports.length > 0) {
+      // Enter edit mode: pre-fill entries from existing reports
+      setIsEditMode(true);
+      const loadedEntries: WorkEntry[] = existingReports.map((r) => ({
+        localId: String(r.id),
+        client: r.client ?? "",
+        project: r.project ?? "",
+        workType: r.workType ?? "",
+        time: String(r.time ?? ""),
+        description: r.description ?? "",
+      }));
+      setEntries(loadedEntries);
+
+      // Pre-fetch projects for all clients present in existing entries
+      const uniqueClients = [...new Set(existingReports.map((r) => r.client).filter(Boolean))];
+      uniqueClients.forEach((c) => fetchProjects(c));
+
+      toast({
+        title: "Edit Mode",
+        description: `Editing existing report for ${fmt(newDate)}.`,
+        className: "bg-amber-500 text-white border-none text-xs",
+        duration: 2000,
+      });
+    } else {
+      // New date — reset to fresh entry
+      setIsEditMode(false);
+      setEntries([createEntry()]);
+      toast({
+        title: "Date Selected",
+        description: format(new Date(newDate), "MMMM d, yyyy"),
+        className: "bg-emerald-500 text-white border-none text-xs",
+        duration: 1500,
+      });
     }
+
     setDate(newDate);
     setHasInteracted(true);
-    toast({
-      title: "Date Selected",
-      description: format(new Date(newDate), "MMMM d, yyyy"),
-      className: "bg-emerald-500 text-white border-none text-xs",
-      duration: 1500,
-    });
   };
 
-  const handleConflictClose = () => {
-    setConflictOpen(false);
-    setConflictDate("");
+  /* ── Cancel edit mode ── */
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+    setEntries([createEntry()]);
+    setDate("");
+    setHasInteracted(false);
   };
 
   /* Entry helpers */
@@ -711,7 +650,6 @@ const EmployeeView = () => {
         const updated = { ...e, [field]: value };
         if (field === "client") { updated.project = ""; fetchProjects(value); }
         if (field === "workType" && isClientProjectOptional(value as WorkType)) {
-          // Clear client and project when training or practicing is selected
           updated.client = "";
           updated.project = "";
         }
@@ -734,25 +672,18 @@ const EmployeeView = () => {
     setEntries((prev) => prev.filter((e) => e.localId !== localId));
   };
 
-  /* Submit */
+  /* ── Submit / Update ── */
   const handleFinalSubmit = async () => {
     if (!date) {
       toast({ title: "No Date Selected", description: "Please pick a date first.", variant: "destructive" });
       return;
     }
-    if (reports.some((r) => toDateKey(r.date) === date)) {
-      setConflictDate(date);
-      setConflictOpen(true);
-      return;
-    }
 
     // Check for incomplete entries
     const incompleteEntry = entries.find((e) => {
-      // For training or practicing, client and project are optional
       if (isClientProjectOptional(e.workType)) {
         return !e.workType || !e.time || !e.description.trim();
       }
-      // For other work types, all fields are required
       return !e.client || !e.project || !e.workType || !e.time || !e.description.trim();
     });
 
@@ -770,24 +701,38 @@ const EmployeeView = () => {
     setSubmitting(true);
     try {
       const payload = entries.map((e) => ({
-        date,
         client: isClientProjectOptional(e.workType) ? e.workType : e.client,
         project: isClientProjectOptional(e.workType) ? `${e.workType} Activity` : e.project,
         workType: e.workType,
         time: parseFloat(e.time),
         description: e.description.trim(),
       }));
-      await api.post("/reports/submit", payload);
-      toast({
-        title: "Submitted Successfully!",
-        description: `${entries.length} record(s) saved for ${fmt(date)}.`,
-        className: "bg-emerald-500 text-white border-none text-xs animate-success-bounce",
-      });
+
+      if (isEditMode) {
+        // ── UPDATE existing report ──
+        // Adjust the endpoint below to match your backend route
+        await api.put(`/reports/update/${date}`, payload);
+        toast({
+          title: "Report Updated!",
+          description: `${entries.length} record(s) updated for ${fmt(date)}.`,
+          className: "bg-amber-500 text-white border-none text-xs animate-success-bounce",
+        });
+      } else {
+        // ── CREATE new report ──
+        await api.post("/reports/submit", payload);
+        toast({
+          title: "Submitted Successfully!",
+          description: `${entries.length} record(s) saved for ${fmt(date)}.`,
+          className: "bg-emerald-500 text-white border-none text-xs animate-success-bounce",
+        });
+      }
+
+      setIsEditMode(false);
       setEntries([createEntry()]);
       setHasInteracted(false);
       await loadReports();
     } catch (err) {
-      toast({ title: "Submission Failed", description: getErrorMessage(err) || "An unexpected error occurred.", variant: "destructive" });
+      toast({ title: isEditMode ? "Update Failed" : "Submission Failed", description: getErrorMessage(err) || "An unexpected error occurred.", variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
@@ -805,14 +750,58 @@ const EmployeeView = () => {
       >
         <div className="space-y-5">
 
-          {/* ══ Submit Form ══ */}
-          <section className="rounded-2xl border border-slate-200/80 bg-white/90 backdrop-blur-sm p-5 shadow-sm card-hover">
+          {/* ══ Submit / Edit Form ══ */}
+          <section
+            className={`rounded-2xl border bg-white/90 backdrop-blur-sm p-5 shadow-sm card-hover transition-colors duration-300 ${
+              isEditMode
+                ? "border-amber-300/80 ring-1 ring-amber-200/60"
+                : "border-slate-200/80"
+            }`}
+          >
+            {/* ── Edit mode banner ── */}
+            {isEditMode && (
+              <div className="edit-mode-banner mb-4 flex items-center justify-between gap-3 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 bg-amber-100 rounded-lg">
+                    <Pencil className="h-3 w-3 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-amber-800">Edit Mode</p>
+                    <p className="text-[10px] text-amber-600">
+                      Editing report for{" "}
+                      <span className="font-bold">{date ? fmt(date) : "selected date"}</span>.
+                      Changes will replace the existing entries.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCancelEdit}
+                  className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold text-amber-700 hover:text-rose-600 bg-white border border-amber-200 hover:border-rose-200 rounded-lg transition-all duration-150 btn-hover-scale flex-shrink-0"
+                >
+                  <XCircle className="h-3 w-3" />
+                  Cancel
+                </button>
+              </div>
+            )}
+
             <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
               <div className="flex items-center gap-2.5 animate-fade-in-up">
-                <div className="p-1.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-sm">
-                  <Calendar className="h-4 w-4 text-white" />
+                <div
+                  className={`p-1.5 rounded-xl shadow-sm ${
+                    isEditMode
+                      ? "bg-gradient-to-br from-amber-500 to-orange-500"
+                      : "bg-gradient-to-br from-indigo-500 to-purple-600"
+                  }`}
+                >
+                  {isEditMode ? (
+                    <Pencil className="h-4 w-4 text-white" />
+                  ) : (
+                    <Calendar className="h-4 w-4 text-white" />
+                  )}
                 </div>
-                <h2 className="text-base font-semibold text-slate-800">Submit Work Report</h2>
+                <h2 className="text-base font-semibold text-slate-800">
+                  {isEditMode ? "Edit Work Report" : "Submit Work Report"}
+                </h2>
               </div>
 
               <div className="space-y-0.5 animate-fade-in-up" style={{ animationDelay: "0.08s" }}>
@@ -822,7 +811,11 @@ const EmployeeView = () => {
                 <Input
                   id="date"
                   type="date"
-                  className="w-36 h-8 text-sm border-slate-200 focus:border-indigo-400 focus:ring-indigo-100"
+                  className={`w-36 h-8 text-sm focus:ring-indigo-100 ${
+                    isEditMode
+                      ? "border-amber-300 focus:border-amber-400"
+                      : "border-slate-200 focus:border-indigo-400"
+                  }`}
                   value={date}
                   onChange={(e) => handleDateChange(e.target.value)}
                   max={today}
@@ -830,7 +823,7 @@ const EmployeeView = () => {
               </div>
             </div>
 
-            {/* Progress bar - now just informational */}
+            {/* Progress bar */}
             {showProgress && (
               <div className="mb-4 rounded-xl bg-slate-50 p-3 border border-slate-100/80 animate-fade-in-up">
                 <div className="flex items-center justify-between mb-2">
@@ -846,12 +839,13 @@ const EmployeeView = () => {
                 </div>
                 <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden mb-2">
                   <div
-                    className="progress-bar-fill h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"
+                    className={`progress-bar-fill h-full rounded-full ${
+                      isEditMode
+                        ? "bg-gradient-to-r from-amber-400 to-orange-400"
+                        : "bg-gradient-to-r from-indigo-500 to-purple-500"
+                    }`}
                     style={{ width: `${progressPercent}%` }}
                   />
-                </div>
-                <div className="text-[10px] text-slate-500">
-                  {/* <span>You can submit with any number of hours</span> */}
                 </div>
               </div>
             )}
@@ -884,31 +878,31 @@ const EmployeeView = () => {
                         style={{ animationDelay: `${index * 0.04}s` }}
                       >
                         <TableCell className="py-1.5">
-                        <Select
-  value={entry.client}
-  onValueChange={(v) => updateEntry(entry.localId, "client", v)}
-  disabled={isOptional}
->
-  <SelectTrigger className={`h-7 text-xs border-slate-200 focus:border-indigo-400 ${isOptional ? "bg-slate-50" : ""}`}>
-    <SelectValue placeholder={isOptional ? "Not required" : (clientsError ? "Error" : "Select client")} />
-  </SelectTrigger>
-  <SelectContent 
-    side="top" 
-    align="start" 
-    sideOffset={4}
-    className="max-h-[320px] overflow-y-auto"
-  >
-    {safeClients.length === 0 && !clientsError ? (
-      <SelectItem value="loading" disabled>Loading clients...</SelectItem>
-    ) : (
-      safeClients.map((c) => (
-        <SelectItem key={c} value={c} className="text-xs py-1.5">
-          {c}
-        </SelectItem>
-      ))
-    )}
-  </SelectContent>
-</Select>
+                          <Select
+                            value={entry.client}
+                            onValueChange={(v) => updateEntry(entry.localId, "client", v)}
+                            disabled={isOptional}
+                          >
+                            <SelectTrigger className={`h-7 text-xs border-slate-200 focus:border-indigo-400 ${isOptional ? "bg-slate-50" : ""}`}>
+                              <SelectValue placeholder={isOptional ? "Not required" : (clientsError ? "Error" : "Select client")} />
+                            </SelectTrigger>
+                            <SelectContent
+                              side="top"
+                              align="start"
+                              sideOffset={4}
+                              className="max-h-[320px] overflow-y-auto"
+                            >
+                              {safeClients.length === 0 && !clientsError ? (
+                                <SelectItem value="loading" disabled>Loading clients...</SelectItem>
+                              ) : (
+                                safeClients.map((c) => (
+                                  <SelectItem key={c} value={c} className="text-xs py-1.5">
+                                    {c}
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell className="py-1.5">
                           <Select
@@ -1015,12 +1009,20 @@ const EmployeeView = () => {
                 onClick={handleFinalSubmit}
                 disabled={submitting || !date}
                 size="sm"
-                className="gap-1.5 h-7 text-xs bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-sm hover:shadow-indigo-200 btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150"
+                className={`gap-1.5 h-7 text-xs shadow-sm btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 ${
+                  isEditMode
+                    ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 hover:shadow-amber-200"
+                    : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 hover:shadow-indigo-200"
+                }`}
               >
                 {submitting ? (
                   <>
                     <div className="h-2.5 w-2.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Submitting…
+                    {isEditMode ? "Updating…" : "Submitting…"}
+                  </>
+                ) : isEditMode ? (
+                  <>
+                    <Pencil className="h-3 w-3" /> Update Report
                   </>
                 ) : (
                   <>
@@ -1076,7 +1078,7 @@ const EmployeeView = () => {
                       <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Entries</TableHead>
                       <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total Time</TableHead>
                       <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Work Types</TableHead>
-                      <TableHead className="w-20 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Details</TableHead>
+                      <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1084,10 +1086,11 @@ const EmployeeView = () => {
                       const dayReports = reportsByDate[dk] || [];
                       const totalTime = dayReports.reduce((s, r) => s + (r.time || 0), 0);
                       const uniqueTypes = [...new Set(dayReports.map((r) => r.workType))];
+                      const isCurrentlyEditing = isEditMode && date === dk;
                       return (
                         <TableRow
                           key={dk}
-                          className="entry-row table-row-animate"
+                          className={`entry-row table-row-animate ${isCurrentlyEditing ? "bg-amber-50/60" : ""}`}
                           style={{ animationDelay: `${index * 0.04}s` }}
                         >
                           <TableCell className="text-xs font-semibold text-slate-700 whitespace-nowrap">
@@ -1117,16 +1120,34 @@ const EmployeeView = () => {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-6 px-2 text-[10px] gap-1 text-indigo-600 border-indigo-100 hover:bg-indigo-50 hover:border-indigo-300 transition-all btn-hover-scale"
-                              onClick={() => { setDetailDate(dk); setDetailOpen(true); }}
-                            >
-                              <Eye className="h-3 w-3" />
-                              View
-                            </Button>
+                            <div className="flex items-center gap-1.5">
+                              {/* View button */}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-2 text-[10px] gap-1 text-indigo-600 border-indigo-100 hover:bg-indigo-50 hover:border-indigo-300 transition-all btn-hover-scale"
+                                onClick={() => { setDetailDate(dk); setDetailOpen(true); }}
+                              >
+                                <Eye className="h-3 w-3" />
+                                View
+                              </Button>
+                              {/* Edit button */}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className={`h-6 px-2 text-[10px] gap-1 transition-all btn-hover-scale ${
+                                  isCurrentlyEditing
+                                    ? "text-amber-700 border-amber-300 bg-amber-50"
+                                    : "text-amber-600 border-amber-100 hover:bg-amber-50 hover:border-amber-300"
+                                }`}
+                                onClick={() => handleDateChange(dk)}
+                              >
+                                <Pencil className="h-3 w-3" />
+                                {isCurrentlyEditing ? "Editing…" : "Edit"}
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -1139,7 +1160,6 @@ const EmployeeView = () => {
         </div>
       </div>
 
-      <ConflictDialog open={conflictOpen} onClose={handleConflictClose} date={conflictDate} />
       <DateDetailModal
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
@@ -1177,7 +1197,6 @@ const OwnerView = () => {
     return () => { cancelled = true; };
   }, []);
 
-  // Fixed: Changed to ascending order (oldest first)
   const uniqueDates = [
     ...new Set(reports.map((r) => toDateKey(r.date))),
   ].sort((a, b) => a.localeCompare(b));
