@@ -110,18 +110,20 @@ const createEntry = (): WorkEntry => ({
 });
 
 const fmt = (d: string) => {
+  if (!d) return "No date";
   try {
     return format(new Date(d), "MMM d, yyyy");
   } catch {
-    return d;
+    return "Invalid date";
   }
 };
 
 const toDateKey = (d: string) => {
+  if (!d) return "no-date";
   try {
     return format(new Date(d), "yyyy-MM-dd");
   } catch {
-    return d.toString().slice(0, 10);
+    return "invalid-date";
   }
 };
 
@@ -500,6 +502,7 @@ const EmployeeView = () => {
   const showProgress = hasInteracted && (hasAnyData || totalHours > 0);
 
   const reportsByDate = reports.reduce<Record<string, Report[]>>((acc, r) => {
+    if (!r.date) return acc; // Skip reports without date
     const k = toDateKey(r.date);
     if (!acc[k]) acc[k] = [];
     acc[k].push(r);
@@ -541,7 +544,9 @@ const EmployeeView = () => {
     setReportsError(null);
     try {
       const { data } = await api.get<Report[]>("/reports/my");
-      const reportsData = Array.isArray(data) ? data : [];
+      const reportsData = Array.isArray(data) 
+        ? data.filter(report => report.date && report.date.trim() !== '') // Filter out reports without date
+        : [];
       setReports(reportsData);
       const todayTaken = reportsData.some((r) => toDateKey(r.date) === today);
       setDate((prevDate) => {
@@ -706,11 +711,11 @@ const EmployeeView = () => {
         workType: e.workType,
         time: parseFloat(e.time),
         description: e.description.trim(),
+        date: date, // Include date in the payload
       }));
 
       if (isEditMode) {
         // ── UPDATE existing report ──
-        // Adjust the endpoint below to match your backend route
         await api.put(`/reports/update/${date}`, payload);
         toast({
           title: "Report Updated!",
@@ -1177,6 +1182,7 @@ const OwnerView = () => {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [missingDatesCount, setMissingDatesCount] = useState(0);
 
   const [filterDate, setFilterDate] = useState<string>("all");
   const [filterEmployee, setFilterEmployee] = useState<string>("all");
@@ -1187,7 +1193,21 @@ const OwnerView = () => {
       try {
         const { data } = await api.get<Report[]>("/reports/all");
         const reportsData = Array.isArray(data) ? data : [];
-        if (!cancelled) { setReports(reportsData); setError(null); }
+        
+        // Count reports with missing dates
+        const missingCount = reportsData.filter(r => !r.date).length;
+        setMissingDatesCount(missingCount);
+        
+        // Process reports: assign default date to those without one
+        const processedReports = reportsData.map(report => ({
+          ...report,
+          date: report.date || new Date().toISOString().split('T')[0] // Use today's date as fallback
+        }));
+        
+        if (!cancelled) { 
+          setReports(processedReports); 
+          setError(null); 
+        }
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err));
       } finally {
@@ -1197,6 +1217,7 @@ const OwnerView = () => {
     return () => { cancelled = true; };
   }, []);
 
+  // Now all reports have dates, so we can safely process them
   const uniqueDates = [
     ...new Set(reports.map((r) => toDateKey(r.date))),
   ].sort((a, b) => a.localeCompare(b));
@@ -1227,6 +1248,19 @@ const OwnerView = () => {
       }}
     >
       <section className="rounded-2xl border border-slate-200/80 bg-white/90 p-5 shadow-sm card-hover">
+        {/* Warning for missing dates */}
+        {missingDatesCount > 0 && (
+          <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 p-3 animate-fade-in-up">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <p className="text-xs text-amber-700">
+                Warning: {missingDatesCount} report(s) are missing dates and have been assigned today's date.
+                Please update these reports with correct dates.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center gap-2.5 mb-4 animate-fade-in-up">
           <div className="p-1.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-sm">
@@ -1372,6 +1406,7 @@ const OwnerView = () => {
                   >
                     <TableCell className="text-xs whitespace-nowrap font-medium text-slate-700">
                       {fmt(r.date)}
+                      {!r.date && <span className="ml-1 text-[8px] text-amber-500">(auto-assigned)</span>}
                     </TableCell>
                     <TableCell className="text-xs font-semibold text-indigo-600">
                       {r.employeeName || "—"}

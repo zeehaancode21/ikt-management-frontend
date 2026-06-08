@@ -12,6 +12,7 @@ import {
   RefreshCw,
   X,
   ArrowLeft,
+  AlertTriangle,
 } from 'lucide-react';
 
 // ─── Types matching backend entities ────────────────────────────────────────
@@ -38,46 +39,181 @@ interface FolderItem {
   documents: DocumentMeta[];
 }
 
-// ─── API base — Spring Boot runs on /  (no /api prefix) ─────────────────────
-// If your backend is on a different origin, set this e.g. "http://localhost:8080"
-// ─── API base — Spring Boot runs on /  (no /api prefix) ─────────────────────
+// ─── Delete Confirmation Modal ───────────────────────────────────────────────
+
+interface DeleteConfirmModalProps {
+  isOpen: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+  title: string;
+  description: string;
+  itemName: string;
+  type: 'folder' | 'document';
+}
+
+const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
+  isOpen,
+  onConfirm,
+  onCancel,
+  title,
+  description,
+  itemName,
+  type,
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <>
+      <style>{`
+        @keyframes backdropFadeIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        @keyframes modalSlideIn {
+          from { opacity: 0; transform: scale(0.92) translateY(16px); }
+          to   { opacity: 1; transform: scale(1)    translateY(0);    }
+        }
+        .delete-backdrop {
+          animation: backdropFadeIn 0.2s ease forwards;
+        }
+        .delete-modal {
+          animation: modalSlideIn 0.25s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+        }
+        .delete-btn-confirm {
+          position: relative;
+          overflow: hidden;
+          transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+        }
+        .delete-btn-confirm:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 20px rgba(220, 38, 38, 0.35);
+        }
+        .delete-btn-confirm:active { transform: translateY(0); }
+        .delete-btn-cancel {
+          transition: background 0.15s, transform 0.1s;
+        }
+        .delete-btn-cancel:hover { transform: translateY(-1px); }
+        .delete-btn-cancel:active { transform: translateY(0); }
+      `}</style>
+
+      {/* Backdrop */}
+      <div
+        className="delete-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ backgroundColor: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(6px)' }}
+        onClick={onCancel}
+      >
+        {/* Modal */}
+        <div
+          className="delete-modal bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+          style={{ border: '1px solid rgba(220, 38, 38, 0.12)' }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Top accent stripe */}
+          <div style={{ height: 4, background: 'linear-gradient(90deg, #dc2626, #f87171, #fca5a5)' }} />
+
+          <div className="p-6">
+            {/* Icon + heading */}
+            <div className="flex items-start gap-4 mb-5">
+              <div
+                className="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-xl"
+                style={{ background: 'linear-gradient(135deg, #fff1f2, #ffe4e6)', border: '1px solid #fecaca' }}
+              >
+                <AlertTriangle className="w-6 h-6" style={{ color: '#dc2626' }} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 leading-tight">{title}</h3>
+                <p className="text-sm text-gray-500 mt-0.5">{description}</p>
+              </div>
+            </div>
+
+            {/* Item name pill */}
+            <div
+              className="flex items-center gap-2.5 px-4 py-3 rounded-xl mb-5"
+              style={{ background: '#fafafa', border: '1px solid #f0f0f0' }}
+            >
+              {type === 'folder' ? (
+                <Folder className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+              ) : (
+                <File className="w-4 h-4 text-blue-400 flex-shrink-0" />
+              )}
+              <span className="text-sm font-semibold text-gray-800 truncate">{itemName}</span>
+            </div>
+
+            {/* Warning note */}
+            <div
+              className="flex items-start gap-2 px-3 py-2.5 rounded-lg mb-6"
+              style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}
+            >
+              <span className="text-orange-400 text-sm mt-0.5 flex-shrink-0">⚠</span>
+              <p className="text-xs text-orange-700 leading-relaxed">
+                {type === 'folder'
+                  ? 'All documents inside this folder will be permanently removed. This action cannot be undone.'
+                  : 'This document will be permanently removed. This action cannot be undone.'}
+              </p>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={onCancel}
+                className="delete-btn-cancel flex-1 py-2.5 px-4 rounded-xl text-sm font-semibold text-gray-600"
+                style={{ background: '#f4f4f5', border: '1px solid #e4e4e7' }}
+              >
+                Keep it
+              </button>
+              <button
+                onClick={onConfirm}
+                className="delete-btn-confirm flex-1 py-2.5 px-4 rounded-xl text-sm font-bold text-white"
+                style={{ background: 'linear-gradient(135deg, #dc2626, #b91c1c)' }}
+              >
+                Yes, delete
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+// ─── API base ────────────────────────────────────────────────────────────────
 const API = 'http://localhost:8080';
 
-// Helper to get auth token (adjust based on where you store your token)
-const getAuthToken = () => {
-  return localStorage.getItem('token'); // or sessionStorage.getItem('token')
+const getAuthToken = () => localStorage.getItem('token');
+
+// Get current user - you can modify this based on your auth implementation
+const getCurrentUser = () => {
+  // Option 1: Get from localStorage if you store user info
+  const userId = localStorage.getItem('userId');
+  if (userId) return userId;
+  
+  // Option 2: Get from JWT token if it contains user info
+  const token = getAuthToken();
+  if (token) {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.userId || payload.sub || 'anonymous';
+    } catch (e) {
+      console.error('Failed to parse token', e);
+    }
+  }
+  
+  // Default fallback - you might want to redirect to login instead
+  return 'anonymous';
 };
 
 async function apiFetch(path: string, options?: RequestInit) {
   const token = getAuthToken();
-  
-  const headers: HeadersInit = {
-    ...(options?.headers || {}),
-  };
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  
-  // Don't set Content-Type for FormData (browser will set it with boundary)
-  if (!(options?.body instanceof FormData)) {
-    headers['Content-Type'] = 'application/json';
-  }
-  
-  const res = await fetch(`${API}${path}`, {
-    ...options,
-    headers,
-  });
-  
+  const headers: HeadersInit = { ...(options?.headers || {}) };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (!(options?.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+
+  const res = await fetch(`${API}${path}`, { ...options, headers });
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
-    try { 
-      const j = await res.json(); 
-      msg = j.error ?? j.message ?? msg; 
-    } catch {}
+    try { const j = await res.json(); msg = j.error ?? j.message ?? msg; } catch {}
     throw new Error(msg);
   }
-  // 204 No Content → return null
   if (res.status === 204) return null;
   return res.json();
 }
@@ -98,14 +234,23 @@ const DocumentManager: React.FC = () => {
   const [renameValue, setRenameValue] = useState('');
   const [uploadingFiles, setUploadingFiles] = useState<string[]>([]);
 
+  // ── Delete confirmation state ──────────────────────────────────────────────
+  const [deleteModal, setDeleteModal] = useState<{
+    open: boolean;
+    type: 'folder' | 'document';
+    id: number;
+    parentId?: number;   // folderId when deleting a document
+    name: string;
+  } | null>(null);
+
   // ── Load all folders ────────────────────────────────────────────────────────
   const loadFolders = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const data: FolderItem[] = await apiFetch('/folders');
+      const userId = getCurrentUser();
+      const data: FolderItem[] = await apiFetch(`/folders/${userId}`);
       setFolders(Array.isArray(data) ? data : []);
-      // Refresh currentFolder if we're inside one
       if (currentFolder) {
         const updated = (Array.isArray(data) ? data : []).find(f => f.id === currentFolder.id);
         setCurrentFolder(updated ?? null);
@@ -124,9 +269,9 @@ const DocumentManager: React.FC = () => {
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
     try {
-      const created: FolderItem = await apiFetch('/folders', {
+      const userId = getCurrentUser();
+      const created: FolderItem = await apiFetch(`/folders`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newFolderName.trim(), description: newFolderDesc.trim() }),
       });
       setFolders(prev => [created, ...prev]);
@@ -142,9 +287,9 @@ const DocumentManager: React.FC = () => {
   const handleRenameFolder = async (id: number, newName: string) => {
     if (!newName.trim()) { setRenamingId(null); return; }
     try {
+      const userId = getCurrentUser();
       const updated: FolderItem = await apiFetch(`/folders/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName.trim() }),
       });
       setFolders(prev => prev.map(f => f.id === id ? { ...f, name: updated.name } : f));
@@ -156,19 +301,39 @@ const DocumentManager: React.FC = () => {
     }
   };
 
-  // ── Delete folder ───────────────────────────────────────────────────────────
-  const handleDeleteFolder = async (id: number) => {
-    if (!window.confirm('Delete this folder and all its documents?')) return;
+  // ── Delete folder — open modal ──────────────────────────────────────────────
+  const handleDeleteFolder = (id: number, name: string) => {
+    setDeleteModal({ open: true, type: 'folder', id, name });
+  };
+
+  // ── Delete document — open modal ────────────────────────────────────────────
+  const handleDeleteDocument = (folderId: number, docId: number, name: string) => {
+    setDeleteModal({ open: true, type: 'document', id: docId, parentId: folderId, name });
+  };
+
+  // ── Confirm deletion (handles both folder & document) ──────────────────────
+  const handleConfirmDelete = async () => {
+    if (!deleteModal) return;
     try {
-      await apiFetch(`/folders/${id}`, { method: 'DELETE' });
-      setFolders(prev => prev.filter(f => f.id !== id));
-      if (currentFolder?.id === id) setCurrentFolder(null);
+      const userId = getCurrentUser();
+      if (deleteModal.type === 'folder') {
+        await apiFetch(`/folders/${deleteModal.id}`, { method: 'DELETE' });
+        setFolders(prev => prev.filter(f => f.id !== deleteModal.id));
+        if (currentFolder?.id === deleteModal.id) setCurrentFolder(null);
+      } else {
+        await apiFetch(`/folders/${userId}/${deleteModal.parentId}/documents/${deleteModal.id}`, { method: 'DELETE' });
+        setCurrentFolder(prev =>
+          prev ? { ...prev, documents: prev.documents.filter(d => d.id !== deleteModal.id) } : prev
+        );
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete folder');
+      setError(err instanceof Error ? err.message : 'Failed to delete');
+    } finally {
+      setDeleteModal(null);
     }
   };
 
-  // ── Upload document to current folder ──────────────────────────────────────
+  // ── Upload document ─────────────────────────────────────────────────────────
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!currentFolder) { setError('Please open a folder before uploading.'); return; }
     const fileList = event.target.files;
@@ -178,14 +343,12 @@ const DocumentManager: React.FC = () => {
       setUploadingFiles(prev => [...prev, file.name]);
       const formData = new FormData();
       formData.append('file', file);
-      // description is optional; omit or add UI as needed
-
       try {
-        const saved: DocumentMeta = await apiFetch(`/folders/${currentFolder.id}/documents`, {
+        const userId = getCurrentUser();
+        const saved: DocumentMeta = await apiFetch(`/folders/${userId}/${currentFolder.id}/documents`, {
           method: 'POST',
           body: formData,
         });
-        // Add doc to currentFolder state
         setCurrentFolder(prev =>
           prev ? { ...prev, documents: [saved, ...(prev.documents ?? [])] } : prev
         );
@@ -198,23 +361,15 @@ const DocumentManager: React.FC = () => {
     event.target.value = '';
   };
 
-  // ── Delete document ─────────────────────────────────────────────────────────
-  const handleDeleteDocument = async (folderId: number, docId: number) => {
-    if (!window.confirm('Delete this document?')) return;
-    try {
-      await apiFetch(`/folders/${folderId}/documents/${docId}`, { method: 'DELETE' });
-      setCurrentFolder(prev =>
-        prev ? { ...prev, documents: prev.documents.filter(d => d.id !== docId) } : prev
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete document');
-    }
-  };
-
   // ── Download document ───────────────────────────────────────────────────────
   const handleDownload = async (folderId: number, doc: DocumentMeta) => {
     try {
-      const res = await fetch(`${API}/folders/${folderId}/documents/${doc.id}/download`);
+      const userId = getCurrentUser();
+      const res = await fetch(`${API}/folders/${userId}/${folderId}/documents/${doc.id}/download`, {
+        headers: {
+          'Authorization': `Bearer ${getAuthToken()}`
+        }
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -225,7 +380,7 @@ const DocumentManager: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-    } catch (err) {
+    } catch {
       setError('Failed to download file');
     }
   };
@@ -261,6 +416,23 @@ const DocumentManager: React.FC = () => {
 
   return (
     <div className="container mx-auto p-6 max-w-6xl">
+
+      {/* ── Delete Confirmation Modal ─────────────────────────────────────────── */}
+      {deleteModal && (
+        <DeleteConfirmModal
+          isOpen={deleteModal.open}
+          type={deleteModal.type}
+          itemName={deleteModal.name}
+          title={deleteModal.type === 'folder' ? 'Delete Folder?' : 'Delete Document?'}
+          description={
+            deleteModal.type === 'folder'
+              ? "You're about to permanently delete this folder."
+              : "You're about to permanently delete this file."
+          }
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setDeleteModal(null)}
+        />
+      )}
 
       {/* Error banner */}
       {error && (
@@ -360,7 +532,6 @@ const DocumentManager: React.FC = () => {
                 >
                   <div className="flex items-start justify-between mb-3">
                     <Folder className="w-10 h-10 text-yellow-400" />
-                    {/* Action buttons — visible on hover */}
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                       <button
                         onClick={() => { setRenamingId(folder.id); setRenameValue(folder.name); }}
@@ -370,7 +541,7 @@ const DocumentManager: React.FC = () => {
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => handleDeleteFolder(folder.id)}
+                        onClick={() => handleDeleteFolder(folder.id, folder.name)}
                         className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
                         title="Delete"
                       >
@@ -410,10 +581,9 @@ const DocumentManager: React.FC = () => {
         </>
       )}
 
-      {/* ── DOCUMENT LIST VIEW (inside a folder) ─────────────────────────────── */}
+      {/* ── DOCUMENT LIST VIEW ───────────────────────────────────────────────── */}
       {currentFolder && (
         <>
-          {/* Uploading indicators */}
           {uploadingFiles.length > 0 && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-blue-700 text-sm font-medium mb-1">Uploading…</p>
@@ -493,7 +663,7 @@ const DocumentManager: React.FC = () => {
                             <Download className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDeleteDocument(currentFolder.id, doc.id)}
+                            onClick={() => handleDeleteDocument(currentFolder.id, doc.id, doc.originalFileName || doc.fileName)}
                             className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
                             title="Delete"
                           >
@@ -538,7 +708,9 @@ const DocumentManager: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description <span className="text-gray-400 font-normal">(optional)</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
                 <input
                   type="text"
                   value={newFolderDesc}
