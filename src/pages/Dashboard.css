@@ -1,64 +1,8 @@
 /* Dashboard.css */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* All visual styling is handled inside Dashboard.jsx via the inline <style> tag. */
+/* This file only keeps safe globals that won't conflict. */
 
-body {
-  font-family: 'Inter', sans-serif;
-  margin: 0;
-}
-
-.glass-card {
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
-}
-
-.glass-card:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-/* Smooth scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: rgba(255,255,255,0.1);
-  border-radius: 10px;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.3);
-  border-radius: 10px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.5);
-}
-
-/* Table styling */
-table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-table th, table td {
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-input, select {
-  background: white;
-  border: 1px solid #d1d5db;
-  transition: border-color 0.2s;
-}
-input:focus, select:focus {
-  outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99,102,241,0.2);
-}
-
-/* Modal backdrop */
+/* Modal backdrop fade-in */
 .fixed.inset-0 {
   animation: fadeIn 0.2s ease;
 }

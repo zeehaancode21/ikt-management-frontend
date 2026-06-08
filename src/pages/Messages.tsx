@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useWebSocket } from "@/context/WebSocketContext";
-import { Send, Search, Users, Megaphone, Hash } from "lucide-react";
+import { Send, Search, Users, Megaphone, Hash, ArrowLeft } from "lucide-react";
 
 interface Message {
   id: number;
@@ -13,14 +13,13 @@ interface Message {
   sentAt: string;
 }
 
-// Broadcast interface updated to match your backend response
 interface Broadcast {
   id: number;
-  targetUsername: string;  // Changed from senderUsername
+  targetUsername: string;
   content: string;
   type: string;
   read: boolean;
-  createdAt: string;       // Changed from sentAt
+  createdAt: string;
 }
 
 interface UserEntry {
@@ -32,11 +31,7 @@ interface UserEntry {
 type ChatTarget = { type: "user"; username: string } | { type: "broadcast" };
 
 // ─── Timestamp helpers ───────────────────────────────────────────────────────
-// Always parse as UTC so the browser's local offset doesn't silently shift the time.
 function parseUTC(raw: string): Date {
-  // ISO strings already end in Z or +00:00 — new Date() handles them correctly.
-  // Plain "yyyy-MM-dd HH:mm:ss" from some backends lacks a timezone marker, so
-  // we normalise those by appending Z before parsing.
   if (!raw) return new Date(NaN);
   const normalised = /Z$|[+-]\d{2}:\d{2}$/.test(raw) ? raw : raw.replace(" ", "T") + "Z";
   return new Date(normalised);
@@ -80,12 +75,13 @@ export default function Messages() {
   const [users, setUsers] = useState<UserEntry[]>([]);
   const [chatTarget, setChatTarget] = useState<ChatTarget | null>(null);
   const [conversation, setConversation] = useState<Message[]>([]);
-  // Broadcasts are stored separately so they don't pollute the DM conversation state
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [inboxMap, setInboxMap] = useState<Record<string, Message>>({});
   const [search, setSearch] = useState("");
+  // Track whether we're showing chat panel on mobile (true) or sidebar (false)
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -97,7 +93,7 @@ export default function Messages() {
       .catch(() => {});
   }, [name]);
 
-  // ── Fetch inbox (latest message per user) ───────────────────────────────────
+  // ── Fetch inbox ─────────────────────────────────────────────────────────────
   const fetchInbox = useCallback(async () => {
     try {
       const res = await api.get<Message[]>("/messages/inbox");
@@ -118,11 +114,10 @@ export default function Messages() {
     fetchInbox();
   }, [fetchInbox]);
 
-  // ── Fetch broadcast history when owner opens "Everyone" ──────────────────────
+  // ── Fetch broadcast history ──────────────────────────────────────────────────
   const fetchBroadcasts = useCallback(async () => {
     try {
       const res = await api.get<Broadcast[]>("/notifications/announcements");
-      // Sort by createdAt (ascending) and map targetUsername to senderUsername for display
       const sorted = [...res.data].sort(
         (a, b) => parseUTC(a.createdAt).getTime() - parseUTC(b.createdAt).getTime()
       );
@@ -138,26 +133,22 @@ export default function Messages() {
     }
   }, [chatTarget, role, fetchBroadcasts]);
 
-  // ── WebSocket: real-time messages ───────────────────────────────────────────
+  // ── WebSocket ───────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!connected || !name) return;
 
     const unsubscribe = subscribe(`/user/queue/messages`, (newMsg: Message) => {
-      // Update conversation if this message belongs to the current chat
       if (
         chatTarget?.type === "user" &&
         (newMsg.senderUsername === chatTarget.username ||
           newMsg.receiverUsername === chatTarget.username)
       ) {
         setConversation((prev) => {
-          // Deduplicate by id — prevents double-rendering when the sender's optimistic
-          // message is confirmed by the server via the WebSocket echo.
           if (prev.some((m) => m.id === newMsg.id)) return prev;
           return [...prev, newMsg];
         });
       }
 
-      // Always update the inbox preview
       const other =
         newMsg.senderUsername === name ? newMsg.receiverUsername : newMsg.senderUsername;
       setInboxMap((prev) => {
@@ -170,14 +161,13 @@ export default function Messages() {
     return () => unsubscribe();
   }, [connected, name, chatTarget, subscribe]);
 
-  // ── Fetch DM conversation when a user is selected ──────────────────────────
+  // ── Fetch DM conversation ───────────────────────────────────────────────────
   const fetchConversation = useCallback(async () => {
     if (!chatTarget || chatTarget.type !== "user") return;
     try {
       const res = await api.get<Message[]>(
         `/messages/conversation/${chatTarget.username}`
       );
-      // Sort ascending so the thread renders oldest → newest
       const sorted = [...res.data].sort(
         (a, b) => parseUTC(a.sentAt).getTime() - parseUTC(b.sentAt).getTime()
       );
@@ -203,14 +193,12 @@ export default function Messages() {
     if (!newMessage.trim() || sending) return;
     const content = newMessage.trim();
 
-    // Broadcast
     if (chatTarget?.type === "broadcast") {
       if (role !== "OWNER") return;
       setSending(true);
       setNewMessage("");
       try {
         await api.post("/notifications/broadcast", { content });
-        // Refresh history so the new entry appears immediately
         await fetchBroadcasts();
       } catch {}
       setSending(false);
@@ -220,7 +208,6 @@ export default function Messages() {
     if (!chatTarget || chatTarget.type !== "user") return;
     setSending(true);
 
-    // Optimistic update — use a negative temp id so it never clashes with real ids
     const tempId = -(Date.now());
     const optimistic: Message = {
       id: tempId,
@@ -238,7 +225,6 @@ export default function Messages() {
         receiverUsername: chatTarget.username,
         content,
       });
-      // Replace the optimistic entry with the confirmed server message
       setConversation((prev) =>
         prev.map((m) => (m.id === tempId ? res.data : m))
       );
@@ -255,6 +241,17 @@ export default function Messages() {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  // Open a chat target and switch to chat panel on mobile
+  const openChat = (target: ChatTarget) => {
+    setChatTarget(target);
+    setMobileChatOpen(true);
+  };
+
+  // Go back to sidebar on mobile
+  const handleBack = () => {
+    setMobileChatOpen(false);
   };
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -463,18 +460,56 @@ export default function Messages() {
           font-size: 13px; color: #92400e;
           display: flex; align-items: center; gap: 8px;
         }
-          @media (max-width: 640px) {
-  .msg-sidebar {
-    width: 100%;
-    border-right: none;
-    border-bottom: 1px solid hsl(var(--border));
-  }
-  .msg-main {
-    flex-direction: column;
-  }
-  .msg-sidebar.has-chat { display: none; }
-  .msg-chat.no-chat { display: none; }
-}
+
+        /* ── Back button (mobile only) ── */
+        .msg-back-btn {
+          display: none;
+          align-items: center; justify-content: center;
+          width: 32px; height: 32px; border-radius: 8px; border: none;
+          background: hsl(var(--muted)); color: hsl(var(--foreground));
+          cursor: pointer; flex-shrink: 0;
+          transition: background 0.15s;
+        }
+        .msg-back-btn:hover { background: hsl(var(--accent)); }
+
+        /* ── Mobile layout ── */
+        @media (max-width: 640px) {
+          .msg-main { position: relative; overflow: hidden; }
+
+          /* Sidebar: full width, slides out left when chat is open */
+          .msg-sidebar {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            border-right: none;
+            z-index: 1;
+            transform: translateX(0);
+            transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+          }
+          .msg-sidebar.mobile-hidden {
+            transform: translateX(-100%);
+            pointer-events: none;
+          }
+
+          /* Chat: full width, slides in from right when open */
+          .msg-chat {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            z-index: 2;
+            transform: translateX(100%);
+            transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+          }
+          .msg-chat.mobile-visible {
+            transform: translateX(0);
+          }
+
+          /* Show back button on mobile */
+          .msg-back-btn { display: flex; }
+
+          /* Bubbles: allow slightly wider on narrow screens */
+          .msg-bubble { max-width: 82%; }
+        }
       `}</style>
 
       {!connected && (
@@ -483,7 +518,7 @@ export default function Messages() {
 
       <div className="msg-main">
         {/* ── Sidebar ── */}
-        <div className="msg-sidebar">
+        <div className={`msg-sidebar${mobileChatOpen ? " mobile-hidden" : ""}`}>
           <div className="msg-sidebar-header">
             <div className="msg-sidebar-title">
               <span>Messages</span>
@@ -505,7 +540,7 @@ export default function Messages() {
                 <div className="msg-section-label">Channels</div>
                 <div
                   className={`msg-contact ${chatTarget?.type === "broadcast" ? "active" : ""}`}
-                  onClick={() => setChatTarget({ type: "broadcast" })}
+                  onClick={() => openChat({ type: "broadcast" })}
                 >
                   <div
                     className="msg-avatar msg-avatar-broadcast"
@@ -539,7 +574,7 @@ export default function Messages() {
                 <div
                   key={u.id}
                   className={`msg-contact ${isSelected ? "active" : ""}`}
-                  onClick={() => setChatTarget({ type: "user", username: u.username })}
+                  onClick={() => openChat({ type: "user", username: u.username })}
                 >
                   <div className="msg-avatar" style={{ background: bg }}>
                     {initials}
@@ -575,7 +610,7 @@ export default function Messages() {
         </div>
 
         {/* ── Chat area ── */}
-        <div className="msg-chat">
+        <div className={`msg-chat${mobileChatOpen ? " mobile-visible" : ""}`}>
           {!chatTarget ? (
             <div className="msg-empty">
               <div className="msg-empty-icon">
@@ -589,6 +624,10 @@ export default function Messages() {
             /* ─── BROADCAST CHANNEL ─── */
             <>
               <div className="msg-chat-header">
+                {/* Back button — mobile only */}
+                <button className="msg-back-btn" onClick={handleBack} aria-label="Back">
+                  <ArrowLeft size={16} />
+                </button>
                 <div
                   className="msg-avatar msg-avatar-broadcast"
                   style={{ background: "linear-gradient(135deg,#f59e0b,#ef4444)", width: 40, height: 40, borderRadius: 12 }}
@@ -606,7 +645,6 @@ export default function Messages() {
                 <span>Messages sent here are delivered as notifications to all team members.</span>
               </div>
 
-              {/* Show past broadcasts with proper timestamps */}
               <div className="msg-messages">
                 {broadcasts.length === 0 ? (
                   <div className="msg-empty" style={{ flex: 1 }}>
@@ -666,6 +704,10 @@ export default function Messages() {
             /* ─── DM CONVERSATION ─── */
             <>
               <div className="msg-chat-header">
+                {/* Back button — mobile only */}
+                <button className="msg-back-btn" onClick={handleBack} aria-label="Back">
+                  <ArrowLeft size={16} />
+                </button>
                 {(() => {
                   const { bg, initials } = getAvatar(chatTarget.username);
                   return (

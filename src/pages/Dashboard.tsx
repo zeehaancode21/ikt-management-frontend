@@ -105,12 +105,10 @@ const api = {
         "Content-Type": "application/json",
         ...authHeaders(),
       },
-      // Backend accepts an array of COs; wrap single item
       body: JSON.stringify([data]),
     });
     const json = await res.json();
     if (!json.success) throw new Error(json.error || "Failed to create change order");
-    // Backend returns array; return first item
     return Array.isArray(json.data) ? json.data[0] : json.data;
   },
   async updateChangeOrder(id, data) {
@@ -153,47 +151,64 @@ const EMPTY_CO = {
 
 // ─── STYLES ───────────────────────────────────────────────────────────────────
 const styles = `
-  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,300&family=DM+Mono:wght@400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --ink: #0a0a0f;
-    --ink-soft: #1a1a2e;
-    --surface: #0f0f1a;
-    --panel: rgba(255,255,255,0.04);
-    --panel-hover: rgba(255,255,255,0.07);
-    --border: rgba(255,255,255,0.08);
-    --border-bright: rgba(255,255,255,0.18);
-    --gold: #d4a84b;
-    --gold-dim: rgba(212,168,75,0.15);
-    --gold-glow: rgba(212,168,75,0.4);
-    --teal: #2dd4bf;
-    --teal-dim: rgba(45,212,191,0.12);
-    --rose: #f43f5e;
-    --rose-dim: rgba(244,63,94,0.12);
-    --text: #e8e8f0;
-    --text-muted: #8888a0;
-    --text-dim: #555570;
-    --green: #22c55e;
-    --green-dim: rgba(34,197,94,0.12);
-    --amber: #f59e0b;
-    --amber-dim: rgba(245,158,11,0.12);
-    --radius: 12px;
-    --radius-lg: 18px;
-    --shadow: 0 8px 40px rgba(0,0,0,0.5);
-    --shadow-gold: 0 0 30px rgba(212,168,75,0.15);
+    /* Core palette — warm slate / professional */
+    --bg:          #f4f3f0;
+    --bg-alt:      #eeede9;
+    --surface:     #ffffff;
+    --surface-2:   #f9f8f6;
+    --border:      #e2e0db;
+    --border-dark: #ccc9c2;
+
+    /* Brand accent — deep indigo with warm copper */
+    --indigo:      #3d4f7c;
+    --indigo-dark: #2a3659;
+    --indigo-dim:  rgba(61,79,124,0.08);
+    --indigo-glow: rgba(61,79,124,0.18);
+    --copper:      #b5732a;
+    --copper-dim:  rgba(181,115,42,0.10);
+    --copper-light:#d4924e;
+
+    /* Semantic */
+    --green:       #1e7b4b;
+    --green-dim:   rgba(30,123,75,0.10);
+    --amber:       #b45309;
+    --amber-dim:   rgba(180,83,9,0.10);
+    --rose:        #b91c3a;
+    --rose-dim:    rgba(185,28,58,0.10);
+    --teal:        #0f7175;
+    --teal-dim:    rgba(15,113,117,0.10);
+
+    /* Text */
+    --text:        #1a1917;
+    --text-soft:   #4a4845;
+    --text-muted:  #8a8780;
+    --text-dim:    #b8b5ae;
+
+    --radius:      10px;
+    --radius-lg:   16px;
+    --shadow-sm:   0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow:      0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
+    --shadow-lg:   0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
   }
 
-  body { background: var(--ink); font-family: 'DM Sans', sans-serif; color: var(--text); }
+  body {
+    background: var(--bg);
+    font-family: 'Outfit', sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
 
   .dash-root {
     min-height: 100vh;
     background:
-      radial-gradient(ellipse 80% 50% at 20% -10%, rgba(212,168,75,0.07) 0%, transparent 60%),
-      radial-gradient(ellipse 60% 40% at 80% 110%, rgba(45,212,191,0.05) 0%, transparent 60%),
-      var(--ink);
-    padding: 0;
+      radial-gradient(ellipse 70% 40% at 0% 0%, rgba(61,79,124,0.05) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 30% at 100% 100%, rgba(181,115,42,0.06) 0%, transparent 60%),
+      var(--bg);
     overflow-x: hidden;
   }
 
@@ -201,170 +216,197 @@ const styles = `
   .topbar {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 20px 40px;
+    gap: 14px;
+    padding: 0 40px;
+    height: 62px;
     border-bottom: 1px solid var(--border);
-    background: rgba(10,10,15,0.8);
-    backdrop-filter: blur(20px);
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     position: sticky;
     top: 0;
     z-index: 100;
+    box-shadow: var(--shadow-sm);
   }
   .topbar-logo {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.8rem;
-    letter-spacing: 0.12em;
-    color: var(--gold);
+    font-family: 'Playfair Display', serif;
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--indigo-dark);
     line-height: 1;
+    white-space: nowrap;
   }
-  .topbar-sep { width: 1px; height: 28px; background: var(--border-bright); }
+  .topbar-logo span {
+    color: var(--copper);
+  }
+  .topbar-sep { width: 1px; height: 22px; background: var(--border-dark); flex-shrink: 0; }
   .topbar-breadcrumb {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 0.82rem;
+    gap: 6px;
+    font-size: 0.78rem;
     color: var(--text-muted);
-    font-family: 'DM Mono', monospace;
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+    min-width: 0;
   }
-  .breadcrumb-item { cursor: pointer; transition: color .2s; }
-  .breadcrumb-item:hover { color: var(--gold); }
-  .breadcrumb-active { color: var(--text); }
-  .breadcrumb-sep { color: var(--text-dim); }
+  .breadcrumb-item {
+    cursor: pointer;
+    transition: color .2s;
+    white-space: nowrap;
+  }
+  .breadcrumb-item:hover { color: var(--indigo); }
+  .breadcrumb-active { color: var(--text-soft); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+  .breadcrumb-sep { color: var(--text-dim); flex-shrink: 0; }
 
   /* ── MAIN CONTENT ── */
   .dash-content {
-    padding: 48px 40px;
-    max-width: 1200px;
+    padding: 44px 40px;
+    max-width: 1160px;
     margin: 0 auto;
   }
 
   /* ── SECTION HEADER ── */
   .section-title {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 3rem;
-    letter-spacing: 0.08em;
+    font-family: 'Playfair Display', serif;
+    font-size: 2.2rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
     color: var(--text);
-    line-height: 1;
-    margin-bottom: 8px;
+    line-height: 1.15;
+    margin-bottom: 6px;
   }
   .section-subtitle {
-    font-size: 0.88rem;
+    font-size: 0.86rem;
     color: var(--text-muted);
-    font-weight: 300;
-    margin-bottom: 40px;
+    font-weight: 400;
+    margin-bottom: 32px;
   }
 
   /* ── YEAR GRID ── */
   .year-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
+    gap: 16px;
   }
-  @media (max-width: 700px) { .year-grid { grid-template-columns: repeat(2,1fr); } }
 
   .year-card {
     position: relative;
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 40px 24px;
+    padding: 36px 20px;
     cursor: pointer;
     overflow: hidden;
-    background: var(--panel);
-    transition: border-color .25s, background .25s;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    transition: border-color .25s, box-shadow .25s, transform .2s;
     text-align: center;
   }
   .year-card::before {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, var(--gold-dim), transparent 70%);
+    background: linear-gradient(135deg, var(--indigo-dim), transparent 70%);
     opacity: 0;
     transition: opacity .3s;
   }
-  .year-card:hover { border-color: var(--gold); background: rgba(212,168,75,0.04); }
+  .year-card:hover {
+    border-color: var(--indigo);
+    box-shadow: var(--shadow), 0 0 0 3px var(--indigo-glow);
+    transform: translateY(-2px);
+  }
   .year-card:hover::before { opacity: 1; }
   .year-card-num {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 4.5rem;
-    letter-spacing: 0.06em;
+    font-family: 'Playfair Display', serif;
+    font-size: 3.2rem;
+    font-weight: 700;
     color: var(--text);
     line-height: 1;
     position: relative;
     z-index: 1;
     transition: color .25s;
+    letter-spacing: -0.02em;
   }
-  .year-card:hover .year-card-num { color: var(--gold); }
+  .year-card:hover .year-card-num { color: var(--indigo); }
   .year-card-label {
     font-size: 0.72rem;
-    letter-spacing: 0.15em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-dim);
     margin-top: 8px;
     position: relative;
     z-index: 1;
     transition: color .25s;
+    font-family: 'JetBrains Mono', monospace;
   }
-  .year-card:hover .year-card-label { color: var(--gold); opacity: 0.7; }
+  .year-card:hover .year-card-label { color: var(--indigo); }
 
   /* ── CLIENT GRID ── */
   .client-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
   }
 
   .client-card {
     position: relative;
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 28px;
+    padding: 24px 22px;
     cursor: pointer;
-    background: var(--panel);
+    background: var(--surface);
     overflow: hidden;
-    transition: border-color .25s, background .25s, transform .2s;
+    box-shadow: var(--shadow-sm);
+    transition: border-color .25s, box-shadow .25s, transform .2s;
   }
   .client-card::after {
     content: '';
     position: absolute;
-    right: -20px; bottom: -20px;
-    width: 100px; height: 100px;
+    right: -16px; bottom: -16px;
+    width: 80px; height: 80px;
     border-radius: 50%;
     background: var(--teal-dim);
     transition: transform .35s;
   }
-  .client-card:hover { border-color: var(--teal); background: rgba(45,212,191,0.03); transform: translateY(-2px); }
-  .client-card:hover::after { transform: scale(2.5); }
+  .client-card:hover {
+    border-color: var(--teal);
+    box-shadow: var(--shadow), 0 0 0 3px rgba(15,113,117,0.12);
+    transform: translateY(-2px);
+  }
+  .client-card:hover::after { transform: scale(2.8); }
   .client-card-name {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.7rem;
-    letter-spacing: 0.06em;
+    font-family: 'Playfair Display', serif;
+    font-size: 1.3rem;
+    font-weight: 700;
     color: var(--text);
     position: relative; z-index: 1;
     transition: color .25s;
   }
   .client-card:hover .client-card-name { color: var(--teal); }
   .client-card-count {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     margin-top: 6px;
-    font-family: 'DM Mono', monospace;
+    font-family: 'JetBrains Mono', monospace;
     position: relative; z-index: 1;
   }
 
   /* ── PROJECT LIST ── */
-  .project-list { display: flex; flex-direction: column; gap: 12px; }
+  .project-list { display: flex; flex-direction: column; gap: 10px; }
 
   .project-card {
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 20px 24px;
+    padding: 18px 20px;
     cursor: pointer;
-    background: var(--panel);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    transition: border-color .2s, background .2s;
+    transition: border-color .2s, box-shadow .2s, transform .15s;
     position: relative;
     overflow: hidden;
   }
@@ -373,120 +415,140 @@ const styles = `
     position: absolute;
     left: 0; top: 0; bottom: 0;
     width: 3px;
-    background: var(--gold);
+    background: var(--copper);
     transform: scaleY(0);
     transition: transform .25s;
     transform-origin: bottom;
   }
-  .project-card:hover { border-color: rgba(212,168,75,0.3); background: var(--panel-hover); }
+  .project-card:hover {
+    border-color: var(--copper-light);
+    box-shadow: var(--shadow);
+    transform: translateX(2px);
+  }
   .project-card:hover::before { transform: scaleY(1); }
   .project-name {
-    font-weight: 500;
-    font-size: 1rem;
+    font-weight: 600;
+    font-size: 0.95rem;
     color: var(--text);
   }
   .project-meta {
     display: flex;
-    gap: 16px;
+    gap: 10px;
     align-items: center;
     flex-shrink: 0;
   }
   .project-job {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.78rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.73rem;
     color: var(--text-muted);
-    background: rgba(255,255,255,0.05);
+    background: var(--surface-2);
     border: 1px solid var(--border);
-    padding: 3px 10px;
+    padding: 3px 9px;
     border-radius: 6px;
   }
-  .project-arrow { color: var(--text-dim); font-size: 1.1rem; transition: transform .2s, color .2s; }
-  .project-card:hover .project-arrow { transform: translateX(4px); color: var(--gold); }
+  .project-arrow { color: var(--text-dim); font-size: 1rem; transition: transform .2s, color .2s; }
+  .project-card:hover .project-arrow { transform: translateX(4px); color: var(--copper); }
 
   /* ── MODAL OVERLAY ── */
   .modal-overlay {
     position: fixed; inset: 0; z-index: 200;
-    background: rgba(0,0,0,0.75);
-    backdrop-filter: blur(10px);
+    background: rgba(26,25,23,0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     display: flex; align-items: center; justify-content: center;
-    padding: 24px;
+    padding: 16px;
   }
   .modal-box {
-    background: #13131f;
-    border: 1px solid var(--border-bright);
+    background: var(--surface);
+    border: 1px solid var(--border-dark);
     border-radius: 20px;
     width: 100%;
-    max-width: 980px;
+    max-width: 960px;
     max-height: 90vh;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    box-shadow: var(--shadow), var(--shadow-gold);
+    box-shadow: var(--shadow-lg);
   }
   .modal-header {
-    padding: 24px 28px 0;
+    padding: 22px 26px 0;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    background: var(--surface-2);
   }
-  .modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.9rem; letter-spacing: 0.07em; color: var(--text); }
-  .modal-subtitle { font-size: 0.8rem; color: var(--text-muted); font-family: 'DM Mono', monospace; margin-top: 2px; margin-bottom: 16px; }
-  .modal-tabs { display: flex; gap: 4px; }
+  .modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.55rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+  .modal-subtitle {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 3px;
+    margin-bottom: 14px;
+  }
+  .modal-tabs { display: flex; gap: 2px; }
   .modal-tab {
-    padding: 10px 22px;
-    font-size: 0.8rem;
-    letter-spacing: 0.1em;
+    padding: 10px 20px;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    font-weight: 500;
+    font-weight: 600;
     border: none;
     background: transparent;
     color: var(--text-muted);
     cursor: pointer;
     border-bottom: 2px solid transparent;
     transition: color .2s, border-color .2s;
+    font-family: 'Outfit', sans-serif;
   }
-  .modal-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
-  .modal-tab:hover:not(.active) { color: var(--text); }
+  .modal-tab.active { color: var(--indigo); border-bottom-color: var(--indigo); }
+  .modal-tab:hover:not(.active) { color: var(--text-soft); }
   .modal-body {
     overflow-y: auto;
-    padding: 24px 28px;
+    padding: 22px 26px;
     flex: 1;
+    background: var(--surface);
   }
   .modal-close {
     position: absolute;
-    top: 20px; right: 24px;
-    width: 32px; height: 32px;
+    top: 18px; right: 22px;
+    width: 30px; height: 30px;
     border-radius: 50%;
-    border: 1px solid var(--border);
-    background: var(--panel);
+    border: 1px solid var(--border-dark);
+    background: var(--surface);
     color: var(--text-muted);
-    font-size: 1rem;
+    font-size: 0.9rem;
     cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    transition: background .2s, color .2s;
+    transition: background .2s, color .2s, border-color .2s;
     z-index: 10;
+    box-shadow: var(--shadow-sm);
   }
   .modal-close:hover { background: var(--rose-dim); color: var(--rose); border-color: var(--rose); }
 
   /* ── DETAIL GRID ── */
-  .detail-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-  @media (max-width: 700px) { .detail-grid { grid-template-columns: 1fr 1fr; } }
+  .detail-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 
   .detail-card {
-    background: var(--panel);
+    background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 16px;
+    padding: 14px 16px;
   }
   .detail-label {
-    font-size: 0.68rem;
-    letter-spacing: 0.15em;
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-dim);
-    margin-bottom: 6px;
-    font-family: 'DM Mono', monospace;
+    margin-bottom: 5px;
+    font-family: 'JetBrains Mono', monospace;
   }
   .detail-value {
-    font-size: 0.92rem;
+    font-size: 0.9rem;
     font-weight: 500;
     color: var(--text);
     white-space: pre-wrap;
@@ -499,123 +561,171 @@ const styles = `
   .edit-form { display: flex; flex-direction: column; gap: 14px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .form-row.three { grid-template-columns: 1fr 1fr 1fr; }
-  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
   .form-label {
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-muted);
-    font-family: 'DM Mono', monospace;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
   }
   .form-input, .form-textarea, .form-select {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid var(--border);
+    background: var(--surface-2);
+    border: 1px solid var(--border-dark);
     border-radius: 8px;
     color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.88rem;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.87rem;
     padding: 9px 12px;
     outline: none;
-    transition: border-color .2s, background .2s;
+    transition: border-color .2s, box-shadow .2s;
     width: 100%;
   }
   .form-input:focus, .form-textarea:focus, .form-select:focus {
-    border-color: var(--gold);
-    background: rgba(212,168,75,0.04);
+    border-color: var(--indigo);
+    box-shadow: 0 0 0 3px var(--indigo-dim);
   }
   .form-textarea { resize: vertical; min-height: 80px; }
-  .form-select option { background: #1a1a2e; color: var(--text); }
+  .form-select option { background: var(--surface); color: var(--text); }
 
   /* ── FORM ACTIONS ── */
-  .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
 
   /* ── BUTTONS ── */
   .btn {
-    padding: 9px 20px;
+    padding: 9px 18px;
     border-radius: 8px;
     border: none;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Outfit', sans-serif;
     font-size: 0.82rem;
-    font-weight: 500;
-    letter-spacing: 0.04em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
     cursor: pointer;
-    transition: all .2s;
+    transition: all .18s;
     display: inline-flex; align-items: center; gap: 6px;
+    white-space: nowrap;
   }
-  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn-gold { background: var(--gold); color: #0a0a0f; }
-  .btn-gold:hover:not(:disabled) { background: #e0b85a; }
-  .btn-ghost { background: var(--panel); border: 1px solid var(--border); color: var(--text-muted); }
-  .btn-ghost:hover:not(:disabled) { background: var(--panel-hover); color: var(--text); border-color: var(--border-bright); }
-  .btn-danger { background: var(--rose-dim); border: 1px solid rgba(244,63,94,0.25); color: var(--rose); }
-  .btn-danger:hover:not(:disabled) { background: rgba(244,63,94,0.2); }
-  .btn-teal { background: var(--teal-dim); border: 1px solid rgba(45,212,191,0.25); color: var(--teal); }
-  .btn-teal:hover:not(:disabled) { background: rgba(45,212,191,0.2); }
-  .btn-sm { padding: 5px 12px; font-size: 0.76rem; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .btn-gold {
+    background: var(--indigo);
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(61,79,124,0.25);
+  }
+  .btn-gold:hover:not(:disabled) {
+    background: var(--indigo-dark);
+    box-shadow: 0 3px 10px rgba(61,79,124,0.3);
+    transform: translateY(-1px);
+  }
+  .btn-ghost {
+    background: var(--surface);
+    border: 1px solid var(--border-dark);
+    color: var(--text-soft);
+    box-shadow: var(--shadow-sm);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--surface-2);
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+  .btn-danger {
+    background: var(--rose-dim);
+    border: 1px solid rgba(185,28,58,0.2);
+    color: var(--rose);
+  }
+  .btn-danger:hover:not(:disabled) { background: rgba(185,28,58,0.18); }
+  .btn-teal {
+    background: var(--teal-dim);
+    border: 1px solid rgba(15,113,117,0.2);
+    color: var(--teal);
+  }
+  .btn-teal:hover:not(:disabled) { background: rgba(15,113,117,0.18); }
+  .btn-sm { padding: 5px 12px; font-size: 0.75rem; }
 
   /* ── BADGE ── */
   .badge {
     display: inline-block;
-    padding: 3px 10px;
+    padding: 2px 9px;
     border-radius: 20px;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 600;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
-    font-family: 'DM Mono', monospace;
+    font-family: 'JetBrains Mono', monospace;
   }
-  .badge-approved { background: var(--green-dim); color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
-  .badge-pending { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(245,158,11,0.2); }
-  .badge-rejected { background: var(--rose-dim); color: var(--rose); border: 1px solid rgba(244,63,94,0.2); }
-  .badge-review { background: var(--teal-dim); color: var(--teal); border: 1px solid rgba(45,212,191,0.2); }
-  .badge-default { background: var(--panel); color: var(--text-muted); border: 1px solid var(--border); }
+  .badge-approved { background: var(--green-dim); color: var(--green); border: 1px solid rgba(30,123,75,0.2); }
+  .badge-pending  { background: var(--amber-dim);  color: var(--amber);  border: 1px solid rgba(180,83,9,0.2); }
+  .badge-rejected { background: var(--rose-dim);   color: var(--rose);   border: 1px solid rgba(185,28,58,0.2); }
+  .badge-review   { background: var(--teal-dim);   color: var(--teal);   border: 1px solid rgba(15,113,117,0.2); }
+  .badge-default  { background: var(--surface-2);  color: var(--text-muted); border: 1px solid var(--border); }
 
   /* ── CO TABLE ── */
-  .co-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-  .co-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 0.07em; color: var(--text); }
-  .co-table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+  .co-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
+  .co-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .co-table-wrap {
+    overflow-x: auto;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    -webkit-overflow-scrolling: touch;
+  }
   .co-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.82rem;
     min-width: 900px;
+    background: var(--surface);
   }
   .co-table th {
-    background: rgba(255,255,255,0.03);
-    color: var(--text-dim);
-    font-family: 'DM Mono', monospace;
-    font-size: 0.68rem;
-    letter-spacing: 0.12em;
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    font-weight: 500;
-    padding: 12px 12px;
+    font-weight: 600;
+    padding: 11px 12px;
     text-align: left;
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
   }
-  .co-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; color: var(--text); }
+  .co-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    color: var(--text);
+  }
   .co-table tr:last-child td { border-bottom: none; }
-  .co-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .co-table tr:hover td { background: var(--surface-2); }
   .co-table-input {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid var(--border-bright);
+    background: var(--surface-2);
+    border: 1px solid var(--border-dark);
     border-radius: 6px;
     color: var(--text);
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Outfit', sans-serif;
     font-size: 0.8rem;
     padding: 5px 8px;
     width: 100%;
     outline: none;
     min-width: 70px;
-    transition: border-color .2s;
+    transition: border-color .2s, box-shadow .2s;
   }
-  .co-table-input:focus { border-color: var(--gold); background: rgba(212,168,75,0.05); }
+  .co-table-input:focus {
+    border-color: var(--indigo);
+    box-shadow: 0 0 0 2px var(--indigo-dim);
+  }
   .co-table-select {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid var(--border-bright);
+    background: var(--surface-2);
+    border: 1px solid var(--border-dark);
     border-radius: 6px;
     color: var(--text);
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Outfit', sans-serif;
     font-size: 0.78rem;
     padding: 5px 6px;
     outline: none;
@@ -623,79 +733,171 @@ const styles = `
     min-width: 120px;
     transition: border-color .2s;
   }
-  .co-table-select:focus { border-color: var(--gold); }
-  .co-table-select option { background: #1a1a2e; }
-  .co-empty { text-align: center; padding: 40px; color: var(--text-dim); font-size: 0.88rem; }
-  .co-idx { color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 0.75rem; text-align: center; }
+  .co-table-select:focus { border-color: var(--indigo); }
+  .co-table-select option { background: var(--surface); }
+  .co-empty {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+  }
+  .co-idx {
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    text-align: center;
+  }
 
   /* ── PROJECT EDIT SECTION ── */
-  .section-actions { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 20px; }
+  .section-actions { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 18px; flex-wrap: wrap; }
 
   /* ── BACK BUTTON ── */
   .back-btn {
     display: inline-flex; align-items: center; gap: 7px;
-    background: var(--panel); border: 1px solid var(--border);
+    background: var(--surface);
+    border: 1px solid var(--border-dark);
     color: var(--text-muted);
-    font-size: 0.8rem;
-    padding: 8px 16px; border-radius: 8px;
+    font-size: 0.78rem;
+    padding: 7px 14px; border-radius: 8px;
     cursor: pointer; transition: all .2s;
-    font-family: 'DM Sans', sans-serif;
-    margin-bottom: 32px;
+    font-family: 'Outfit', sans-serif;
+    margin-bottom: 28px;
+    box-shadow: var(--shadow-sm);
+    font-weight: 500;
   }
-  .back-btn:hover { border-color: var(--border-bright); color: var(--text); }
+  .back-btn:hover { border-color: var(--text-dim); color: var(--text); }
 
   /* ── ADD PROJECT FORM PANEL ── */
   .add-panel {
-    background: rgba(212,168,75,0.04);
-    border: 1px solid rgba(212,168,75,0.15);
+    background: rgba(61,79,124,0.04);
+    border: 1px solid rgba(61,79,124,0.14);
     border-radius: var(--radius-lg);
-    padding: 24px;
-    margin-bottom: 24px;
+    padding: 22px;
+    margin-bottom: 22px;
   }
   .add-panel-title {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.2rem;
-    letter-spacing: 0.07em;
-    color: var(--gold);
-    margin-bottom: 16px;
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--indigo);
+    margin-bottom: 14px;
+    letter-spacing: 0.01em;
   }
 
   /* ── LOADING ── */
   .loading-screen {
     min-height: 100vh;
     display: flex; align-items: center; justify-content: center;
-    background: var(--ink);
-    flex-direction: column; gap: 20px;
+    background: var(--bg);
+    flex-direction: column; gap: 18px;
   }
   .loading-text {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.5rem;
-    letter-spacing: 0.15em;
+    font-family: 'Playfair Display', serif;
+    font-size: 1.2rem;
+    font-weight: 700;
     color: var(--text-muted);
   }
   .spinner {
-    width: 36px; height: 36px;
-    border: 2px solid var(--border);
-    border-top-color: var(--gold);
+    width: 34px; height: 34px;
+    border: 2px solid var(--border-dark);
+    border-top-color: var(--indigo);
     border-radius: 50%;
     animation: spin .7s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── SCROLLBAR ── */
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
-
+  /* ── ERROR BANNER ── */
   .error-banner {
     background: var(--rose-dim);
-    border: 1px solid rgba(244,63,94,0.25);
+    border: 1px solid rgba(185,28,58,0.2);
     color: var(--rose);
     font-size: 0.82rem;
-    padding: 10px 16px;
+    padding: 10px 14px;
     border-radius: 8px;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-dark); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+  /* ════════════════════════════════════════════
+     MOBILE RESPONSIVE  — ≤ 640 px
+  ════════════════════════════════════════════ */
+  @media (max-width: 640px) {
+
+    /* Topbar: shrink padding, keep logo + breadcrumb */
+    .topbar {
+      padding: 0 16px;
+      height: auto;
+      min-height: 54px;
+      flex-wrap: nowrap;
+      gap: 8px;
+    }
+    .topbar-logo { font-size: 1.1rem; }
+    .topbar-breadcrumb { font-size: 0.7rem; }
+    .breadcrumb-active { max-width: 100px; }
+
+    /* Main content */
+    .dash-content { padding: 24px 16px; }
+    .section-title { font-size: 1.6rem; }
+
+    /* Year grid: 2 columns */
+    .year-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .year-card { padding: 28px 12px; }
+    .year-card-num { font-size: 2.4rem; }
+
+    /* Client grid: 1 column */
+    .client-grid { grid-template-columns: 1fr; gap: 10px; }
+
+    /* Project card: stack vertically */
+    .project-card {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 14px 16px;
+    }
+    .project-meta { width: 100%; justify-content: space-between; }
+
+    /* Forms: single column */
+    .form-row { grid-template-columns: 1fr !important; gap: 12px; }
+    .form-row.three { grid-template-columns: 1fr !important; }
+
+    /* Modal: full screen on mobile */
+    .modal-overlay { padding: 0; align-items: flex-end; }
+    .modal-box {
+      border-radius: 20px 20px 0 0;
+      max-height: 92vh;
+      max-width: 100%;
+    }
+    .modal-header { padding: 18px 16px 0; }
+    .modal-body { padding: 16px; }
+    .modal-title { font-size: 1.2rem; }
+    .modal-close { top: 14px; right: 14px; }
+
+    /* Detail grid: 2 col */
+    .detail-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    /* Section actions */
+    .section-actions { justify-content: flex-start; }
+
+    /* Buttons in tight rows */
+    .form-actions { flex-wrap: wrap; }
+    .btn { font-size: 0.8rem; }
+
+    /* CO header: wrap */
+    .co-header { flex-direction: column; align-items: flex-start; }
+  }
+
+  /* Small tablets: 641–768 */
+  @media (min-width: 641px) and (max-width: 768px) {
+    .dash-content { padding: 32px 24px; }
+    .year-grid { grid-template-columns: repeat(3, 1fr); }
+    .form-row.three { grid-template-columns: 1fr 1fr; }
+    .modal-overlay { padding: 12px; }
+    .modal-box { max-width: 100%; }
   }
 `;
 
@@ -731,12 +933,10 @@ const scaleIn = {
   exit: { opacity: 0, scale: 0.96 }
 };
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 // ─── CO CSV IMPORT HELPERS ─────────────────────────────────────────────────────
 function parseCSVtoCOs(text) {
   const lines = text.trim().split("\n").filter(l => l.trim());
   if (lines.length < 2) return [];
-  // Try to detect header
   const header = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_"));
   return lines.slice(1).map(line => {
     const vals = line.split(",").map(v => v.trim().replace(/^"|"$/g, ""));
@@ -781,7 +981,6 @@ export default function Dashboard() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // CO file import
   const [showCoImport, setShowCoImport] = useState(false);
   const [coDragging, setCoDragging] = useState(false);
   const [coImportData, setCoImportData] = useState([]);
@@ -789,12 +988,10 @@ export default function Dashboard() {
   const [coImportSaving, setCoImportSaving] = useState(false);
   const coFileRef = React.useRef(null);
 
-  // Dynamic years
   const [years, setYears] = useState([]);
   const [showAddYear, setShowAddYear] = useState(false);
   const [newYearInput, setNewYearInput] = useState("");
 
-  // Load all projects on mount
   useEffect(() => {
     api.getAllProjects()
       .then(data => {
@@ -806,12 +1003,10 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Reload projects when year/client changes (filter server-side)
   const filteredByYear = allProjects.filter(p => p.year === selectedYear);
   const clientsForYear = [...new Set(filteredByYear.map(p => p.client))];
   const projectsForClient = filteredByYear.filter(p => p.client === selectedClient);
 
-  // Load change orders when needed
   useEffect(() => {
     if (selectedProject && activeTab === "change" && selectedProject.jobNumber) {
       setCoLoading(true);
@@ -827,7 +1022,6 @@ export default function Dashboard() {
     setAllProjects(data);
   };
 
-  // ── PROJECT CRUD ──
   const handleSaveProject = async () => {
     setSaving(true); setError("");
     try {
@@ -861,7 +1055,6 @@ export default function Dashboard() {
     setSaving(false);
   };
 
-  // ── CO CRUD ──
   const handleSaveCo = async () => {
     setSaving(true); setError("");
     try {
@@ -891,7 +1084,6 @@ export default function Dashboard() {
     } catch (e) { setError(e.message); }
   };
 
-  // ── CO FILE IMPORT ──
   const handleCoFile = (file) => {
     setCoImportError("");
     const ext = file.name.split(".").pop()?.toLowerCase();
@@ -905,7 +1097,6 @@ export default function Dashboard() {
       reader.readAsText(file);
     } else {
       setCoImportError("Please upload a CSV file. PNG/image import reads file name for reference only.");
-      // For images, create a placeholder row
       setCoImportData([{ co: file.name.replace(/\.[^.]+$/, ""), description: `Imported from: ${file.name}`, status: "APPROVAL PENDING", amount: 0, ifaDate: "", ifaPer: "", iffDate: "", iffPer: "", remarks: "" }]);
     }
   };
@@ -954,7 +1145,7 @@ export default function Dashboard() {
       <div className="dash-root">
         {/* ── TOPBAR ── */}
         <div className="topbar">
-          <span className="topbar-logo">ProjectTrack</span>
+          <span className="topbar-logo">Project<span>Track</span></span>
           <div className="topbar-sep" />
           <div className="topbar-breadcrumb">
             <span
@@ -986,11 +1177,10 @@ export default function Dashboard() {
             {/* ════════════════════ YEAR SELECTION ════════════════════ */}
             {!selectedYear && (
               <motion.div key="years" variants={fadeUp} initial="hidden" animate="show" exit="exit">
-                <p className="section-title">SELECT YEAR</p>
+                <p className="section-title">Select Year</p>
                 <p className="section-subtitle">Choose a fiscal year to explore projects</p>
 
-                {/* ── Add Year Row ── */}
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
                   {showAddYear ? (
                     <motion.div
                       initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
@@ -998,7 +1188,7 @@ export default function Dashboard() {
                     >
                       <input
                         className="form-input"
-                        style={{ width: 110, fontFamily: "'DM Mono', monospace", fontSize: "1rem" }}
+                        style={{ width: 110, fontFamily: "'JetBrains Mono', monospace", fontSize: "0.95rem" }}
                         placeholder="e.g. 2026"
                         maxLength={4}
                         value={newYearInput}
@@ -1055,11 +1245,10 @@ export default function Dashboard() {
             {selectedYear && !selectedClient && (
               <motion.div key="clients" variants={fadeUp} initial="hidden" animate="show" exit="exit">
                 <button className="back-btn" onClick={() => setSelectedYear(null)}>← Back to Years</button>
-                <p className="section-title">CLIENTS — {selectedYear}</p>
+                <p className="section-title">Clients — {selectedYear}</p>
                 <p className="section-subtitle">{clientsForYear.length} client(s) with active projects</p>
 
-                {/* Add project button at client level */}
-                <div style={{ marginBottom: 20 }}>
+                <div style={{ marginBottom: 18 }}>
                   <button className="btn btn-gold" onClick={() => setShowAddProject(v => !v)}>
                     {showAddProject ? "✕ Cancel" : "+ New Project"}
                   </button>
@@ -1095,7 +1284,7 @@ export default function Dashboard() {
                       >
                         <div className="client-card-name">{client}</div>
                         <div className="client-card-count">
-                          {projectsForClient.filter(p => p.client === client).length || filteredByYear.filter(p => p.client === client).length} project(s)
+                          {filteredByYear.filter(p => p.client === client).length} project(s)
                         </div>
                       </motion.div>
                     ))}
@@ -1146,7 +1335,7 @@ export default function Dashboard() {
                       >
                         <div>
                           <div className="project-name">{p.projectName}</div>
-                          <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
+                          <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
                             {p.approvalStatus && <span className="badge badge-default">Approval: {p.approvalStatus}</span>}
                             {p.fabStatus && <span className="badge badge-default">FAB: {p.fabStatus}</span>}
                           </div>
@@ -1202,7 +1391,6 @@ export default function Dashboard() {
                 <div className="modal-body">
                   {error && <div className="error-banner">⚠ {error}</div>}
 
-                  {/* ── MAIN TAB ── */}
                   <AnimatePresence mode="wait">
                     {activeTab === "main" && (
                       <motion.div key="main-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -1216,8 +1404,8 @@ export default function Dashboard() {
                           </>
                         ) : (
                           <>
-                            <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.1rem", letterSpacing: "0.07em", color: "var(--gold)" }}>EDITING PROJECT</span>
+                            <div style={{ marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontFamily: "'Playfair Display', serif", fontSize: "1rem", fontWeight: 700, color: "var(--indigo)" }}>Editing Project</span>
                             </div>
                             <EditProjectForm
                               data={editProjectData}
@@ -1231,12 +1419,11 @@ export default function Dashboard() {
                       </motion.div>
                     )}
 
-                    {/* ── CHANGE ORDERS TAB ── */}
                     {activeTab === "change" && (
                       <motion.div key="co-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                         <div className="co-header">
-                          <span className="co-title">CHANGE ORDERS</span>
-                          <div style={{display:"flex",gap:8}}>
+                          <span className="co-title">Change Orders</span>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                             <button className="btn btn-ghost btn-sm" onClick={() => { setShowCoImport(v => !v); setCoImportData([]); setCoImportError(""); }}>
                               {showCoImport ? "✕ Cancel Import" : "⬆ Import File"}
                             </button>
@@ -1246,48 +1433,47 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        {/* CO File Import Panel */}
                         {showCoImport && (
-                          <div style={{margin:"12px 0",padding:"18px",background:"rgba(99,179,237,0.04)",border:"1px solid rgba(99,179,237,0.15)",borderRadius:12}}>
-                            <p style={{fontSize:12,fontWeight:700,color:"#63b3ed",marginBottom:10,letterSpacing:"0.06em",textTransform:"uppercase"}}>Import Change Orders from File</p>
+                          <div style={{ margin: "12px 0", padding: "18px", background: "rgba(61,79,124,0.04)", border: "1px solid rgba(61,79,124,0.14)", borderRadius: 12 }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: "var(--indigo)", marginBottom: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>Import Change Orders from File</p>
                             <div
-                              onDragOver={e=>{e.preventDefault();setCoDragging(true);}}
-                              onDragLeave={()=>setCoDragging(false)}
+                              onDragOver={e => { e.preventDefault(); setCoDragging(true); }}
+                              onDragLeave={() => setCoDragging(false)}
                               onDrop={handleCoDropImport}
-                              onClick={()=>coFileRef.current?.click()}
+                              onClick={() => coFileRef.current?.click()}
                               style={{
-                                border:`2px dashed ${coDragging?"rgba(99,179,237,0.6)":"rgba(99,179,237,0.25)"}`,
-                                borderRadius:10,padding:"24px 16px",textAlign:"center",cursor:"pointer",
-                                background:coDragging?"rgba(99,179,237,0.07)":"transparent",transition:"all 0.2s",
-                                marginBottom:12
+                                border: `2px dashed ${coDragging ? "var(--indigo)" : "var(--border-dark)"}`,
+                                borderRadius: 10, padding: "24px 16px", textAlign: "center", cursor: "pointer",
+                                background: coDragging ? "var(--indigo-dim)" : "transparent", transition: "all 0.2s",
+                                marginBottom: 12
                               }}
                             >
-                              <div style={{fontSize:28,marginBottom:6}}>📂</div>
-                              <p style={{fontSize:13,color:"rgba(255,255,255,0.5)"}}>Drop a CSV file here, or click to browse</p>
-                              <p style={{fontSize:11,color:"rgba(255,255,255,0.3)",marginTop:4}}>Supports .csv files. Columns: co, description, status, amount, ifaDate, ifaPer, iffDate, iffPer, remarks</p>
-                              <input ref={coFileRef} type="file" accept=".csv,.txt,.png,.jpg,.jpeg" style={{display:"none"}} onChange={handleCoFileChange} />
+                              <div style={{ fontSize: 26, marginBottom: 6 }}>📂</div>
+                              <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Drop a CSV file here, or click to browse</p>
+                              <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Supports .csv files. Columns: co, description, status, amount, ifaDate, ifaPer, iffDate, iffPer, remarks</p>
+                              <input ref={coFileRef} type="file" accept=".csv,.txt,.png,.jpg,.jpeg" style={{ display: "none" }} onChange={handleCoFileChange} />
                             </div>
-                            {coImportError && <p style={{color:"#fc8181",fontSize:12,marginBottom:10}}>{coImportError}</p>}
+                            {coImportError && <p style={{ color: "var(--rose)", fontSize: 12, marginBottom: 10 }}>{coImportError}</p>}
                             {coImportData.length > 0 && (
                               <>
-                                <p style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginBottom:8}}>{coImportData.length} row(s) detected — review and edit before saving:</p>
-                                <div style={{overflowX:"auto",borderRadius:8,border:"1px solid rgba(255,255,255,0.07)",marginBottom:10}}>
-                                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                                <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>{coImportData.length} row(s) detected — review and edit before saving:</p>
+                                <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid var(--border)", marginBottom: 10 }}>
+                                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                                     <thead>
-                                      <tr style={{background:"rgba(255,255,255,0.04)"}}>
-                                        {["CO","Description","Status","Amount","IFA Date","IFA%","IFF Date","IFF%","Remarks"].map(h=>(
-                                          <th key={h} style={{padding:"7px 10px",textAlign:"left",color:"rgba(255,255,255,0.4)",fontWeight:600,textTransform:"uppercase",fontSize:10,borderBottom:"1px solid rgba(255,255,255,0.07)",whiteSpace:"nowrap"}}>{h}</th>
+                                      <tr style={{ background: "var(--surface-2)" }}>
+                                        {["CO", "Description", "Status", "Amount", "IFA Date", "IFA%", "IFF Date", "IFF%", "Remarks"].map(h => (
+                                          <th key={h} style={{ padding: "7px 10px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600, textTransform: "uppercase", fontSize: 10, borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>{h}</th>
                                         ))}
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {coImportData.map((row,i)=>(
-                                        <tr key={i} style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
-                                          {["co","description","status","amount","ifaDate","ifaPer","iffDate","iffPer","remarks"].map(field=>(
-                                            <td key={field} style={{padding:"6px 8px"}}>
+                                      {coImportData.map((row, i) => (
+                                        <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                                          {["co", "description", "status", "amount", "ifaDate", "ifaPer", "iffDate", "iffPer", "remarks"].map(field => (
+                                            <td key={field} style={{ padding: "6px 8px" }}>
                                               <input
-                                                style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:5,padding:"4px 7px",color:"#fff",fontSize:12,minWidth:field==="description"?120:60,width:"100%",outline:"none"}}
-                                                value={row[field]??""} onChange={e=>{const upd=[...coImportData];upd[i]={...upd[i],[field]:e.target.value};setCoImportData(upd);}}
+                                                style={{ background: "var(--surface-2)", border: "1px solid var(--border-dark)", borderRadius: 5, padding: "4px 7px", color: "var(--text)", fontSize: 12, minWidth: field === "description" ? 120 : 60, width: "100%", outline: "none" }}
+                                                value={row[field] ?? ""} onChange={e => { const upd = [...coImportData]; upd[i] = { ...upd[i], [field]: e.target.value }; setCoImportData(upd); }}
                                               />
                                             </td>
                                           ))}
@@ -1296,23 +1482,22 @@ export default function Dashboard() {
                                     </tbody>
                                   </table>
                                 </div>
-                                <div style={{display:"flex",gap:8}}>
-                                  <button className="btn btn-teal btn-sm" onClick={handleImportSave} disabled={coImportSaving}>
-                                    {coImportSaving?"Saving…":"Save All to Project"}
+                                <div style={{ display: "flex", gap: 8 }}>
+                                  <button className="btn btn-gold btn-sm" onClick={handleImportSave} disabled={coImportSaving}>
+                                    {coImportSaving ? "Saving…" : "Save All to Project"}
                                   </button>
-                                  <button className="btn btn-ghost btn-sm" onClick={()=>{setCoImportData([]);setCoImportError("");}}>Clear</button>
+                                  <button className="btn btn-ghost btn-sm" onClick={() => { setCoImportData([]); setCoImportError(""); }}>Clear</button>
                                 </div>
                               </>
                             )}
                           </div>
                         )}
 
-                        {/* Add CO form */}
                         <AnimatePresence>
                           {showAddCo && (
                             <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-                              <div className="add-panel" style={{ borderColor: "rgba(45,212,191,0.2)", background: "rgba(45,212,191,0.03)" }}>
-                                <p className="add-panel-title" style={{ color: "var(--teal)" }}>NEW CHANGE ORDER</p>
+                              <div className="add-panel" style={{ borderColor: "rgba(15,113,117,0.18)", background: "rgba(15,113,117,0.03)" }}>
+                                <p className="add-panel-title" style={{ color: "var(--teal)" }}>New Change Order</p>
                                 <CoEditRow
                                   data={newCoData}
                                   setData={setNewCoData}
@@ -1333,28 +1518,28 @@ export default function Dashboard() {
                         ) : (
                           <div className="co-table-wrap">
                             <table className="co-table">
-                            <thead>
-  <tr>
-    <th>#</th>
-    <th>CO</th>
-    <th>Description</th>
-    <th>Status</th>
-    <th>Amount</th>
-    <th>IFA Date</th>
-    <th>IFA %</th>
-    <th>IFF Date</th>
-    <th>IFF %</th>
-    <th>Remarks</th>
-    <th>Actions</th>
-  </tr>
-</thead>
+                              <thead>
+                                <tr>
+                                  <th>#</th>
+                                  <th>CO</th>
+                                  <th>Description</th>
+                                  <th>Status</th>
+                                  <th>Amount</th>
+                                  <th>IFA Date</th>
+                                  <th>IFA %</th>
+                                  <th>IFF Date</th>
+                                  <th>IFF %</th>
+                                  <th>Remarks</th>
+                                  <th>Actions</th>
+                                </tr>
+                              </thead>
                               <tbody>
                                 {changeOrders.length === 0 ? (
                                   <tr><td colSpan={11} className="co-empty">No change orders yet. Add one above.</td></tr>
                                 ) : changeOrders.map((co, idx) => (
                                   <React.Fragment key={co.id}>
                                     {editingCoId === co.id ? (
-                                      <tr style={{ background: "rgba(212,168,75,0.04)" }}>
+                                      <tr style={{ background: "var(--indigo-dim)" }}>
                                         <td className="co-idx">{idx + 1}</td>
                                         <td><input className="co-table-input" value={editCoData.co || ""} onChange={e => setEditCoData(p => ({ ...p, co: e.target.value }))} /></td>
                                         <td><input className="co-table-input" value={editCoData.description || ""} onChange={e => setEditCoData(p => ({ ...p, description: e.target.value }))} /></td>
@@ -1377,10 +1562,10 @@ export default function Dashboard() {
                                     ) : (
                                       <tr>
                                         <td className="co-idx">{idx + 1}</td>
-                                        <td style={{ fontFamily: "'DM Mono',monospace", fontWeight: 500, color: "var(--gold)" }}>{co.co || "—"}</td>
+                                        <td style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color: "var(--copper)" }}>{co.co || "—"}</td>
                                         <td style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={co.description}>{co.description || "—"}</td>
                                         <td><span className={getBadgeClass(co.status)}>{co.status}</span></td>
-                                        <td style={{ fontFamily: "'DM Mono',monospace" }}>${(co.amount || 0).toLocaleString()}</td>
+                                        <td style={{ fontFamily: "'JetBrains Mono',monospace" }}>${(co.amount || 0).toLocaleString()}</td>
                                         <td>{co.ifaDate || "—"}</td>
                                         <td>{co.ifaPer || "—"}</td>
                                         <td>{co.iffDate || "—"}</td>
@@ -1422,7 +1607,7 @@ function ProjectDetailsView({ project }) {
       </div>
       <div className="detail-card">
         <p className="detail-label">Job Number</p>
-        <p className="detail-value" style={{ fontFamily: "'DM Mono',monospace" }}>{project.jobNumber || "N/A"}</p>
+        <p className="detail-value" style={{ fontFamily: "'JetBrains Mono',monospace" }}>{project.jobNumber || "N/A"}</p>
       </div>
       <div className="detail-card">
         <p className="detail-label">Year</p>
@@ -1440,7 +1625,7 @@ function ProjectDetailsView({ project }) {
         <p className="detail-label">FAB Status</p>
         <p className="detail-value">
           {project.fabStatus
-            ? <span style={{ color: "var(--gold)", fontWeight: 600 }}>{project.fabStatus}</span>
+            ? <span style={{ color: "var(--copper)", fontWeight: 600 }}>{project.fabStatus}</span>
             : "—"}
         </p>
       </div>
@@ -1525,7 +1710,7 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
   const s = (k) => (v) => setData(p => ({ ...p, [k]: v }));
   return (
     <div className="add-panel">
-      <p className="add-panel-title">NEW PROJECT</p>
+      <p className="add-panel-title">New Project</p>
       {error && <div className="error-banner">⚠ {error}</div>}
       <div className="edit-form">
         <div className="form-row">

@@ -36,32 +36,34 @@ function App() {
   return (
     <AuthProvider>
       <WebSocketProvider>
-      <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={<Navigate to="/login" replace />} />
+        <BrowserRouter>
+          <div className="app-wrapper">
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/" element={<Navigate to="/login" replace />} />
 
-            <Route
-              element={
-                <RequireAuth>
-                  <AppLayout />
-                </RequireAuth>
-              }
-            >
-              <Route path="/admin" element={<OwnerOnly><AdminConsole /></OwnerOnly>} />
-              <Route path="/dashboard" element={<OwnerOrLead><Dashboard /></OwnerOrLead>} />
-              <Route path="/progress" element={<WorkProgress />} />
-              <Route path="/leave" element={<LeavePortal />} />
-              <Route path="/reports" element={<WorkReport />} />
-              <Route path="/messages" element={<Messages />} />
-              {/* Document Management - all roles */}
-              <Route path="/documents" element={<DocumentManager />} />
-            </Route>
+              <Route
+                element={
+                  <RequireAuth>
+                    <AppLayout />
+                  </RequireAuth>
+                }
+              >
+                <Route path="/admin" element={<OwnerOnly><AdminConsole /></OwnerOnly>} />
+                <Route path="/dashboard" element={<OwnerOrLead><Dashboard /></OwnerOrLead>} />
+                <Route path="/progress" element={<WorkProgress />} />
+                <Route path="/leave" element={<LeavePortal />} />
+                <Route path="/reports" element={<WorkReport />} />
+                <Route path="/messages" element={<Messages />} />
+                {/* Document Management - all roles */}
+                <Route path="/documents" element={<DocumentManager />} />
+              </Route>
 
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
 
-          <Toaster />
+            <Toaster />
+          </div>
         </BrowserRouter>
       </WebSocketProvider>
     </AuthProvider>
