@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   FolderPlus,
   Upload,
@@ -13,7 +13,6 @@ import {
   X,
   ArrowLeft,
   AlertTriangle,
-  Clock,
   CheckCircle2,
 } from 'lucide-react';
 
@@ -30,7 +29,7 @@ interface DocumentMeta {
   projectName: string;
   uploadedBy: string;
   uploadedAt: string;
-  status?: 'PROCESSING' | 'READY'; // added by async backend
+  status?: 'PROCESSING' | 'READY';
 }
 
 interface FolderItem {
@@ -139,21 +138,6 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   );
 };
 
-// ─── Status badge ─────────────────────────────────────────────────────────────
-
-const StatusBadge: React.FC<{ status?: 'PROCESSING' | 'READY' }> = ({ status }) => {
-  if (!status || status === 'READY') return null;
-  return (
-    <span
-      className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
-      style={{ background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe' }}
-    >
-      <RefreshCw className="w-3 h-3 animate-spin" />
-      Processing
-    </span>
-  );
-};
-
 // ─── API helpers ─────────────────────────────────────────────────────────────
 
 const API = 'http://localhost:8080';
@@ -202,9 +186,6 @@ const DocumentManager: React.FC = () => {
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
-  // Poll intervals keyed by documentId — cleared once READY
-  const pollingRefs = useRef<Record<number, ReturnType<typeof setInterval>>>({});
-
   const [deleteModal, setDeleteModal] = useState<{
     open: boolean;
     type: 'folder' | 'document';
@@ -212,13 +193,6 @@ const DocumentManager: React.FC = () => {
     parentId?: number;
     name: string;
   } | null>(null);
-
-  // ── Cleanup all pollers on unmount ─────────────────────────────────────────
-  useEffect(() => {
-    return () => {
-      Object.values(pollingRefs.current).forEach(clearInterval);
-    };
-  }, []);
 
   // ── Load folders ───────────────────────────────────────────────────────────
   const loadFolders = useCallback(async () => {
@@ -242,40 +216,6 @@ const DocumentManager: React.FC = () => {
   }, [currentFolder]);
 
   useEffect(() => { loadFolders(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Poll a single document until it's READY ────────────────────────────────
-  const pollDocumentStatus = useCallback((folderId: number, docId: number) => {
-    // Avoid duplicate pollers
-    if (pollingRefs.current[docId]) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const userId = getCurrentUser();
-        const result: DocumentMeta & { status: 'PROCESSING' | 'READY' } =
-          await apiFetch(`/folders/${userId}/${folderId}/documents/${docId}/status`);
-
-        if (result.status === 'READY') {
-          clearInterval(pollingRefs.current[docId]);
-          delete pollingRefs.current[docId];
-
-          // Update document status in state
-          setCurrentFolder(prev => {
-            if (!prev || prev.id !== folderId) return prev;
-            return {
-              ...prev,
-              documents: prev.documents.map(d =>
-                d.id === docId ? { ...d, status: 'READY' } : d
-              ),
-            };
-          });
-        }
-      } catch {
-        // Silently ignore poll errors — file will just stay in PROCESSING state
-      }
-    }, 1500); // poll every 1.5s
-
-    pollingRefs.current[docId] = interval;
-  }, []);
 
   // ── Create folder ──────────────────────────────────────────────────────────
   const handleCreateFolder = async () => {
@@ -332,10 +272,7 @@ const DocumentManager: React.FC = () => {
       setFolders(prev => prev.filter(f => f.id !== snapshot.id));
       if (currentFolder?.id === snapshot.id) setCurrentFolder(null);
     } else {
-      if (pollingRefs.current[snapshot.id]) {
-        clearInterval(pollingRefs.current[snapshot.id]);
-        delete pollingRefs.current[snapshot.id];
-      }
+      // ✅ Removed pollingRefs cleanup — no longer needed
       setCurrentFolder(prev =>
         prev ? { ...prev, documents: prev.documents.filter(d => d.id !== snapshot.id) } : prev
       );
@@ -351,7 +288,7 @@ const DocumentManager: React.FC = () => {
     });
   };
 
-  // ── Upload — truly fire-and-forget, UI updates before any network wait ──────
+  // ── Upload — fire-and-forget, UI updates before any network wait ───────────
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!currentFolder) { setError('Please open a folder before uploading.'); return; }
     const fileList = event.target.files;
@@ -376,7 +313,7 @@ const DocumentManager: React.FC = () => {
         projectName: '',
         uploadedBy: userId,
         uploadedAt: new Date().toISOString(),
-        status: 'PROCESSING',
+        status: 'READY', // ✅ always READY — backend saves synchronously
       };
 
       setCurrentFolder(prev =>
@@ -398,8 +335,8 @@ const DocumentManager: React.FC = () => {
           return res.json();
         })
         .then((saved: DocumentMeta) => {
-          // 4. Swap placeholder with real doc from server
-          const realDoc: DocumentMeta = { ...saved, status: saved.status ?? 'PROCESSING' };
+          // 4. Swap placeholder with real doc from server — always READY
+          const realDoc: DocumentMeta = { ...saved, status: 'READY' };
           setCurrentFolder(prev => {
             if (!prev) return prev;
             return {
@@ -409,10 +346,6 @@ const DocumentManager: React.FC = () => {
               ),
             };
           });
-          // 5. Start polling if still processing
-          if (realDoc.status === 'PROCESSING') {
-            pollDocumentStatus(folderId, realDoc.id);
-          }
         })
         .catch(err => {
           // Remove placeholder on failure and show error
@@ -430,23 +363,14 @@ const DocumentManager: React.FC = () => {
     event.target.value = '';
   };
 
-  // ── Download — respects PROCESSING state ──────────────────────────────────
+  // ── Download ───────────────────────────────────────────────────────────────
   const handleDownload = async (folderId: number, doc: DocumentMeta) => {
-    if (doc.status === 'PROCESSING') {
-      setError('File is still being processed. Please wait a moment and try again.');
-      return;
-    }
     try {
       const userId = getCurrentUser();
       const res = await fetch(
         `${API}/folders/${userId}/${folderId}/documents/${doc.id}/download`,
         { headers: { Authorization: `Bearer ${getAuthToken()}` } }
       );
-      // Backend returns 202 if file isn't ready yet
-      if (res.status === 202) {
-        setError('File is still processing. Please try again in a moment.');
-        return;
-      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -689,78 +613,70 @@ const DocumentManager: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {docs.map((doc, idx) => {
-                    const isProcessing = doc.status === 'PROCESSING';
-                    return (
-                      <tr
-                        key={doc.id}
-                        className={`border-b border-gray-50 transition-colors group ${
-                          idx === docs.length - 1 ? 'border-0' : ''
-                        } ${isProcessing ? 'bg-blue-50/30' : 'hover:bg-gray-50'}`}
-                      >
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            <File className={`w-5 h-5 flex-shrink-0 ${isProcessing ? 'text-blue-300' : 'text-blue-400'}`} />
-                            <div>
-                              <p className="text-sm font-medium text-gray-800 truncate max-w-[200px]">
-                                {doc.originalFileName || doc.fileName}
-                              </p>
-                              {doc.description && (
-                                <p className="text-xs text-gray-400 truncate max-w-[200px]">{doc.description}</p>
-                              )}
-                            </div>
+                  {docs.map((doc, idx) => (
+                    <tr
+                      key={doc.id}
+                      className={`border-b border-gray-50 transition-colors group hover:bg-gray-50 ${
+                        idx === docs.length - 1 ? 'border-0' : ''
+                      }`}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <File className="w-5 h-5 flex-shrink-0 text-blue-400" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-800 truncate max-w-[200px]">
+                              {doc.originalFileName || doc.fileName}
+                            </p>
+                            {doc.description && (
+                              <p className="text-xs text-gray-400 truncate max-w-[200px]">{doc.description}</p>
+                            )}
                           </div>
-                        </td>
-                        <td className="px-4 py-3 hidden sm:table-cell">
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">
-                            {doc.fileType?.split('/')[1]?.toUpperCase() || doc.fileType || '—'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
-                          {formatSize(doc.fileSize)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
-                          {formatDate(doc.uploadedAt)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
-                          {doc.uploadedBy || '—'}
-                        </td>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">
+                          {doc.fileType?.split('/')[1]?.toUpperCase() || doc.fileType || '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
+                        {formatSize(doc.fileSize)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
+                        {formatDate(doc.uploadedAt)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
+                        {doc.uploadedBy || '—'}
+                      </td>
 
-                        {/* Status column */}
-                        <td className="px-4 py-3 hidden sm:table-cell">
-                          {isProcessing ? (
-                            <StatusBadge status="PROCESSING" />
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-xs text-green-600">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Ready
-                            </span>
-                          )}
-                        </td>
+                      {/* Status column — always READY */}
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Ready
+                        </span>
+                      </td>
 
-                        {/* Actions */}
-                        <td className="px-4 py-3">
-                          <div className={`flex items-center gap-1 justify-end transition-opacity ${isProcessing ? 'opacity-30' : 'opacity-0 group-hover:opacity-100'}`}>
-                            <button
-                              onClick={() => handleDownload(currentFolder.id, doc)}
-                              disabled={isProcessing}
-                              className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded disabled:cursor-not-allowed"
-                              title={isProcessing ? 'File is still processing…' : 'Download'}
-                            >
-                              <Download className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteDocument(currentFolder.id, doc.id, doc.originalFileName || doc.fileName)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                      {/* Actions */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => handleDownload(currentFolder.id, doc)}
+                            className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
+                            title="Download"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteDocument(currentFolder.id, doc.id, doc.originalFileName || doc.fileName)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
