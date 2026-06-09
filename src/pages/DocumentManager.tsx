@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   FolderPlus,
   Upload,
@@ -13,9 +13,11 @@ import {
   X,
   ArrowLeft,
   AlertTriangle,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react';
 
-// ─── Types matching backend entities ────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface DocumentMeta {
   id: number;
@@ -28,6 +30,7 @@ interface DocumentMeta {
   projectName: string;
   uploadedBy: string;
   uploadedAt: string;
+  status?: 'PROCESSING' | 'READY'; // added by async backend
 }
 
 interface FolderItem {
@@ -52,71 +55,39 @@ interface DeleteConfirmModalProps {
 }
 
 const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
-  isOpen,
-  onConfirm,
-  onCancel,
-  title,
-  description,
-  itemName,
-  type,
+  isOpen, onConfirm, onCancel, title, description, itemName, type,
 }) => {
   if (!isOpen) return null;
-
   return (
     <>
       <style>{`
-        @keyframes backdropFadeIn {
-          from { opacity: 0; }
-          to   { opacity: 1; }
-        }
-        @keyframes modalSlideIn {
-          from { opacity: 0; transform: scale(0.92) translateY(16px); }
-          to   { opacity: 1; transform: scale(1)    translateY(0);    }
-        }
-        .delete-backdrop {
-          animation: backdropFadeIn 0.2s ease forwards;
-        }
-        .delete-modal {
-          animation: modalSlideIn 0.25s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
-        }
-        .delete-btn-confirm {
-          position: relative;
-          overflow: hidden;
-          transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
-        }
-        .delete-btn-confirm:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 6px 20px rgba(220, 38, 38, 0.35);
-        }
-        .delete-btn-confirm:active { transform: translateY(0); }
-        .delete-btn-cancel {
-          transition: background 0.15s, transform 0.1s;
-        }
-        .delete-btn-cancel:hover { transform: translateY(-1px); }
-        .delete-btn-cancel:active { transform: translateY(0); }
+        @keyframes backdropFadeIn { from{opacity:0} to{opacity:1} }
+        @keyframes modalSlideIn  { from{opacity:0;transform:scale(0.92) translateY(16px)} to{opacity:1;transform:scale(1) translateY(0)} }
+        .delete-backdrop { animation: backdropFadeIn 0.2s ease forwards; }
+        .delete-modal    { animation: modalSlideIn 0.25s cubic-bezier(0.34,1.4,0.64,1) forwards; }
+        .delete-btn-confirm { position:relative;overflow:hidden;transition:background 0.2s,box-shadow 0.2s,transform 0.1s; }
+        .delete-btn-confirm:hover { transform:translateY(-1px);box-shadow:0 6px 20px rgba(220,38,38,0.35); }
+        .delete-btn-confirm:active { transform:translateY(0); }
+        .delete-btn-cancel { transition:background 0.15s,transform 0.1s; }
+        .delete-btn-cancel:hover { transform:translateY(-1px); }
+        .delete-btn-cancel:active { transform:translateY(0); }
       `}</style>
-
-      {/* Backdrop */}
       <div
         className="delete-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
-        style={{ backgroundColor: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(6px)' }}
+        style={{ backgroundColor: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(6px)' }}
         onClick={onCancel}
       >
-        {/* Modal */}
         <div
           className="delete-modal bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
-          style={{ border: '1px solid rgba(220, 38, 38, 0.12)' }}
+          style={{ border: '1px solid rgba(220,38,38,0.12)' }}
           onClick={e => e.stopPropagation()}
         >
-          {/* Top accent stripe */}
-          <div style={{ height: 4, background: 'linear-gradient(90deg, #dc2626, #f87171, #fca5a5)' }} />
-
+          <div style={{ height: 4, background: 'linear-gradient(90deg,#dc2626,#f87171,#fca5a5)' }} />
           <div className="p-6">
-            {/* Icon + heading */}
             <div className="flex items-start gap-4 mb-5">
               <div
                 className="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-xl"
-                style={{ background: 'linear-gradient(135deg, #fff1f2, #ffe4e6)', border: '1px solid #fecaca' }}
+                style={{ background: 'linear-gradient(135deg,#fff1f2,#ffe4e6)', border: '1px solid #fecaca' }}
               >
                 <AlertTriangle className="w-6 h-6" style={{ color: '#dc2626' }} />
               </div>
@@ -125,21 +96,15 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
                 <p className="text-sm text-gray-500 mt-0.5">{description}</p>
               </div>
             </div>
-
-            {/* Item name pill */}
             <div
               className="flex items-center gap-2.5 px-4 py-3 rounded-xl mb-5"
               style={{ background: '#fafafa', border: '1px solid #f0f0f0' }}
             >
-              {type === 'folder' ? (
-                <Folder className="w-4 h-4 text-yellow-500 flex-shrink-0" />
-              ) : (
-                <File className="w-4 h-4 text-blue-400 flex-shrink-0" />
-              )}
+              {type === 'folder'
+                ? <Folder className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                : <File className="w-4 h-4 text-blue-400 flex-shrink-0" />}
               <span className="text-sm font-semibold text-gray-800 truncate">{itemName}</span>
             </div>
-
-            {/* Warning note */}
             <div
               className="flex items-start gap-2 px-3 py-2.5 rounded-lg mb-6"
               style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}
@@ -151,8 +116,6 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
                   : 'This document will be permanently removed. This action cannot be undone.'}
               </p>
             </div>
-
-            {/* Buttons */}
             <div className="flex gap-3">
               <button
                 onClick={onCancel}
@@ -164,7 +127,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
               <button
                 onClick={onConfirm}
                 className="delete-btn-confirm flex-1 py-2.5 px-4 rounded-xl text-sm font-bold text-white"
-                style={{ background: 'linear-gradient(135deg, #dc2626, #b91c1c)' }}
+                style={{ background: 'linear-gradient(135deg,#dc2626,#b91c1c)' }}
               >
                 Yes, delete
               </button>
@@ -176,29 +139,36 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   );
 };
 
-// ─── API base ────────────────────────────────────────────────────────────────
-const API = 'http://localhost:8080';
+// ─── Status badge ─────────────────────────────────────────────────────────────
 
+const StatusBadge: React.FC<{ status?: 'PROCESSING' | 'READY' }> = ({ status }) => {
+  if (!status || status === 'READY') return null;
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
+      style={{ background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe' }}
+    >
+      <RefreshCw className="w-3 h-3 animate-spin" />
+      Processing
+    </span>
+  );
+};
+
+// ─── API helpers ─────────────────────────────────────────────────────────────
+
+const API = 'http://localhost:8080';
 const getAuthToken = () => localStorage.getItem('token');
 
-// Get current user - you can modify this based on your auth implementation
 const getCurrentUser = () => {
-  // Option 1: Get from localStorage if you store user info
   const userId = localStorage.getItem('userId');
   if (userId) return userId;
-  
-  // Option 2: Get from JWT token if it contains user info
   const token = getAuthToken();
   if (token) {
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       return payload.userId || payload.sub || 'anonymous';
-    } catch (e) {
-      console.error('Failed to parse token', e);
-    }
+    } catch { /* ignore */ }
   }
-  
-  // Default fallback - you might want to redirect to login instead
   return 'anonymous';
 };
 
@@ -226,33 +196,41 @@ const DocumentManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // UI state
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderDesc, setNewFolderDesc] = useState('');
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const [uploadingFiles, setUploadingFiles] = useState<string[]>([]);
 
-  // ── Delete confirmation state ──────────────────────────────────────────────
+  // Poll intervals keyed by documentId — cleared once READY
+  const pollingRefs = useRef<Record<number, ReturnType<typeof setInterval>>>({});
+
   const [deleteModal, setDeleteModal] = useState<{
     open: boolean;
     type: 'folder' | 'document';
     id: number;
-    parentId?: number;   // folderId when deleting a document
+    parentId?: number;
     name: string;
   } | null>(null);
 
-  // ── Load all folders ────────────────────────────────────────────────────────
+  // ── Cleanup all pollers on unmount ─────────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      Object.values(pollingRefs.current).forEach(clearInterval);
+    };
+  }, []);
+
+  // ── Load folders ───────────────────────────────────────────────────────────
   const loadFolders = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const userId = getCurrentUser();
       const data: FolderItem[] = await apiFetch(`/folders/${userId}`);
-      setFolders(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setFolders(list);
       if (currentFolder) {
-        const updated = (Array.isArray(data) ? data : []).find(f => f.id === currentFolder.id);
+        const updated = list.find(f => f.id === currentFolder.id);
         setCurrentFolder(updated ?? null);
       }
     } catch (err) {
@@ -265,11 +243,44 @@ const DocumentManager: React.FC = () => {
 
   useEffect(() => { loadFolders(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Create folder ───────────────────────────────────────────────────────────
+  // ── Poll a single document until it's READY ────────────────────────────────
+  const pollDocumentStatus = useCallback((folderId: number, docId: number) => {
+    // Avoid duplicate pollers
+    if (pollingRefs.current[docId]) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const userId = getCurrentUser();
+        const result: DocumentMeta & { status: 'PROCESSING' | 'READY' } =
+          await apiFetch(`/folders/${userId}/${folderId}/documents/${docId}/status`);
+
+        if (result.status === 'READY') {
+          clearInterval(pollingRefs.current[docId]);
+          delete pollingRefs.current[docId];
+
+          // Update document status in state
+          setCurrentFolder(prev => {
+            if (!prev || prev.id !== folderId) return prev;
+            return {
+              ...prev,
+              documents: prev.documents.map(d =>
+                d.id === docId ? { ...d, status: 'READY' } : d
+              ),
+            };
+          });
+        }
+      } catch {
+        // Silently ignore poll errors — file will just stay in PROCESSING state
+      }
+    }, 1500); // poll every 1.5s
+
+    pollingRefs.current[docId] = interval;
+  }, []);
+
+  // ── Create folder ──────────────────────────────────────────────────────────
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
     try {
-      const userId = getCurrentUser();
       const created: FolderItem = await apiFetch(`/folders`, {
         method: 'POST',
         body: JSON.stringify({ name: newFolderName.trim(), description: newFolderDesc.trim() }),
@@ -283,17 +294,17 @@ const DocumentManager: React.FC = () => {
     }
   };
 
-  // ── Rename folder ───────────────────────────────────────────────────────────
+  // ── Rename folder ──────────────────────────────────────────────────────────
   const handleRenameFolder = async (id: number, newName: string) => {
     if (!newName.trim()) { setRenamingId(null); return; }
     try {
-      const userId = getCurrentUser();
       const updated: FolderItem = await apiFetch(`/folders/${id}`, {
         method: 'PUT',
         body: JSON.stringify({ name: newName.trim() }),
       });
       setFolders(prev => prev.map(f => f.id === id ? { ...f, name: updated.name } : f));
-      if (currentFolder?.id === id) setCurrentFolder(prev => prev ? { ...prev, name: updated.name } : prev);
+      if (currentFolder?.id === id)
+        setCurrentFolder(prev => prev ? { ...prev, name: updated.name } : prev);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to rename folder');
     } finally {
@@ -301,75 +312,141 @@ const DocumentManager: React.FC = () => {
     }
   };
 
-  // ── Delete folder — open modal ──────────────────────────────────────────────
-  const handleDeleteFolder = (id: number, name: string) => {
+  // ── Delete handlers ────────────────────────────────────────────────────────
+  const handleDeleteFolder = (id: number, name: string) =>
     setDeleteModal({ open: true, type: 'folder', id, name });
-  };
 
-  // ── Delete document — open modal ────────────────────────────────────────────
-  const handleDeleteDocument = (folderId: number, docId: number, name: string) => {
+  const handleDeleteDocument = (folderId: number, docId: number, name: string) =>
     setDeleteModal({ open: true, type: 'document', id: docId, parentId: folderId, name });
-  };
 
-  // ── Confirm deletion (handles both folder & document) ──────────────────────
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = () => {
     if (!deleteModal) return;
-    try {
-      const userId = getCurrentUser();
-      if (deleteModal.type === 'folder') {
-        await apiFetch(`/folders/${deleteModal.id}`, { method: 'DELETE' });
-        setFolders(prev => prev.filter(f => f.id !== deleteModal.id));
-        if (currentFolder?.id === deleteModal.id) setCurrentFolder(null);
-      } else {
-        await apiFetch(`/folders/${userId}/${deleteModal.parentId}/documents/${deleteModal.id}`, { method: 'DELETE' });
-        setCurrentFolder(prev =>
-          prev ? { ...prev, documents: prev.documents.filter(d => d.id !== deleteModal.id) } : prev
-        );
+
+    const snapshot = { ...deleteModal };
+    const userId = getCurrentUser();
+
+    // 1. Update UI instantly — no waiting for server
+    setDeleteModal(null);
+
+    if (snapshot.type === 'folder') {
+      setFolders(prev => prev.filter(f => f.id !== snapshot.id));
+      if (currentFolder?.id === snapshot.id) setCurrentFolder(null);
+    } else {
+      if (pollingRefs.current[snapshot.id]) {
+        clearInterval(pollingRefs.current[snapshot.id]);
+        delete pollingRefs.current[snapshot.id];
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete');
-    } finally {
-      setDeleteModal(null);
+      setCurrentFolder(prev =>
+        prev ? { ...prev, documents: prev.documents.filter(d => d.id !== snapshot.id) } : prev
+      );
     }
+
+    // 2. Fire DELETE in background — no await
+    const url = snapshot.type === 'folder'
+      ? `/folders/${snapshot.id}`
+      : `/folders/${userId}/${snapshot.parentId}/documents/${snapshot.id}`;
+
+    apiFetch(url, { method: 'DELETE' }).catch(err => {
+      setError(`Delete failed: ${err instanceof Error ? err.message : 'unknown error'} — please refresh.`);
+    });
   };
 
-  // ── Upload document ─────────────────────────────────────────────────────────
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // ── Upload — truly fire-and-forget, UI updates before any network wait ──────
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!currentFolder) { setError('Please open a folder before uploading.'); return; }
     const fileList = event.target.files;
     if (!fileList || fileList.length === 0) return;
 
-    for (const file of Array.from(fileList)) {
-      setUploadingFiles(prev => [...prev, file.name]);
+    const folderId = currentFolder.id;
+    const userId = getCurrentUser();
+
+    Array.from(fileList).forEach(file => {
+      // 1. Generate a temporary negative ID so the row appears instantly
+      const tempId = -(Date.now() + Math.random());
+
+      // 2. Add a placeholder row RIGHT NOW — no network wait at all
+      const placeholder: DocumentMeta = {
+        id: tempId as unknown as number,
+        fileName: file.name,
+        originalFileName: file.name,
+        fileType: file.type || 'application/octet-stream',
+        fileSize: file.size,
+        description: '',
+        category: 'GENERAL',
+        projectName: '',
+        uploadedBy: userId,
+        uploadedAt: new Date().toISOString(),
+        status: 'PROCESSING',
+      };
+
+      setCurrentFolder(prev =>
+        prev ? { ...prev, documents: [placeholder, ...(prev.documents ?? [])] } : prev
+      );
+
+      // 3. Fire the upload in the background — do NOT await here
       const formData = new FormData();
       formData.append('file', file);
-      try {
-        const userId = getCurrentUser();
-        const saved: DocumentMeta = await apiFetch(`/folders/${userId}/${currentFolder.id}/documents`, {
-          method: 'POST',
-          body: formData,
+
+      const token = getAuthToken();
+      fetch(`${API}/folders/${userId}/${folderId}/documents`, {
+        method: 'POST',
+        body: formData,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .then((saved: DocumentMeta) => {
+          // 4. Swap placeholder with real doc from server
+          const realDoc: DocumentMeta = { ...saved, status: saved.status ?? 'PROCESSING' };
+          setCurrentFolder(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              documents: prev.documents.map(d =>
+                d.id === (tempId as unknown as number) ? realDoc : d
+              ),
+            };
+          });
+          // 5. Start polling if still processing
+          if (realDoc.status === 'PROCESSING') {
+            pollDocumentStatus(folderId, realDoc.id);
+          }
+        })
+        .catch(err => {
+          // Remove placeholder on failure and show error
+          setCurrentFolder(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              documents: prev.documents.filter(d => d.id !== (tempId as unknown as number)),
+            };
+          });
+          setError(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : ''}`);
         });
-        setCurrentFolder(prev =>
-          prev ? { ...prev, documents: [saved, ...(prev.documents ?? [])] } : prev
-        );
-      } catch (err) {
-        setError(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : ''}`);
-      } finally {
-        setUploadingFiles(prev => prev.filter(n => n !== file.name));
-      }
-    }
+    });
+
     event.target.value = '';
   };
 
-  // ── Download document ───────────────────────────────────────────────────────
+  // ── Download — respects PROCESSING state ──────────────────────────────────
   const handleDownload = async (folderId: number, doc: DocumentMeta) => {
+    if (doc.status === 'PROCESSING') {
+      setError('File is still being processed. Please wait a moment and try again.');
+      return;
+    }
     try {
       const userId = getCurrentUser();
-      const res = await fetch(`${API}/folders/${userId}/${folderId}/documents/${doc.id}/download`, {
-        headers: {
-          'Authorization': `Bearer ${getAuthToken()}`
-        }
-      });
+      const res = await fetch(
+        `${API}/folders/${userId}/${folderId}/documents/${doc.id}/download`,
+        { headers: { Authorization: `Bearer ${getAuthToken()}` } }
+      );
+      // Backend returns 202 if file isn't ready yet
+      if (res.status === 202) {
+        setError('File is still processing. Please try again in a moment.');
+        return;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -385,7 +462,7 @@ const DocumentManager: React.FC = () => {
     }
   };
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
   const formatSize = (bytes: number) => {
     if (!bytes) return '0 B';
     const k = 1024;
@@ -399,7 +476,7 @@ const DocumentManager: React.FC = () => {
     try { return new Date(iso).toLocaleDateString(); } catch { return ''; }
   };
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   if (loading && folders.length === 0) {
     return (
@@ -417,7 +494,7 @@ const DocumentManager: React.FC = () => {
   return (
     <div className="container mx-auto p-6 max-w-6xl">
 
-      {/* ── Delete Confirmation Modal ─────────────────────────────────────────── */}
+      {/* Delete modal */}
       {deleteModal && (
         <DeleteConfirmModal
           isOpen={deleteModal.open}
@@ -451,7 +528,6 @@ const DocumentManager: React.FC = () => {
             <button
               onClick={() => setCurrentFolder(null)}
               className="p-2 hover:bg-gray-100 rounded-lg text-gray-600"
-              title="Back to folders"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
@@ -507,7 +583,7 @@ const DocumentManager: React.FC = () => {
         )}
       </div>
 
-      {/* ── FOLDER LIST VIEW ─────────────────────────────────────────────────── */}
+      {/* ── FOLDER LIST ──────────────────────────────────────────────────────── */}
       {!currentFolder && (
         <>
           {folders.length === 0 && !loading ? (
@@ -532,7 +608,10 @@ const DocumentManager: React.FC = () => {
                 >
                   <div className="flex items-start justify-between mb-3">
                     <Folder className="w-10 h-10 text-yellow-400" />
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                    <div
+                      className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={e => e.stopPropagation()}
+                    >
                       <button
                         onClick={() => { setRenamingId(folder.id); setRenameValue(folder.name); }}
                         className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded"
@@ -581,22 +660,10 @@ const DocumentManager: React.FC = () => {
         </>
       )}
 
-      {/* ── DOCUMENT LIST VIEW ───────────────────────────────────────────────── */}
+      {/* ── DOCUMENT LIST ────────────────────────────────────────────────────── */}
       {currentFolder && (
         <>
-          {uploadingFiles.length > 0 && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-blue-700 text-sm font-medium mb-1">Uploading…</p>
-              {uploadingFiles.map(name => (
-                <div key={name} className="flex items-center gap-2 text-blue-600 text-xs">
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                  {name}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {docs.length === 0 && uploadingFiles.length === 0 ? (
+          {docs.length === 0 ? (
             <div className="text-center py-20 border-2 border-dashed border-gray-200 rounded-xl">
               <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500 font-medium">No documents in this folder</p>
@@ -617,62 +684,83 @@ const DocumentManager: React.FC = () => {
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden md:table-cell">Size</th>
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">Uploaded</th>
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">By</th>
+                    <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden sm:table-cell">Status</th>
                     <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {docs.map((doc, idx) => (
-                    <tr
-                      key={doc.id}
-                      className={`border-b border-gray-50 hover:bg-gray-50 transition-colors group ${idx === docs.length - 1 ? 'border-0' : ''}`}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <File className="w-5 h-5 text-blue-400 flex-shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-800 truncate max-w-[200px]">
-                              {doc.originalFileName || doc.fileName}
-                            </p>
-                            {doc.description && (
-                              <p className="text-xs text-gray-400 truncate max-w-[200px]">{doc.description}</p>
-                            )}
+                  {docs.map((doc, idx) => {
+                    const isProcessing = doc.status === 'PROCESSING';
+                    return (
+                      <tr
+                        key={doc.id}
+                        className={`border-b border-gray-50 transition-colors group ${
+                          idx === docs.length - 1 ? 'border-0' : ''
+                        } ${isProcessing ? 'bg-blue-50/30' : 'hover:bg-gray-50'}`}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <File className={`w-5 h-5 flex-shrink-0 ${isProcessing ? 'text-blue-300' : 'text-blue-400'}`} />
+                            <div>
+                              <p className="text-sm font-medium text-gray-800 truncate max-w-[200px]">
+                                {doc.originalFileName || doc.fileName}
+                              </p>
+                              {doc.description && (
+                                <p className="text-xs text-gray-400 truncate max-w-[200px]">{doc.description}</p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 hidden sm:table-cell">
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">
-                          {doc.fileType?.split('/')[1]?.toUpperCase() || doc.fileType || '—'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
-                        {formatSize(doc.fileSize)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
-                        {formatDate(doc.uploadedAt)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
-                        {doc.uploadedBy || '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => handleDownload(currentFolder.id, doc)}
-                            className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
-                            title="Download"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteDocument(currentFolder.id, doc.id, doc.originalFileName || doc.fileName)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-3 hidden sm:table-cell">
+                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">
+                            {doc.fileType?.split('/')[1]?.toUpperCase() || doc.fileType || '—'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
+                          {formatSize(doc.fileSize)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
+                          {formatDate(doc.uploadedAt)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
+                          {doc.uploadedBy || '—'}
+                        </td>
+
+                        {/* Status column */}
+                        <td className="px-4 py-3 hidden sm:table-cell">
+                          {isProcessing ? (
+                            <StatusBadge status="PROCESSING" />
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Ready
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-4 py-3">
+                          <div className={`flex items-center gap-1 justify-end transition-opacity ${isProcessing ? 'opacity-30' : 'opacity-0 group-hover:opacity-100'}`}>
+                            <button
+                              onClick={() => handleDownload(currentFolder.id, doc)}
+                              disabled={isProcessing}
+                              className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded disabled:cursor-not-allowed"
+                              title={isProcessing ? 'File is still processing…' : 'Download'}
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDocument(currentFolder.id, doc.id, doc.originalFileName || doc.fileName)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

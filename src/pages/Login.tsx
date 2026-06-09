@@ -370,9 +370,9 @@ export default function Login() {
           </div>
 
           <h1 className="login-title">
-            <span className="login-title-gradient">Welcome back</span>
+            <span className="login-title-gradient">IK Tangience</span>
           </h1>
-          <p className="login-sub">Sign in to your WorkWeaver account</p>
+          <p className="login-sub">Sign in to your professional account.</p>
 
           <form onSubmit={handleLogin}>
             <div className="field-group">
