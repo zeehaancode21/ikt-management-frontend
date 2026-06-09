@@ -29,26 +29,26 @@ export const AppSidebar = () => {
   const navItems =
     role === "OWNER"
       ? [
-          { to: "/admin",     label: "Admin Console",  icon: ShieldCheck   },
-          { to: "/dashboard", label: "Projects",       icon: Briefcase     },
-          { to: "/documents", label: "Documents",      icon: FolderOpen    },
-          { to: "/reports",   label: "Work Report",    icon: FileText      },
-          { to: "/leave",     label: "Leave Portal",   icon: CalendarDays  },
-          { to: "/messages",  label: "Messages",       icon: MessageSquare },
-        ]
+        { to: "/admin", label: "Admin Console", icon: ShieldCheck },
+        { to: "/dashboard", label: "Projects", icon: Briefcase },
+        { to: "/documents", label: "Documents", icon: FolderOpen },
+        { to: "/reports", label: "Work Report", icon: FileText },
+        { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+        { to: "/messages", label: "Messages", icon: MessageSquare },
+      ]
       : role === "LEAD"
-      ? [
-          { to: "/dashboard", label: "Projects",       icon: Briefcase     },
-          { to: "/documents", label: "Documents",      icon: FolderOpen    },
-          { to: "/reports",   label: "Work Report",    icon: FileText      },
-          { to: "/leave",     label: "Leave Report",   icon: CalendarDays  },
-          { to: "/messages",  label: "Messages",       icon: MessageSquare },
+        ? [
+          { to: "/dashboard", label: "Projects", icon: Briefcase },
+          { to: "/documents", label: "Documents", icon: FolderOpen },
+          { to: "/reports", label: "Work Report", icon: FileText },
+          { to: "/leave", label: "Leave Report", icon: CalendarDays },
+          { to: "/messages", label: "Messages", icon: MessageSquare },
         ]
-      : [
-          { to: "/leave",     label: "Leave Portal",   icon: CalendarDays  },
-          { to: "/documents", label: "Documents",      icon: FolderOpen    },
-          { to: "/reports",   label: "Work Report",    icon: FileText      },
-          { to: "/messages",  label: "Messages",       icon: MessageSquare },
+        : [
+          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+          { to: "/documents", label: "Documents", icon: FolderOpen },
+          { to: "/reports", label: "Work Report", icon: FileText },
+          { to: "/messages", label: "Messages", icon: MessageSquare },
         ];
 
   return (
@@ -58,14 +58,13 @@ export const AppSidebar = () => {
       <aside className="flex h-screen w-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
 
         {/* LOGO */}
-        <div className="flex items-center gap-3 border-b border-sidebar-border px-6 py-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-            <Briefcase className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="text-base font-semibold text-white">IK Tangience</div>
-            <div className="text-xs text-sidebar-foreground/70">Management</div>
-          </div>
+        {/* LOGO */}
+        <div className="flex items-center justify-center border-b border-sidebar-border px-10 py-15">
+          <img
+            src="/IKT.png"
+            alt="IK Tangience Logo"
+            className="h-100 w-auto object-contain"
+          />
         </div>
 
         {/* USER CHIP */}

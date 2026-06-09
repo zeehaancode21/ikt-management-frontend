@@ -314,11 +314,11 @@ function ProjectsTab() {
     try {
       const { data } = await api.get<Project[]>("/projects");
       setProjects(data);
-      
+
       // Extract unique clients
       const clients = [...new Set(data.map(p => p.client).filter(c => c))];
       setAvailableClients(clients);
-      
+
       // Load project statuses for all projects
       await loadProjectStatuses();
     } catch (err) {
@@ -344,12 +344,12 @@ function ProjectsTab() {
 
   const loadProjectsByClient = async (clientName: string) => {
     if (!clientName) return;
-    
+
     setLoading(true);
     try {
       const { data } = await api.get<Project[]>(`/project-status/client/${encodeURIComponent(clientName)}`);
       setProjects(data);
-      
+
       // Also load statuses for these projects
       const { data: statusData } = await api.get<ProjectStatus[]>("/project-status");
       const statusMap = new Map();
@@ -386,7 +386,7 @@ function ProjectsTab() {
       setEditor("");
       setChecker("");
       setModular("");
-      
+
       // Reload based on current filter
       if (filterType === "client" && selectedClient) {
         await loadProjectsByClient(selectedClient);
@@ -407,7 +407,7 @@ function ProjectsTab() {
       await api.delete(`/projects/${deleteId}`);
       toast({ title: "🗑️ Project deleted" });
       setDeleteId(null);
-      
+
       // Reload based on current filter
       if (filterType === "client" && selectedClient) {
         await loadProjectsByClient(selectedClient);
@@ -1010,7 +1010,7 @@ function EmployeesTab() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function AdminConsole() {
   const { role } = useAuth();
-  const [tab, setTab] = useState<"projects" | "employees">("projects");
+  const [tab, setTab] = useState<"projects" | "employees">("employees");
 
   if (role !== "OWNER") return <Navigate to="/progress" replace />;
 
@@ -1900,7 +1900,7 @@ export default function AdminConsole() {
             <h1 className="ac-page-title">Admin Console</h1>
             <p className="ac-page-sub">Manage projects and team members from one centralized dashboard</p>
           </div>
-          <div className="ac-tabs">
+          {/* <div className="ac-tabs">
             <motion.button
               className={`ac-tab-btn ${tab === "projects" ? "active" : ""}`}
               onClick={() => setTab("projects")}
@@ -1919,6 +1919,32 @@ export default function AdminConsole() {
               <span className="ac-tab-dot" style={{ background: tab === "employees" ? "#10b981" : "#94a3b8" }} />
               Employees
             </motion.button>
+          </div> */}
+          <div className="ac-tabs">
+
+            <motion.button
+              className="ac-tab-btn active"
+              onClick={() => setTab("employees")}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <span className="ac-tab-dot" style={{ background: "#10b981" }} />
+              Employees
+            </motion.button>
+            <motion.button
+              className="ac-tab-btn"
+              disabled={true}
+              style={{
+                opacity: 0.4,
+                cursor: 'not-allowed',
+                filter: 'grayscale(0.3)'
+              }}
+            >
+              <span className="ac-tab-dot" style={{ background: "#94a3b8" }} />
+              Projects (Coming Soon)
+            </motion.button>
+
+            
           </div>
         </div>
 
