@@ -29,22 +29,22 @@ export const AppSidebar = () => {
   const navItems =
     role === "OWNER"
       ? [
-        { to: "/admin", label: "Admin Console", icon: ShieldCheck },
-        { to: "/dashboard", label: "Projects", icon: Briefcase },
-        { to: "/documents", label: "Documents", icon: FolderOpen },
-        { to: "/reports", label: "Work Report", icon: FileText },
-        { to: "/leave", label: "Leave Portal", icon: CalendarDays },
-        { to: "/messages", label: "Messages", icon: MessageSquare },
-      ]
+          { to: "/admin", label: "Admin Console", icon: ShieldCheck },
+          { to: "/dashboard", label: "Projects", icon: Briefcase },
+          { to: "/documents", label: "Documents", icon: FolderOpen },
+          { to: "/reports", label: "Work Report", icon: FileText },
+          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+          { to: "/messages", label: "Messages", icon: MessageSquare },
+        ]
       : role === "LEAD"
-        ? [
+      ? [
           { to: "/dashboard", label: "Projects", icon: Briefcase },
           { to: "/documents", label: "Documents", icon: FolderOpen },
           { to: "/reports", label: "Work Report", icon: FileText },
           { to: "/leave", label: "Leave Report", icon: CalendarDays },
           { to: "/messages", label: "Messages", icon: MessageSquare },
         ]
-        : [
+      : [
           { to: "/leave", label: "Leave Portal", icon: CalendarDays },
           { to: "/documents", label: "Documents", icon: FolderOpen },
           { to: "/reports", label: "Work Report", icon: FileText },
@@ -56,8 +56,6 @@ export const AppSidebar = () => {
       {showCP && <ChangePasswordModal onClose={() => setShowCP(false)} />}
 
       <aside className="flex h-screen w-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-
-        {/* LOGO */}
         {/* LOGO */}
         <div className="flex items-center justify-center border-b border-sidebar-border px-10 py-15">
           <img
@@ -102,33 +100,43 @@ export const AppSidebar = () => {
         </nav>
 
         {/* FOOTER */}
-        <div className="border-t border-sidebar-border p-3">
+        <div className="border-t border-sidebar-border">
+          {/* Camera Button - Owner Only */}
           {role === "OWNER" && (
-            <div className="flex justify-center py-3">
-              <GiCctvCamera className="text-4xl text-blue-500" />
+            <div className="p-3 border-b border-sidebar-border">
+              <button 
+                onClick={() => {
+                  const cameraUrl = "rtsp://admin:password@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0";
+                  window.open(`/camera-viewer?url=${encodeURIComponent(cameraUrl)}`, '_blank');
+                }}
+                className="w-full flex justify-center py-3 hover:bg-sidebar-accent rounded-md transition-colors group"
+              >
+                <GiCctvCamera className="text-4xl text-blue-500 group-hover:text-blue-400 transition-colors" />
+              </button>
             </div>
           )}
 
           {/* Change Password - all roles */}
-          <Button
-            variant="ghost"
-            onClick={() => setShowCP(true)}
-            className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-white mb-1"
-          >
-            <KeyRound className="mr-2 h-4 w-4" />
-            Change Password
-          </Button>
+          <div className="p-3">
+            <Button
+              variant="ghost"
+              onClick={() => setShowCP(true)}
+              className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-white mb-1"
+            >
+              <KeyRound className="mr-2 h-4 w-4" />
+              Change Password
+            </Button>
 
-          <Button
-            variant="ghost"
-            onClick={handleLogout}
-            className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-white"
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            Log out
-          </Button>
+            <Button
+              variant="ghost"
+              onClick={handleLogout}
+              className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-white"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Log out
+            </Button>
+          </div>
         </div>
-
       </aside>
     </>
   );
