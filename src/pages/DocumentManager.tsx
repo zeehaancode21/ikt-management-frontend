@@ -140,7 +140,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
 
-const API = 'http://localhost:8080';
+const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 const getAuthToken = () => localStorage.getItem('token');
 
 const getCurrentUser = () => {
