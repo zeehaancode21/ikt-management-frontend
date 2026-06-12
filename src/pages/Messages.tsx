@@ -4,7 +4,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useWebSocket } from "@/context/WebSocketContext";
 import {
   Send, Search, Users, Megaphone, Hash, ArrowLeft,
-  Plus, Settings, Trash2, UserPlus, BarChart2, X, Check
+  Plus, Settings, Trash2, UserPlus, BarChart2, X, Check,
+  Paperclip, Image, File, Video, FileArchive, XCircle
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -15,6 +16,7 @@ interface Message {
   content: string;
   readByReceiver: boolean;
   sentAt: string;
+  attachments?: Attachment[];
 }
 
 interface GroupMessage {
@@ -22,15 +24,10 @@ interface GroupMessage {
   groupId: number;
   senderUsername: string;
   content: string;
-  messageType: "MESSAGE" | "POLL";
+  messageType: "MESSAGE" | "POLL" | "FILE";
   pollData?: string; // JSON string
+  attachments?: Attachment[];
   sentAt: string;
-}
-
-interface PollData {
-  question: string;
-  options: string[];
-  votes: Record<string, string[]>;
 }
 
 interface Broadcast {
@@ -40,6 +37,22 @@ interface Broadcast {
   type: string;
   read: boolean;
   createdAt: string;
+  attachments?: Attachment[];
+}
+
+interface Attachment {
+  id: number;
+  filename: string;
+  originalName: string;
+  fileType: string;
+  fileSize: number;
+  filePath: string;
+}
+
+interface PollData {
+  question: string;
+  options: string[];
+  votes: Record<string, string[]>;
 }
 
 interface UserEntry {
@@ -114,6 +127,71 @@ function getRoleColor(r: string) {
   return "#64748b";
 }
 
+// ─── File Attachment Component ────────────────────────────────────────────────
+function FileAttachment({ attachment, isMine }: { attachment: Attachment; isMine: boolean }) {
+  const getFileIcon = () => {
+    const ext = attachment.originalName.split('.').pop()?.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext || '')) {
+      return <Image size={20} />;
+    }
+    if (['mp4', 'webm', 'mov', 'avi'].includes(ext || '')) {
+      return <Video size={20} />;
+    }
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext || '')) {
+      return <FileArchive size={20} />;
+    }
+    return <File size={20} />;
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const handleDownload = async () => {
+    try {
+      const response = await api.get(`/attachments/${attachment.id}/download`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', attachment.originalName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
+  };
+
+  const handlePreview = () => {
+    const ext = attachment.originalName.split('.').pop()?.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext || '')) {
+      window.open(`/api/attachments/${attachment.id}/preview`, '_blank');
+    } else {
+      handleDownload();
+    }
+  };
+
+  return (
+    <div className={`file-attachment ${isMine ? 'mine' : 'theirs'}`} onClick={handlePreview}>
+      <div className="file-icon">{getFileIcon()}</div>
+      <div className="file-info">
+        <div className="file-name">{attachment.originalName}</div>
+        <div className="file-size">{formatFileSize(attachment.fileSize)}</div>
+      </div>
+      <button className="file-download" onClick={(e) => { e.stopPropagation(); handleDownload(); }}>
+        📥
+      </button>
+    </div>
+  );
+}
+
 // ─── Poll component ───────────────────────────────────────────────────────────
 function PollBubble({
   msg, currentUser, groupId, onVoted
@@ -185,9 +263,12 @@ export default function Messages() {
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [inboxMap, setInboxMap] = useState<Record<string, Message>>({});
   const [search, setSearch] = useState("");
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Group management modal
   const [showGroupModal, setShowGroupModal] = useState(false);
@@ -317,57 +398,154 @@ export default function Messages() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation, groupMessages, broadcasts]);
 
-  // ── Send ─────────────────────────────────────────────────────────────────────
+  // ── File upload handlers ─────────────────────────────────────────────────────
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      const validFiles = files.filter(file => {
+        const maxSize = 50 * 1024 * 1024; // 50MB limit
+        if (file.size > maxSize) {
+          alert(`${file.name} exceeds 50MB limit`);
+          return false;
+        }
+        return true;
+      });
+      setSelectedFiles(prev => [...prev, ...validFiles]);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeSelectedFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadFiles = async (files: File[]): Promise<Attachment[]> => {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('files', file);
+    });
+    
+    try {
+      const response = await api.post<Attachment[]>('/attachments/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Upload failed:', error);
+      throw error;
+    }
+  };
+
+  // ── Send with attachments ─────────────────────────────────────────────────────
   const handleSend = async () => {
-    if (!newMessage.trim() || sending) return;
+    if ((!newMessage.trim() && selectedFiles.length === 0) || sending || uploading) return;
+    
+    setSending(true);
     const content = newMessage.trim();
+    const filesToUpload = [...selectedFiles];
+    
+    // Clear input immediately for better UX
+    setNewMessage("");
+    setSelectedFiles([]);
 
     // Broadcast
     if (chatTarget?.type === "broadcast") {
-      if (role !== "OWNER") return;
-      setSending(true);
-      setNewMessage("");
+      if (role !== "OWNER") {
+        setSending(false);
+        return;
+      }
       try {
-        await api.post("/notifications/broadcast", { content });
+        let attachments: Attachment[] = [];
+        if (filesToUpload.length > 0) {
+          attachments = await uploadFiles(filesToUpload);
+        }
+        await api.post("/notifications/broadcast", { content, attachments: attachments.map(a => a.id) });
         await fetchBroadcasts();
-      } catch { /* ignore */ } finally { setSending(false); }
+      } catch (error) {
+        console.error('Broadcast failed:', error);
+        // Restore input on error
+        setNewMessage(content);
+        setSelectedFiles(filesToUpload);
+      } finally { 
+        setSending(false);
+        setUploading(false);
+      }
       return;
     }
 
     // Group message
     if (chatTarget?.type === "group") {
-      setSending(true);
-      setNewMessage("");
       try {
-        const r = await api.post<GroupMessage>(`/groups/${chatTarget.group.id}/messages`, { content });
+        let attachments: Attachment[] = [];
+        if (filesToUpload.length > 0) {
+          setUploading(true);
+          attachments = await uploadFiles(filesToUpload);
+          setUploading(false);
+        }
+        const r = await api.post<GroupMessage>(`/groups/${chatTarget.group.id}/messages`, { 
+          content, 
+          attachments: attachments.map(a => a.id),
+          messageType: attachments.length > 0 ? "FILE" : "MESSAGE"
+        });
         setGroupMessages((prev) =>
           prev.some((m) => m.id === r.data.id) ? prev : [...prev, r.data]
         );
-      } catch { /* ignore */ } finally { setSending(false); }
+      } catch (error) {
+        console.error('Group message failed:', error);
+        setNewMessage(content);
+        setSelectedFiles(filesToUpload);
+      } finally { 
+        setSending(false);
+        setUploading(false);
+      }
       return;
     }
 
     // DM
-    if (!chatTarget || chatTarget.type !== "user") return;
-    setSending(true);
+    if (!chatTarget || chatTarget.type !== "user") {
+      setSending(false);
+      return;
+    }
+    
     const tempId = -(Date.now());
-    const optimistic: Message = {
-      id: tempId, senderUsername: name!, receiverUsername: chatTarget.username,
-      content, readByReceiver: false, sentAt: new Date().toISOString(),
-    };
-    setConversation((prev) => [...prev, optimistic]);
-    setNewMessage("");
     try {
-      const r = await api.post<Message>("/messages/send", { receiverUsername: chatTarget.username, content });
+      let attachments: Attachment[] = [];
+      if (filesToUpload.length > 0) {
+        setUploading(true);
+        attachments = await uploadFiles(filesToUpload);
+        setUploading(false);
+      }
+      
+      const optimistic: Message = {
+        id: tempId, senderUsername: name!, receiverUsername: chatTarget.username,
+        content, readByReceiver: false, sentAt: new Date().toISOString(),
+        attachments
+      };
+      setConversation((prev) => [...prev, optimistic]);
+      
+      const r = await api.post<Message>("/messages/send", { 
+        receiverUsername: chatTarget.username, 
+        content,
+        attachments: attachments.map(a => a.id)
+      });
       setConversation((prev) => prev.map((m) => m.id === tempId ? r.data : m));
       await fetchInbox();
-    } catch {
+    } catch (error) {
+      console.error('DM send failed:', error);
       setConversation((prev) => prev.filter((m) => m.id !== tempId));
-    } finally { setSending(false); }
+      setNewMessage(content);
+      setSelectedFiles(filesToUpload);
+    } finally { 
+      setSending(false);
+      setUploading(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (e.key === "Enter" && !e.shiftKey && !uploading) { 
+      e.preventDefault(); 
+      handleSend(); 
+    }
   };
 
   const openChat = (target: ChatTarget) => { setChatTarget(target); setMobileChatOpen(true); };
@@ -573,6 +751,51 @@ export default function Messages() {
         .msg-bubble-meta { display:flex; align-items:center; gap:4px; margin-top:3px; padding:0 4px; }
         .msg-bubble-meta span { font-size:10.5px; color:hsl(var(--muted-foreground)); }
         .msg-bubble-meta.mine span { color:rgba(255,255,255,.65); }
+
+        /* ── File attachments ── */
+        .file-attachment {
+          display:flex; align-items:center; gap:10px; padding:8px 12px;
+          border-radius:12px; cursor:pointer; transition:all .2s;
+          margin-top:6px; background:rgba(0,0,0,0.05);
+        }
+        .file-attachment.mine { background:rgba(255,255,255,0.15); }
+        .file-attachment.theirs { background:rgba(0,0,0,0.05); }
+        .file-attachment:hover { transform:translateY(-1px); box-shadow:0 2px 6px rgba(0,0,0,0.1); }
+        .file-icon { font-size:24px; flex-shrink:0; }
+        .file-info { flex:1; min-width:0; }
+        .file-name { font-size:12px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .file-size { font-size:10px; opacity:0.7; margin-top:2px; }
+        .file-download {
+          background:none; border:none; cursor:pointer; font-size:16px;
+          padding:4px; border-radius:6px; transition:background .2s;
+        }
+        .file-download:hover { background:rgba(0,0,0,0.1); }
+
+        .selected-files {
+          display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;
+          padding:8px; background:hsl(var(--muted)); border-radius:8px;
+        }
+        .selected-file {
+          display:flex; align-items:center; gap:6px; padding:4px 8px;
+          background:hsl(var(--background)); border-radius:6px;
+          font-size:11px; border:1px solid hsl(var(--border));
+        }
+        .selected-file button {
+          background:none; border:none; cursor:pointer; padding:0;
+          display:flex; align-items:center; color:#ef4444;
+        }
+        .uploading-indicator {
+          display:flex; align-items:center; gap:8px; padding:4px 8px;
+          font-size:12px; color:hsl(var(--muted-foreground));
+        }
+        .uploading-spinner {
+          width:14px; height:14px; border:2px solid hsl(var(--border));
+          border-top-color:#2563eb; border-radius:50%;
+          animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
 
         /* ── Input ── */
         .msg-input-area { padding:14px 20px 16px; border-top:1px solid hsl(var(--border)); background:hsl(var(--card)); }
@@ -843,6 +1066,9 @@ export default function Messages() {
                       <div className="msg-bubble-group broadcast-msg">
                         <div className="msg-sender-label">{bc.targetUsername}</div>
                         <div className="msg-bubble broadcast">{bc.content}</div>
+                        {bc.attachments?.map(attachment => (
+                          <FileAttachment key={attachment.id} attachment={attachment} isMine={false} />
+                        ))}
                         <div className="msg-bubble-meta"><span>{fmtTime(bc.createdAt)}</span></div>
                       </div>
                     </div>
@@ -852,8 +1078,13 @@ export default function Messages() {
               </div>
               <div className="msg-input-area">
                 <div className="msg-input-row">
-                  <input ref={inputRef} placeholder="Send a message to everyone…" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={handleKeyDown} disabled={sending} />
-                  <button className="msg-send-btn" onClick={handleSend} disabled={!newMessage.trim() || sending}><Send size={15} /></button>
+                  <input ref={inputRef} placeholder="Send a message to everyone…" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={handleKeyDown} disabled={sending || uploading} />
+                  <button className="msg-toolbar-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                    <Paperclip size={13} />
+                  </button>
+                  <button className="msg-send-btn" onClick={handleSend} disabled={(!newMessage.trim() && selectedFiles.length === 0) || sending || uploading}>
+                    {uploading ? <div className="uploading-spinner" /> : <Send size={15} />}
+                  </button>
                 </div>
               </div>
             </>
@@ -908,7 +1139,12 @@ export default function Messages() {
                             }
                           />
                         ) : (
-                          <div className={`msg-bubble ${isMine ? "mine" : "theirs"}`}>{msg.content}</div>
+                          <>
+                            {msg.content && <div className={`msg-bubble ${isMine ? "mine" : "theirs"}`}>{msg.content}</div>}
+                            {msg.attachments?.map(attachment => (
+                              <FileAttachment key={attachment.id} attachment={attachment} isMine={isMine} />
+                            ))}
+                          </>
                         )}
                         <div className={`msg-bubble-meta ${isMine ? "mine" : ""}`}>
                           <span>{fmtTime(msg.sentAt)}</span>
@@ -926,9 +1162,39 @@ export default function Messages() {
                     <BarChart2 size={13} /> Poll
                   </button>
                 </div>
+                {selectedFiles.length > 0 && (
+                  <div className="selected-files">
+                    {selectedFiles.map((file, idx) => (
+                      <div key={idx} className="selected-file">
+                        <span>{file.name}</span>
+                        <button onClick={() => removeSelectedFile(idx)}>
+                          <XCircle size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {uploading && (
+                  <div className="uploading-indicator">
+                    <div className="uploading-spinner" />
+                    <span>Uploading files...</span>
+                  </div>
+                )}
                 <div className="msg-input-row">
-                  <input ref={inputRef} placeholder={`Message ${chatTarget.group.name}…`} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={handleKeyDown} disabled={sending} />
-                  <button className="msg-send-btn" onClick={handleSend} disabled={!newMessage.trim() || sending}><Send size={15} /></button>
+                  <input 
+                    ref={inputRef} 
+                    placeholder={`Message ${chatTarget.group.name}…`} 
+                    value={newMessage} 
+                    onChange={(e) => setNewMessage(e.target.value)} 
+                    onKeyDown={handleKeyDown} 
+                    disabled={sending || uploading} 
+                  />
+                  <button className="msg-toolbar-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                    <Paperclip size={13} />
+                  </button>
+                  <button className="msg-send-btn" onClick={handleSend} disabled={(!newMessage.trim() && selectedFiles.length === 0) || sending || uploading}>
+                    {uploading ? <div className="uploading-spinner" /> : <Send size={15} />}
+                  </button>
                 </div>
               </div>
             </>
@@ -970,7 +1236,10 @@ export default function Messages() {
                       {showDivider && <div className="msg-day-divider"><span>{longDateLabel(msg.sentAt)}</span></div>}
                       <div className={`msg-bubble-group ${isMine ? "mine" : "theirs"}`}>
                         {showSender && !isMine && <div className="msg-sender-label">{msg.senderUsername}</div>}
-                        <div className={`msg-bubble ${isMine ? "mine" : "theirs"}`}>{msg.content}</div>
+                        {msg.content && <div className={`msg-bubble ${isMine ? "mine" : "theirs"}`}>{msg.content}</div>}
+                        {msg.attachments?.map(attachment => (
+                          <FileAttachment key={attachment.id} attachment={attachment} isMine={isMine} />
+                        ))}
                         <div className={`msg-bubble-meta ${isMine ? "mine" : ""}`}>
                           <span>{fmtTime(msg.sentAt)}</span>
                           {isMine && <span style={{ fontSize: 12 }}>{msg.readByReceiver ? "✓✓" : "✓"}</span>}
@@ -983,15 +1252,55 @@ export default function Messages() {
               </div>
 
               <div className="msg-input-area">
+                {selectedFiles.length > 0 && (
+                  <div className="selected-files">
+                    {selectedFiles.map((file, idx) => (
+                      <div key={idx} className="selected-file">
+                        <span>{file.name}</span>
+                        <button onClick={() => removeSelectedFile(idx)}>
+                          <XCircle size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {uploading && (
+                  <div className="uploading-indicator">
+                    <div className="uploading-spinner" />
+                    <span>Uploading files...</span>
+                  </div>
+                )}
                 <div className="msg-input-row">
-                  <input ref={inputRef} placeholder={`Message ${chatTarget.username}…`} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={handleKeyDown} disabled={sending} />
-                  <button className="msg-send-btn" onClick={handleSend} disabled={!newMessage.trim() || sending}><Send size={15} /></button>
+                  <input 
+                    ref={inputRef} 
+                    placeholder={`Message ${chatTarget.username}…`} 
+                    value={newMessage} 
+                    onChange={(e) => setNewMessage(e.target.value)} 
+                    onKeyDown={handleKeyDown} 
+                    disabled={sending || uploading} 
+                  />
+                  <button className="msg-toolbar-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                    <Paperclip size={13} />
+                  </button>
+                  <button className="msg-send-btn" onClick={handleSend} disabled={(!newMessage.trim() && selectedFiles.length === 0) || sending || uploading}>
+                    {uploading ? <div className="uploading-spinner" /> : <Send size={15} />}
+                  </button>
                 </div>
               </div>
             </>
           )}
         </div>
       </div>
+
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        multiple
+        onChange={handleFileSelect}
+        accept="image/*,video/*,application/pdf,application/zip,application/x-rar-compressed,application/x-7z-compressed,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      />
 
       {/* ── Create / Edit Group Modal ──────────────────────────────────────── */}
       {showGroupModal && (
