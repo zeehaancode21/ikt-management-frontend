@@ -7,6 +7,7 @@ import {
   Download,
   File,
   Folder,
+  FolderOpen,
   ChevronRight,
   Home,
   RefreshCw,
@@ -14,6 +15,7 @@ import {
   ArrowLeft,
   AlertTriangle,
   CheckCircle2,
+  Lock,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -38,10 +40,17 @@ interface FolderItem {
   description: string;
   createdBy: string;
   createdAt: string;
+  parentId: number | null;
+  subFolders: FolderItem[];
   documents: DocumentMeta[];
 }
 
-// ─── Delete Confirmation Modal ───────────────────────────────────────────────
+// A folder that already has files is a LEAF  → can't add sub-folders
+// A folder that already has sub-folders is a BRANCH → can't upload files
+function isLeaf(f: FolderItem) { return (f.documents?.length ?? 0) > 0; }
+function isBranch(f: FolderItem) { return (f.subFolders?.length ?? 0) > 0; }
+
+// ─── Delete Confirmation Modal ────────────────────────────────────────────────
 
 interface DeleteConfirmModalProps {
   isOpen: boolean;
@@ -111,7 +120,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
               <span className="text-orange-400 text-sm mt-0.5 flex-shrink-0">⚠</span>
               <p className="text-xs text-orange-700 leading-relaxed">
                 {type === 'folder'
-                  ? 'All documents inside this folder will be permanently removed. This action cannot be undone.'
+                  ? 'All sub-folders and documents inside will be permanently removed. This action cannot be undone.'
                   : 'This document will be permanently removed. This action cannot be undone.'}
               </p>
             </div>
@@ -138,19 +147,21 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   );
 };
 
-// ─── API helpers ─────────────────────────────────────────────────────────────
+// ─── API helpers ──────────────────────────────────────────────────────────────
 
 const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 const getAuthToken = () => localStorage.getItem('token');
 
 const getCurrentUser = () => {
-  const userId = localStorage.getItem('userId');
-  if (userId) return userId;
+  // Prefer explicit userId in storage; fall back to JWT subject claim
+  const stored = localStorage.getItem('userId') || localStorage.getItem('username');
+  if (stored) return stored;
   const token = getAuthToken();
   if (token) {
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
-      return payload.userId || payload.sub || 'anonymous';
+      // Most Spring JWT setups put the username in 'sub'
+      return payload.sub || payload.userId || 'anonymous';
     } catch { /* ignore */ }
   }
   return 'anonymous';
@@ -158,25 +169,26 @@ const getCurrentUser = () => {
 
 async function apiFetch(path: string, options?: RequestInit) {
   const token = getAuthToken();
-  const headers: HeadersInit = { ...(options?.headers || {}) };
+  const headers: Record<string, string> = { ...(options?.headers as Record<string, string> || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (!(options?.body instanceof FormData)) headers['Content-Type'] = 'application/json';
 
   const res = await fetch(`${API}${path}`, { ...options, headers });
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
-    try { const j = await res.json(); msg = j.error ?? j.message ?? msg; } catch {}
+    try { const j = await res.json(); msg = j.error ?? j.message ?? msg; } catch { /* ignore */ }
     throw new Error(msg);
   }
   if (res.status === 204) return null;
   return res.json();
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 
 const DocumentManager: React.FC = () => {
   const [folders, setFolders] = useState<FolderItem[]>([]);
-  const [currentFolder, setCurrentFolder] = useState<FolderItem | null>(null);
+  // Stack of folder IDs the user has drilled into: [] = root
+  const [folderStack, setFolderStack] = useState<FolderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -190,11 +202,14 @@ const DocumentManager: React.FC = () => {
     open: boolean;
     type: 'folder' | 'document';
     id: number;
-    parentId?: number;
+    parentFolderId?: number;
     name: string;
   } | null>(null);
 
-  // ── Load folders ───────────────────────────────────────────────────────────
+  // The currently-viewed folder is the top of the stack
+  const currentFolder = folderStack.length > 0 ? folderStack[folderStack.length - 1] : null;
+
+  // ── Load root folders ──────────────────────────────────────────────────────
   const loadFolders = useCallback(async () => {
     try {
       setLoading(true);
@@ -203,29 +218,95 @@ const DocumentManager: React.FC = () => {
       const data: FolderItem[] = await apiFetch(`/folders/${userId}`);
       const list = Array.isArray(data) ? data : [];
       setFolders(list);
-      if (currentFolder) {
-        const updated = list.find(f => f.id === currentFolder.id);
-        setCurrentFolder(updated ?? null);
-      }
+
+      // Keep the stack in sync: refresh each folder in the stack from new data
+      setFolderStack(prev => {
+        if (prev.length === 0) return prev;
+        // Re-fetch the deepest folder so its contents are current
+        // (shallow re-sync from the root tree returned)
+        return prev.map(stackItem => {
+          const refreshed = findFolderInTree(list, stackItem.id);
+          return refreshed ?? stackItem;
+        });
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load folders');
       setFolders([]);
     } finally {
       setLoading(false);
     }
-  }, [currentFolder]);
+  }, []); // no deps — we read from localStorage each time
 
   useEffect(() => { loadFolders(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Utility: find a folder anywhere in a recursive tree ───────────────────
+  function findFolderInTree(tree: FolderItem[], id: number): FolderItem | undefined {
+    for (const f of tree) {
+      if (f.id === id) return f;
+      if (f.subFolders?.length) {
+        const found = findFolderInTree(f.subFolders, id);
+        if (found) return found;
+      }
+    }
+  }
+
+  // ── Refresh the currently-open folder from the server ─────────────────────
+  const refreshCurrentFolder = async (folderId: number) => {
+    try {
+      const userId = getCurrentUser();
+      const updated: FolderItem = await apiFetch(`/folders/${userId}/${folderId}`);
+      if (updated.documents) updated.documents.forEach(d => { d.status = 'READY'; });
+      setFolderStack(prev => prev.map((f, i) =>
+        i === prev.length - 1 ? updated : f
+      ));
+    } catch { /* non-critical */ }
+  };
+
+  // ── Navigate into a folder ─────────────────────────────────────────────────
+  const openFolder = (folder: FolderItem) => {
+    setFolderStack(prev => [...prev, folder]);
+  };
+
+  // ── Navigate back one level ────────────────────────────────────────────────
+  const goBack = () => {
+    setFolderStack(prev => prev.slice(0, -1));
+  };
+
+  // ── Navigate to a specific crumb ──────────────────────────────────────────
+  const goToCrumb = (index: number) => {
+    if (index < 0) {
+      setFolderStack([]);
+    } else {
+      setFolderStack(prev => prev.slice(0, index + 1));
+    }
+  };
 
   // ── Create folder ──────────────────────────────────────────────────────────
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
     try {
+      const parentId = currentFolder?.id ?? null;
       const created: FolderItem = await apiFetch(`/folders`, {
         method: 'POST',
-        body: JSON.stringify({ name: newFolderName.trim(), description: newFolderDesc.trim() }),
+        body: JSON.stringify({
+          name: newFolderName.trim(),
+          description: newFolderDesc.trim(),
+          parentId,
+        }),
       });
-      setFolders(prev => [created, ...prev]);
+      created.subFolders = created.subFolders ?? [];
+      created.documents = created.documents ?? [];
+
+      if (parentId === null) {
+        // Add to root list
+        setFolders(prev => [created, ...prev]);
+      } else {
+        // Patch the current folder's subFolders list optimistically
+        setFolderStack(prev => prev.map((f, i) => {
+          if (i !== prev.length - 1) return f;
+          return { ...f, subFolders: [created, ...(f.subFolders ?? [])] };
+        }));
+      }
       setShowCreateFolder(false);
       setNewFolderName('');
       setNewFolderDesc('');
@@ -242,9 +323,11 @@ const DocumentManager: React.FC = () => {
         method: 'PUT',
         body: JSON.stringify({ name: newName.trim() }),
       });
-      setFolders(prev => prev.map(f => f.id === id ? { ...f, name: updated.name } : f));
-      if (currentFolder?.id === id)
-        setCurrentFolder(prev => prev ? { ...prev, name: updated.name } : prev);
+      // Patch wherever the folder appears (root list or stack)
+      const patchName = (list: FolderItem[]): FolderItem[] =>
+        list.map(f => f.id === id ? { ...f, name: updated.name } : f);
+      setFolders(prev => patchName(prev));
+      setFolderStack(prev => patchName(prev));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to rename folder');
     } finally {
@@ -253,44 +336,61 @@ const DocumentManager: React.FC = () => {
   };
 
   // ── Delete handlers ────────────────────────────────────────────────────────
-  const handleDeleteFolder = (id: number, name: string) =>
-    setDeleteModal({ open: true, type: 'folder', id, name });
+  const handleDeleteFolder = (id: number, name: string, parentFolderId?: number) =>
+    setDeleteModal({ open: true, type: 'folder', id, parentFolderId, name });
 
   const handleDeleteDocument = (folderId: number, docId: number, name: string) =>
-    setDeleteModal({ open: true, type: 'document', id: docId, parentId: folderId, name });
+    setDeleteModal({ open: true, type: 'document', id: docId, parentFolderId: folderId, name });
 
   const handleConfirmDelete = () => {
     if (!deleteModal) return;
-
     const snapshot = { ...deleteModal };
     const userId = getCurrentUser();
-
-    // 1. Update UI instantly — no waiting for server
     setDeleteModal(null);
 
     if (snapshot.type === 'folder') {
+      // Optimistic: remove from root or from parent's subFolders
       setFolders(prev => prev.filter(f => f.id !== snapshot.id));
-      if (currentFolder?.id === snapshot.id) setCurrentFolder(null);
+      setFolderStack(prev => {
+        const filtered = prev.filter(f => f.id !== snapshot.id);
+        // If we just deleted the current folder, pop back
+        if (filtered.length < prev.length &&
+            prev[prev.length - 1].id === snapshot.id) {
+          return filtered.slice(0, -1);
+        }
+        // Also patch subFolders in the parent if we're inside it
+        return filtered.map(f => ({
+          ...f,
+          subFolders: (f.subFolders ?? []).filter(s => s.id !== snapshot.id),
+        }));
+      });
+
+      apiFetch(`/folders/${snapshot.id}`, { method: 'DELETE' }).catch(err => {
+        setError(`Delete failed: ${err instanceof Error ? err.message : 'unknown error'} — please refresh.`);
+      });
     } else {
-      // ✅ Removed pollingRefs cleanup — no longer needed
-      setCurrentFolder(prev =>
-        prev ? { ...prev, documents: prev.documents.filter(d => d.id !== snapshot.id) } : prev
-      );
+      // Optimistic: remove document from current folder
+      setFolderStack(prev => prev.map((f, i) => {
+        if (i !== prev.length - 1) return f;
+        return { ...f, documents: f.documents.filter(d => d.id !== snapshot.id) };
+      }));
+
+      const url = `/folders/${userId}/${snapshot.parentFolderId}/documents/${snapshot.id}`;
+      apiFetch(url, { method: 'DELETE' }).catch(err => {
+        setError(`Delete failed: ${err instanceof Error ? err.message : 'unknown error'} — please refresh.`);
+      });
     }
-
-    // 2. Fire DELETE in background — no await
-    const url = snapshot.type === 'folder'
-      ? `/folders/${snapshot.id}`
-      : `/folders/${userId}/${snapshot.parentId}/documents/${snapshot.id}`;
-
-    apiFetch(url, { method: 'DELETE' }).catch(err => {
-      setError(`Delete failed: ${err instanceof Error ? err.message : 'unknown error'} — please refresh.`);
-    });
   };
 
-  // ── Upload — fire-and-forget, UI updates before any network wait ───────────
+  // ── Upload ─────────────────────────────────────────────────────────────────
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!currentFolder) { setError('Please open a folder before uploading.'); return; }
+    if (isBranch(currentFolder)) {
+      setError('Cannot upload files here — this folder contains sub-folders. Upload into a leaf folder.');
+      event.target.value = '';
+      return;
+    }
+
     const fileList = event.target.files;
     if (!fileList || fileList.length === 0) return;
 
@@ -298,12 +398,10 @@ const DocumentManager: React.FC = () => {
     const userId = getCurrentUser();
 
     Array.from(fileList).forEach(file => {
-      // 1. Generate a temporary negative ID so the row appears instantly
-      const tempId = -(Date.now() + Math.random());
+      const tempId = -(Date.now() + Math.random()) as unknown as number;
 
-      // 2. Add a placeholder row RIGHT NOW — no network wait at all
       const placeholder: DocumentMeta = {
-        id: tempId as unknown as number,
+        id: tempId,
         fileName: file.name,
         originalFileName: file.name,
         fileType: file.type || 'application/octet-stream',
@@ -313,49 +411,44 @@ const DocumentManager: React.FC = () => {
         projectName: '',
         uploadedBy: userId,
         uploadedAt: new Date().toISOString(),
-        status: 'READY', // ✅ always READY — backend saves synchronously
+        status: 'READY',
       };
 
-      setCurrentFolder(prev =>
-        prev ? { ...prev, documents: [placeholder, ...(prev.documents ?? [])] } : prev
-      );
+      setFolderStack(prev => prev.map((f, i) => {
+        if (i !== prev.length - 1) return f;
+        return { ...f, documents: [placeholder, ...(f.documents ?? [])] };
+      }));
 
-      // 3. Fire the upload in the background — do NOT await here
       const formData = new FormData();
       formData.append('file', file);
-
       const token = getAuthToken();
+
       fetch(`${API}/folders/${userId}/${folderId}/documents`, {
         method: 'POST',
         body: formData,
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
         .then(res => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          if (!res.ok) return res.json().then(j => { throw new Error(j.error ?? `HTTP ${res.status}`); });
           return res.json();
         })
         .then((saved: DocumentMeta) => {
-          // 4. Swap placeholder with real doc from server — always READY
           const realDoc: DocumentMeta = { ...saved, status: 'READY' };
-          setCurrentFolder(prev => {
-            if (!prev) return prev;
+          setFolderStack(prev => prev.map((f, i) => {
+            if (i !== prev.length - 1) return f;
             return {
-              ...prev,
-              documents: prev.documents.map(d =>
-                d.id === (tempId as unknown as number) ? realDoc : d
-              ),
+              ...f,
+              documents: f.documents.map(d => d.id === tempId ? realDoc : d),
             };
-          });
+          }));
+          // Also refresh so the "isBranch / isLeaf" badge updates in parent views
+          refreshCurrentFolder(folderId);
         })
         .catch(err => {
-          // Remove placeholder on failure and show error
-          setCurrentFolder(prev => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              documents: prev.documents.filter(d => d.id !== (tempId as unknown as number)),
-            };
-          });
+          setFolderStack(prev => prev.map((f, i) => {
+            if (i !== prev.length - 1) return f;
+            return { ...f, documents: f.documents.filter(d => d.id !== tempId) };
+          }));
           setError(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : ''}`);
         });
     });
@@ -369,7 +462,7 @@ const DocumentManager: React.FC = () => {
       const userId = getCurrentUser();
       const res = await fetch(
         `${API}/folders/${userId}/${folderId}/documents/${doc.id}/download`,
-        { headers: { Authorization: `Bearer ${getAuthToken()}` } }
+        { headers: { Authorization: `Bearer ${getAuthToken() ?? ''}` } }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
@@ -400,8 +493,20 @@ const DocumentManager: React.FC = () => {
     try { return new Date(iso).toLocaleDateString(); } catch { return ''; }
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── What's showing in the current view? ───────────────────────────────────
+  const viewingFolders: FolderItem[] = currentFolder
+    ? (currentFolder.subFolders ?? [])
+    : folders;
+  const viewingDocs: DocumentMeta[] = currentFolder
+    ? (currentFolder.documents ?? [])
+    : [];
 
+  // Can we create a sub-folder here?
+  const canCreateFolder = !currentFolder || !isLeaf(currentFolder);
+  // Can we upload here? Only inside a folder AND that folder is not a branch
+  const canUpload = !!currentFolder && !isBranch(currentFolder);
+
+  // ── Loading state ──────────────────────────────────────────────────────────
   if (loading && folders.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -413,8 +518,7 @@ const DocumentManager: React.FC = () => {
     );
   }
 
-  const docs = currentFolder?.documents ?? [];
-
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="container mx-auto p-6 max-w-6xl">
 
@@ -427,7 +531,7 @@ const DocumentManager: React.FC = () => {
           title={deleteModal.type === 'folder' ? 'Delete Folder?' : 'Delete Document?'}
           description={
             deleteModal.type === 'folder'
-              ? "You're about to permanently delete this folder."
+              ? "You're about to permanently delete this folder and everything inside it."
               : "You're about to permanently delete this file."
           }
           onConfirm={handleConfirmDelete}
@@ -450,7 +554,7 @@ const DocumentManager: React.FC = () => {
         <div className="flex items-center gap-3">
           {currentFolder && (
             <button
-              onClick={() => setCurrentFolder(null)}
+              onClick={goBack}
               className="p-2 hover:bg-gray-100 rounded-lg text-gray-600"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -459,6 +563,17 @@ const DocumentManager: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-800">
             {currentFolder ? currentFolder.name : 'Document Manager'}
           </h1>
+          {/* Folder type badge */}
+          {currentFolder && isLeaf(currentFolder) && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+              Files folder
+            </span>
+          )}
+          {currentFolder && isBranch(currentFolder) && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+              Sub-folders inside
+            </span>
+          )}
         </div>
 
         <div className="flex gap-2">
@@ -470,49 +585,168 @@ const DocumentManager: React.FC = () => {
             <RefreshCw className="w-5 h-5" />
           </button>
 
-          {!currentFolder && (
+          {/* New Folder button — shown at root OR inside a branch/empty folder */}
+          {canCreateFolder && (
             <button
               onClick={() => setShowCreateFolder(true)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
             >
               <FolderPlus className="w-4 h-4" />
-              New Folder
+              {currentFolder ? 'New Sub-folder' : 'New Folder'}
             </button>
           )}
 
-          {currentFolder && (
+          {/* Upload button — only inside a leaf/empty folder */}
+          {currentFolder && canUpload && (
             <label className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors cursor-pointer text-sm font-medium">
               <Upload className="w-4 h-4" />
               Upload
               <input type="file" multiple onChange={handleFileUpload} className="hidden" />
             </label>
           )}
+
+          {/* Locked: branch folder cannot upload */}
+          {currentFolder && !canUpload && (
+            <div
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-400 rounded-lg text-sm font-medium cursor-not-allowed"
+              title="This folder contains sub-folders. Upload into a leaf folder."
+            >
+              <Lock className="w-4 h-4" />
+              Upload locked
+            </div>
+          )}
         </div>
       </div>
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 mb-6 text-sm text-gray-500">
+      <div className="flex items-center gap-1 mb-6 text-sm text-gray-500 flex-wrap">
         <button
-          onClick={() => setCurrentFolder(null)}
+          onClick={() => goToCrumb(-1)}
           className="flex items-center gap-1 hover:text-gray-800 transition-colors"
         >
           <Home className="w-4 h-4" />
           All Folders
         </button>
-        {currentFolder && (
-          <>
-            <ChevronRight className="w-4 h-4" />
-            <span className="text-gray-800 font-medium">{currentFolder.name}</span>
-          </>
-        )}
+        {folderStack.map((f, i) => (
+          <React.Fragment key={f.id}>
+            <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
+            {i === folderStack.length - 1 ? (
+              <span className="text-gray-800 font-medium">{f.name}</span>
+            ) : (
+              <button
+                onClick={() => goToCrumb(i)}
+                className="hover:text-gray-800 transition-colors"
+              >
+                {f.name}
+              </button>
+            )}
+          </React.Fragment>
+        ))}
       </div>
 
-      {/* ── FOLDER LIST ──────────────────────────────────────────────────────── */}
-      {!currentFolder && (
-        <>
-          {folders.length === 0 && !loading ? (
-            <div className="text-center py-20 border-2 border-dashed border-gray-200 rounded-xl">
-              <Folder className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+      {/* Info banner for leaf / branch state */}
+      {currentFolder && isBranch(currentFolder) && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2 text-sm text-blue-700">
+          <FolderOpen className="w-4 h-4 flex-shrink-0" />
+          This folder contains sub-folders. To upload files, open a sub-folder that doesn't have any sub-folders yet.
+        </div>
+      )}
+      {currentFolder && isLeaf(currentFolder) && (
+        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-sm text-green-700">
+          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+          This folder contains files. You can upload more files here but cannot add sub-folders.
+        </div>
+      )}
+
+      {/* ── FOLDER LIST ──────────────────────────────────────────────────── */}
+      {viewingFolders.length > 0 && (
+        <div className="mb-6">
+          {currentFolder && (
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+              Sub-folders
+            </h2>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {viewingFolders.map(folder => (
+              <div
+                key={folder.id}
+                className="group relative bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
+                onClick={() => openFolder(folder)}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  {isLeaf(folder)
+                    ? <FolderOpen className="w-10 h-10 text-green-400" />
+                    : <Folder className="w-10 h-10 text-yellow-400" />}
+                  <div
+                    className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() => { setRenamingId(folder.id); setRenameValue(folder.name); }}
+                      className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded"
+                      title="Rename"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteFolder(folder.id, folder.name, currentFolder?.id)}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {renamingId === folder.id ? (
+                  <input
+                    type="text"
+                    value={renameValue}
+                    onChange={e => setRenameValue(e.target.value)}
+                    onBlur={() => handleRenameFolder(folder.id, renameValue)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleRenameFolder(folder.id, renameValue);
+                      if (e.key === 'Escape') setRenamingId(null);
+                    }}
+                    className="w-full px-2 py-1 text-sm border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    autoFocus
+                    onClick={e => e.stopPropagation()}
+                  />
+                ) : (
+                  <p className="font-semibold text-gray-800 truncate">{folder.name}</p>
+                )}
+
+                {folder.description && (
+                  <p className="text-xs text-gray-400 mt-1 truncate">{folder.description}</p>
+                )}
+                <div className="flex items-center gap-2 mt-2">
+                  {isLeaf(folder) && (
+                    <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
+                      {folder.documents.length} file{folder.documents.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {isBranch(folder) && (
+                    <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                      {folder.subFolders.length} sub-folder{folder.subFolders.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {!isLeaf(folder) && !isBranch(folder) && (
+                    <span className="text-xs text-gray-400">Empty</span>
+                  )}
+                  <span className="text-xs text-gray-400 ml-auto">{formatDate(folder.createdAt)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Empty state (no folders, no docs) ────────────────────────────── */}
+      {viewingFolders.length === 0 && viewingDocs.length === 0 && !loading && (
+        <div className="text-center py-20 border-2 border-dashed border-gray-200 rounded-xl">
+          <Folder className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          {!currentFolder ? (
+            <>
               <p className="text-gray-500 font-medium">No folders yet</p>
               <p className="text-gray-400 text-sm mt-1">Create a folder to start organising your documents</p>
               <button
@@ -521,175 +755,124 @@ const DocumentManager: React.FC = () => {
               >
                 Create First Folder
               </button>
-            </div>
+            </>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {folders.map(folder => (
-                <div
-                  key={folder.id}
-                  className="group relative bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
-                  onClick={() => setCurrentFolder(folder)}
+            <>
+              <p className="text-gray-500 font-medium">This folder is empty</p>
+              <p className="text-gray-400 text-sm mt-1">Add a sub-folder or upload files directly</p>
+              <div className="flex justify-center gap-3 mt-4">
+                <button
+                  onClick={() => setShowCreateFolder(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <Folder className="w-10 h-10 text-yellow-400" />
-                    <div
-                      className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <button
-                        onClick={() => { setRenamingId(folder.id); setRenameValue(folder.name); }}
-                        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded"
-                        title="Rename"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteFolder(folder.id, folder.name)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {renamingId === folder.id ? (
-                    <input
-                      type="text"
-                      value={renameValue}
-                      onChange={e => setRenameValue(e.target.value)}
-                      onBlur={() => handleRenameFolder(folder.id, renameValue)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') handleRenameFolder(folder.id, renameValue);
-                        if (e.key === 'Escape') setRenamingId(null);
-                      }}
-                      className="w-full px-2 py-1 text-sm border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
-                      autoFocus
-                      onClick={e => e.stopPropagation()}
-                    />
-                  ) : (
-                    <p className="font-semibold text-gray-800 truncate">{folder.name}</p>
-                  )}
-
-                  {folder.description && (
-                    <p className="text-xs text-gray-400 mt-1 truncate">{folder.description}</p>
-                  )}
-                  <p className="text-xs text-gray-400 mt-2">
-                    {folder.documents?.length ?? 0} file{(folder.documents?.length ?? 0) !== 1 ? 's' : ''} · {formatDate(folder.createdAt)}
-                  </p>
-                </div>
-              ))}
-            </div>
+                  New Sub-folder
+                </button>
+                <label className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium cursor-pointer">
+                  Upload Files
+                  <input type="file" multiple onChange={handleFileUpload} className="hidden" />
+                </label>
+              </div>
+            </>
           )}
-        </>
+        </div>
       )}
 
-      {/* ── DOCUMENT LIST ────────────────────────────────────────────────────── */}
-      {currentFolder && (
-        <>
-          {docs.length === 0 ? (
-            <div className="text-center py-20 border-2 border-dashed border-gray-200 rounded-xl">
-              <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 font-medium">No documents in this folder</p>
-              <p className="text-gray-400 text-sm mt-1">Upload files to get started</p>
-              <label className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium cursor-pointer">
-                <Upload className="w-4 h-4" />
-                Upload File
-                <input type="file" multiple onChange={handleFileUpload} className="hidden" />
-              </label>
-            </div>
-          ) : (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Name</th>
-                    <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden sm:table-cell">Type</th>
-                    <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden md:table-cell">Size</th>
-                    <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">Uploaded</th>
-                    <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">By</th>
-                    <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden sm:table-cell">Status</th>
-                    <th className="px-4 py-3"></th>
+      {/* ── DOCUMENT LIST ────────────────────────────────────────────────── */}
+      {viewingDocs.length > 0 && (
+        <div>
+          {(viewingFolders.length > 0) && (
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 mt-6">
+              Files
+            </h2>
+          )}
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Name</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden sm:table-cell">Type</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden md:table-cell">Size</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">Uploaded</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">By</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden sm:table-cell">Status</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {viewingDocs.map((doc, idx) => (
+                  <tr
+                    key={doc.id}
+                    className={`border-b border-gray-50 transition-colors group hover:bg-gray-50 ${
+                      idx === viewingDocs.length - 1 ? 'border-0' : ''
+                    }`}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <File className="w-5 h-5 flex-shrink-0 text-blue-400" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-800 truncate max-w-[200px]">
+                            {doc.originalFileName || doc.fileName}
+                          </p>
+                          {doc.description && (
+                            <p className="text-xs text-gray-400 truncate max-w-[200px]">{doc.description}</p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">
+                        {doc.fileType?.split('/')[1]?.toUpperCase() || doc.fileType || '—'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
+                      {formatSize(doc.fileSize)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
+                      {formatDate(doc.uploadedAt)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
+                      {doc.uploadedBy || '—'}
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Ready
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => currentFolder && handleDownload(currentFolder.id, doc)}
+                          className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
+                          title="Download"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => currentFolder && handleDeleteDocument(currentFolder.id, doc.id, doc.originalFileName || doc.fileName)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {docs.map((doc, idx) => (
-                    <tr
-                      key={doc.id}
-                      className={`border-b border-gray-50 transition-colors group hover:bg-gray-50 ${
-                        idx === docs.length - 1 ? 'border-0' : ''
-                      }`}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <File className="w-5 h-5 flex-shrink-0 text-blue-400" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-800 truncate max-w-[200px]">
-                              {doc.originalFileName || doc.fileName}
-                            </p>
-                            {doc.description && (
-                              <p className="text-xs text-gray-400 truncate max-w-[200px]">{doc.description}</p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 hidden sm:table-cell">
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">
-                          {doc.fileType?.split('/')[1]?.toUpperCase() || doc.fileType || '—'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
-                        {formatSize(doc.fileSize)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
-                        {formatDate(doc.uploadedAt)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
-                        {doc.uploadedBy || '—'}
-                      </td>
-
-                      {/* Status column — always READY */}
-                      <td className="px-4 py-3 hidden sm:table-cell">
-                        <span className="inline-flex items-center gap-1 text-xs text-green-600">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Ready
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => handleDownload(currentFolder.id, doc)}
-                            className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
-                            title="Download"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteDocument(currentFolder.id, doc.id, doc.originalFileName || doc.fileName)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
-      {/* ── Create Folder Modal ───────────────────────────────────────────────── */}
+      {/* ── Create Folder Modal ───────────────────────────────────────────── */}
       {showCreateFolder && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-semibold text-gray-800">New Folder</h3>
+              <h3 className="text-lg font-semibold text-gray-800">
+                {currentFolder ? `New Sub-folder in "${currentFolder.name}"` : 'New Folder'}
+              </h3>
               <button
                 onClick={() => { setShowCreateFolder(false); setNewFolderName(''); setNewFolderDesc(''); }}
                 className="text-gray-400 hover:text-gray-600"
@@ -738,7 +921,7 @@ const DocumentManager: React.FC = () => {
                 disabled={!newFolderName.trim()}
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
-                Create Folder
+                Create
               </button>
             </div>
           </div>
