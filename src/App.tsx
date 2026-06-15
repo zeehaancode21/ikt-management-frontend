@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Toaster } from "@/components/ui/toaster";
+import { useEffect } from "react";
 
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -33,6 +34,16 @@ function OwnerOrLead({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("/sw.js")
+          .then((reg) => console.log("✅ SW registered:", reg.scope))
+          .catch((err) => console.error("❌ SW registration failed:", err));
+      });
+    }
+  }, []);
   return (
     <AuthProvider>
       <WebSocketProvider>
