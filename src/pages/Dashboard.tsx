@@ -434,9 +434,9 @@ function getBadgeClass(status = "") {
 }
 
 function parseTeam(str) {
-  if (!str) return { modular: "—", editor: "—", checker: "—" };
+  if (!str) return { modeler: "—", editor: "—", checker: "—" };
   const [m, e, c] = str.split("/");
-  return { modular: m || "—", editor: e || "—", checker: c || "—" };
+  return { modeler: m || "—", editor: e || "—", checker: c || "—" };
 }
 
 const fadeUp = {
@@ -1267,7 +1267,7 @@ function ProjectDetailsView({ project }) {
       <div className="detail-card"><p className="detail-label">Approval Status</p><p className="detail-value">{project.approvalStatus ? <span style={{ color: "var(--teal)", fontWeight: 600 }}>{project.approvalStatus}</span> : "—"}</p></div>
       <div className="detail-card"><p className="detail-label">FAB Status</p><p className="detail-value">{project.fabStatus ? <span style={{ color: "var(--copper)", fontWeight: 600 }}>{project.fabStatus}</span> : "—"}</p></div>
       <div className="detail-card" />
-      <div className="detail-card"><p className="detail-label">Modular</p><p className="detail-value">{team.modular}</p></div>
+      <div className="detail-card"><p className="detail-label">Modeler</p><p className="detail-value">{team.modeler}</p></div>
       <div className="detail-card"><p className="detail-label">Editor</p><p className="detail-value">{team.editor}</p></div>
       <div className="detail-card"><p className="detail-label">Checker</p><p className="detail-value">{team.checker}</p></div>
       {project.remarks && <div className="detail-card remarks"><p className="detail-label">Remarks</p><p className="detail-value">{project.remarks}</p></div>}
@@ -1291,7 +1291,7 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
         <div className="form-group"><label className="form-label">FAB Status</label><input className="form-input" placeholder="e.g. 90%" value={f("fabStatus")} onChange={e => s("fabStatus")(e.target.value)} /></div>
       </div>
       <div className="form-row">
-        <div className="form-group"><label className="form-label">Team (Modular/Editor/Checker)</label><input className="form-input" placeholder="e.g. FAKRU/Murthu/Panch" value={f("team")} onChange={e => s("team")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label">Team (Modeler/Editor/Checker)</label><input className="form-input" placeholder="e.g. FAKRU/Murthu/Panch" value={f("team")} onChange={e => s("team")(e.target.value)} /></div>
         <div className="form-group"><label className="form-label">Year</label><input className="form-input" value={f("year")} onChange={e => s("year")(e.target.value)} /></div>
       </div>
       <div className="form-group"><label className="form-label">Remarks</label><textarea className="form-textarea" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} /></div>
@@ -1324,7 +1324,7 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
           <div className="form-group"><label className="form-label">FAB Status</label><input className="form-input" placeholder="e.g. 90%" value={f("fabStatus")} onChange={e => s("fabStatus")(e.target.value)} /></div>
         </div>
         <div className="form-row">
-          <div className="form-group"><label className="form-label">Team (Modular/Editor/Checker)</label><input className="form-input" placeholder="e.g. FAKRU/Murthu/Panch" value={f("team")} onChange={e => s("team")(e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">Team (Modeler/Editor/Checker)</label><input className="form-input" placeholder="e.g. FAKRU/Murthu/Panch" value={f("team")} onChange={e => s("team")(e.target.value)} /></div>
           <div className="form-group"><label className="form-label">Year</label><input className="form-input" value={defaultYear || f("year")} readOnly={!!defaultYear} onChange={e => s("year")(e.target.value)} /></div>
         </div>
         <div className="form-group"><label className="form-label">Remarks</label><textarea className="form-textarea" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} /></div>

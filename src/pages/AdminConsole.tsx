@@ -13,7 +13,7 @@ interface Project {
   shipmentDate: string;
   editor: string;
   checker: string;
-  modular: string;
+  modeler: string;
 }
 
 interface Employee {
@@ -171,7 +171,7 @@ function ProjectEditModal({ project, onClose, onSaved }: {
     shipmentDate: project.shipmentDate || "",
     editor: project.editor || "",
     checker: project.checker || "",
-    modular: project.modular || "",
+    modeler: project.modeler || "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -262,8 +262,8 @@ function ProjectEditModal({ project, onClose, onSaved }: {
             <input className="ac-input" placeholder="e.g. Sarah" value={form.checker} onChange={(e) => setForm(f => ({ ...f, checker: e.target.value }))} />
           </div>
           <div className="ac-field">
-            <label className="ac-label">Modular</label>
-            <input className="ac-input" placeholder="e.g. Module A" value={form.modular} onChange={(e) => setForm(f => ({ ...f, modular: e.target.value }))} />
+            <label className="ac-label">Modeler</label>
+            <input className="ac-input" placeholder="e.g. Module A" value={form.modeler} onChange={(e) => setForm(f => ({ ...f, modeler: e.target.value }))} />
           </div>
         </motion.div>
 
@@ -297,7 +297,7 @@ function ProjectsTab() {
   const [client, setClient] = useState("");
   const [editor, setEditor] = useState("");
   const [checker, setChecker] = useState("");
-  const [modular, setModular] = useState("");
+  const [modeler, setModular] = useState("");
   const [shipmentDate, setShipmentDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState("");
@@ -378,7 +378,7 @@ function ProjectsTab() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await api.post("/projects", { projectName, client, shipmentDate, editor, checker, modular });
+      await api.post("/projects", { projectName, client, shipmentDate, editor, checker, modeler });
       toast({ title: "✅ Project added" });
       setProjectName("");
       setClient("");
@@ -515,8 +515,8 @@ function ProjectsTab() {
             <input className="ac-input" placeholder="e.g. Checker Name.." value={checker} onChange={(e) => setChecker(e.target.value)} />
           </div>
           <div className="ac-field">
-            <label className="ac-label">Modular</label>
-            <input className="ac-input" placeholder="e.g. Modular Name.." value={modular} onChange={(e) => setModular(e.target.value)} />
+            <label className="ac-label">Modeler</label>
+            <input className="ac-input" placeholder="e.g. Modeler Name.." value={modeler} onChange={(e) => setModular(e.target.value)} />
           </div>
           <motion.button
             type="submit"
@@ -649,7 +649,7 @@ function ProjectsTab() {
               <span>Shipment Date</span>
               <span>Editor</span>
               <span>Checker</span>
-              <span>Modular</span>
+              <span>Modeler</span>
               <span></span>
             </div>
             <AnimatePresence>
@@ -718,7 +718,7 @@ function ProjectsTab() {
                     <span className="ac-cell-optional">{fmtDate(p.shipmentDate) || <span className="ac-cell-empty">—</span>}</span>
                     <span className="ac-cell-optional">{p.editor || <span className="ac-cell-empty">—</span>}</span>
                     <span className="ac-cell-optional">{p.checker || <span className="ac-cell-empty">—</span>}</span>
-                    <span className="ac-cell-optional">{p.modular || <span className="ac-cell-empty">—</span>}</span>
+                    <span className="ac-cell-optional">{p.modeler || <span className="ac-cell-empty">—</span>}</span>
                     <span className="ac-table-actions">
                       <motion.button
                         className="ac-edit-btn"
