@@ -4,8 +4,10 @@ import HolidayHover from "@/pages/HolidayHover";
 import { useAuth } from "@/context/AuthContext";
 import NotificationBell from "./NotificationBell";
 import { useState, useEffect } from "react";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 export const AppLayout = () => {
+  usePushNotifications();
   const location = useLocation();
   const user = useAuth(); 
   const isOwner = user?.role === "OWNER";
