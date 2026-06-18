@@ -1,10 +1,14 @@
 // src/hooks/usePushNotifications.ts
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { messaging, requestNotificationPermission, onMessage } from "@/lib/firebase";
 import api from "@/lib/api";
 
 export function usePushNotifications() {
   const [serviceWorkerReady, setServiceWorkerReady] = useState(false);
+  // ✅ Track recent notifications to prevent duplicates
+  const recentNotifications = useRef<Map<string, number>>(new Map());
+  const DUPLICATE_WINDOW = 3000; // 3 seconds window to detect duplicates
+  const shownNotifications = useRef<Set<string>>(new Set()); // ✅ Track shown notifications
 
   const registerToken = useCallback(async () => {
     try {
@@ -40,7 +44,48 @@ export function usePushNotifications() {
     }
   }, []);
 
-  // ✅ METHOD 1: Force Notification via Service Worker Registration
+  // ✅ Check if notification is a duplicate
+  const isDuplicateNotification = useCallback((title: string, body: string, messageId?: string) => {
+    // Create a unique key for this notification
+    const key = messageId || `${title}-${body}`;
+    const now = Date.now();
+    const lastTime = recentNotifications.current.get(key);
+    
+    // ✅ CRITICAL FIX: Check if this notification has already been SHOWN
+    if (shownNotifications.current.has(key)) {
+      console.log('🔄 Notification already shown, skipping duplicate:', key);
+      return true;
+    }
+    
+    // Check if we received this same notification recently (within DUPLICATE_WINDOW)
+    if (lastTime && (now - lastTime) < DUPLICATE_WINDOW) {
+      console.log('🔄 Duplicate notification detected in time window, skipping:', key);
+      return true;
+    }
+    
+    // ✅ Store the current time for this notification
+    recentNotifications.current.set(key, now);
+    
+    // Clean up old entries (older than 10 seconds)
+    for (const [k, v] of recentNotifications.current.entries()) {
+      if (now - v > 10000) {
+        recentNotifications.current.delete(k);
+        // Also clean up shown notifications
+        shownNotifications.current.delete(k);
+      }
+    }
+    
+    return false;
+  }, []);
+
+  // ✅ MARK notification as shown
+  const markNotificationAsShown = useCallback((messageId?: string) => {
+    if (messageId) {
+      shownNotifications.current.add(messageId);
+    }
+  }, []);
+
+  // ✅ METHOD 1: Force Notification via Service Worker Registration (WITH LOGO)
   const showForcedNotification = useCallback(async (title: string, body: string, icon: string, payload: any) => {
     try {
       if (!('Notification' in window)) {
@@ -69,32 +114,37 @@ export function usePushNotifications() {
 
       console.log('📤 Showing forced notification via service worker...');
 
-      // ✅ Try with showNotification
+      const messageId = payload?.data?.messageId || payload?.messageId || Date.now().toString();
+      
+      // ✅ Try with showNotification (WITH LOGO)
       await registration.showNotification(title || "New Message", {
         body: body || "You have a new message",
-        icon: icon || "/IKT.png",
+        icon: icon || "/IKT.png", // ✅ This shows the logo
         badge: "/IKT.png",
         vibrate: [200, 100, 200],
         data: payload?.data || {},
         requireInteraction: true,
         silent: false,
-        tag: "forced-" + Date.now(),
+        tag: "notification-" + messageId,
         actions: [
           { action: "open", title: "Open App" },
           { action: "dismiss", title: "Dismiss" },
         ],
       });
 
-      console.log('✅ Forced notification shown successfully');
+      // ✅ Mark as shown
+      markNotificationAsShown(messageId);
+      
+      console.log('✅ Forced notification shown successfully with logo');
       return true;
 
     } catch (error) {
       console.error('❌ Forced notification failed:', error);
       return false;
     }
-  }, []);
+  }, [markNotificationAsShown]);
 
-  // ✅ METHOD 2: Direct Notification with Fallback
+  // ✅ METHOD 2: Direct Notification with Fallback (WITH LOGO)
   const showDirectNotification = useCallback((title: string, body: string, icon: string, payload: any) => {
     try {
       if (!('Notification' in window)) {
@@ -109,12 +159,14 @@ export function usePushNotifications() {
 
       console.log('📤 Showing direct notification...');
 
+      const messageId = payload?.data?.messageId || payload?.messageId || Date.now().toString();
+
       const notificationOptions: NotificationOptions = {
         body: body || "You have a new message",
-        icon: icon || "/IKT.png",
+        icon: icon || "/IKT.png", // ✅ This shows the logo
         badge: "/IKT.png",
         silent: false,
-        tag: "direct-" + Date.now(),
+        tag: "notification-" + messageId,
         data: payload?.data || {},
         requireInteraction: true,
         renotify: true,
@@ -126,6 +178,9 @@ export function usePushNotifications() {
 
       const notification = new Notification(title || "New Message", notificationOptions);
 
+      // ✅ Mark as shown
+      markNotificationAsShown(messageId);
+
       notification.onclick = (event) => {
         event.preventDefault();
         window.focus();
@@ -136,16 +191,16 @@ export function usePushNotifications() {
 
       setTimeout(() => notification.close(), 10000);
 
-      console.log('✅ Direct notification shown successfully');
+      console.log('✅ Direct notification shown successfully with logo');
       return true;
 
     } catch (error) {
       console.error('❌ Direct notification failed:', error);
       return false;
     }
-  }, []);
+  }, [markNotificationAsShown]);
 
-  // ✅ METHOD 3: HTML/CSS Custom Notification (Always works!)
+  // ✅ METHOD 3: HTML/CSS Custom Notification (Fallback - WITHOUT LOGO)
   const showCustomNotification = useCallback((title: string, body: string) => {
     try {
       console.log('📤 Showing custom HTML notification...');
@@ -185,7 +240,7 @@ export function usePushNotifications() {
         background: rgba(30, 41, 59, 0.95);
       `;
 
-      // Icon
+      // Icon (emoji fallback since we can't show logo in HTML notification easily)
       const iconDiv = document.createElement('div');
       iconDiv.style.cssText = `
         flex-shrink: 0;
@@ -308,7 +363,7 @@ export function usePushNotifications() {
         // Silent fail for audio
       }
 
-      console.log('✅ Custom HTML notification shown');
+      console.log('✅ Custom HTML notification shown (fallback)');
       return true;
 
     } catch (error) {
@@ -317,14 +372,23 @@ export function usePushNotifications() {
     }
   }, []);
 
-  // ✅ MAIN: Try all methods
+  // ✅ MAIN: Show notification with duplicate detection (PREFERS LOGO VERSION)
   const showNotification = useCallback(async (title: string, body: string, icon: string, payload: any) => {
+    // Get messageId
+    const messageId = payload?.data?.messageId || payload?.messageId;
+    
+    // ✅ Check for duplicate BEFORE showing
+    if (messageId && isDuplicateNotification(title, body, messageId)) {
+      console.log('⚠️ Skipping duplicate notification');
+      return false;
+    }
+
     console.log('🔔 Attempting to show notification...');
 
-    // ✅ Try all methods in sequence
+    // ✅ Try methods that show logo FIRST
     const methods = [
-      { name: 'Forced Service Worker', fn: () => showForcedNotification(title, body, icon, payload) },
-      { name: 'Direct Notification', fn: () => showDirectNotification(title, body, icon, payload) },
+      { name: 'Forced Service Worker (with logo)', fn: () => showForcedNotification(title, body, icon, payload) },
+      { name: 'Direct Notification (with logo)', fn: () => showDirectNotification(title, body, icon, payload) },
     ];
 
     for (const method of methods) {
@@ -332,12 +396,6 @@ export function usePushNotifications() {
         const result = await method.fn();
         if (result) {
           console.log(`✅ Success using: ${method.name}`);
-          
-          // ✅ Also show custom notification as backup
-          setTimeout(() => {
-            showCustomNotification(title, body);
-          }, 300);
-          
           return true;
         }
       } catch (error) {
@@ -345,11 +403,17 @@ export function usePushNotifications() {
       }
     }
 
-    // ✅ Fallback: Always show custom HTML notification
-    console.log('📤 Using final fallback: Custom HTML notification');
+    // ✅ Last resort: Show custom HTML (without logo)
+    console.log('📤 Using final fallback: Custom HTML notification (no logo)');
     showCustomNotification(title, body);
+    
+    // ✅ Mark as shown even for fallback
+    if (messageId) {
+      markNotificationAsShown(messageId);
+    }
+    
     return false;
-  }, [showForcedNotification, showDirectNotification, showCustomNotification]);
+  }, [showForcedNotification, showDirectNotification, showCustomNotification, isDuplicateNotification, markNotificationAsShown]);
 
   // ✅ Initialize service worker
   useEffect(() => {
@@ -368,31 +432,20 @@ export function usePushNotifications() {
     initServiceWorker();
   }, []);
 
-  // ✅ Register token and listen for messages
   useEffect(() => {
     registerToken();
 
     const unsubscribe = onMessage(messaging, async (payload) => {
       console.log("📩 Foreground message received:", payload);
 
-      const title = 
-        payload.notification?.title ?? 
-        payload.data?.title ?? 
-        "New Message";
-      
-      const body = 
-        payload.notification?.body ?? 
-        payload.data?.body ?? 
-        "";
-      
-      const icon = 
-        payload.notification?.image ?? 
-        payload.data?.image ?? 
-        "/IKT.png";
+      const title = payload.notification?.title ?? payload.data?.title ?? "New Message";
+      const body = payload.notification?.body ?? payload.data?.body ?? "";
+      const icon = payload.notification?.image ?? payload.data?.image ?? "/IKT.png";
+      const messageId = payload.data?.messageId || payload.messageId;
 
-      console.log('📨 Extracted notification data:', { title, body, icon });
+      console.log('📨 Extracted notification data:', { title, body, icon, messageId });
 
-      // ✅ Show notification
+      // ✅ Show notification - duplicate detection happens inside showNotification
       await showNotification(title, body, icon, payload);
     });
 
