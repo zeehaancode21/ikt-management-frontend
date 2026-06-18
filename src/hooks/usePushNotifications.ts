@@ -1,9 +1,3 @@
-body: 'Service worker is working!',
-              icon: '/IKT.png',
-              requireInteraction: true,
-
-ABOVE IS THE TESING PLZ REMOVE IT FROM THE MAIN LOGIC SO THAT I WILL BE READY FOR PRODUCTION RELAESE
-// src/hooks/usePushNotifications.ts
 import { useEffect, useCallback, useState } from "react";
 import { messaging, requestNotificationPermission, onMessage } from "@/lib/firebase";
 import api from "@/lib/api";
