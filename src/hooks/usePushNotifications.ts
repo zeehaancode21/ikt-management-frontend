@@ -1,3 +1,4 @@
+// src/hooks/usePushNotifications.ts
 import { useEffect, useCallback, useState } from "react";
 import { messaging, requestNotificationPermission, onMessage } from "@/lib/firebase";
 import api from "@/lib/api";
