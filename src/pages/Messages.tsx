@@ -25,7 +25,7 @@ interface GroupMessage {
   senderUsername: string;
   content: string;
   messageType: "MESSAGE" | "POLL" | "FILE";
-  pollData?: string; // JSON string
+  pollData?: string;
   attachments?: Attachment[];
   sentAt: string;
 }
@@ -66,7 +66,7 @@ interface Group {
   name: string;
   description?: string;
   createdBy: string;
-  members: string; // comma-separated
+  members: string;
   createdAt: string;
 }
 
@@ -268,6 +268,7 @@ export default function Messages() {
   const [search, setSearch] = useState("");
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [inboxError, setInboxError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Group management modal
@@ -300,10 +301,13 @@ export default function Messages() {
 
   useEffect(() => { fetchGroups(); }, [fetchGroups]);
 
-  // ── Load inbox ───────────────────────────────────────────────────────────────
+  // ── Load inbox with better error handling ──────────────────────────────────
   const fetchInbox = useCallback(async () => {
     try {
+      setInboxError(null);
+      console.log('📥 Fetching inbox...');
       const r = await api.get<Message[]>("/messages/inbox");
+      console.log('✅ Inbox fetched:', r.data.length, 'messages');
       const map: Record<string, Message> = {};
       r.data.forEach((msg) => {
         const other = msg.senderUsername === name ? msg.receiverUsername : msg.senderUsername;
@@ -311,10 +315,16 @@ export default function Messages() {
         if (!ex || parseUTC(msg.sentAt) > parseUTC(ex.sentAt)) map[other] = msg;
       });
       setInboxMap(map);
-    } catch { /* ignore */ }
+    } catch (error: any) {
+      console.error('❌ Error fetching inbox:', error);
+      setInboxError(error.response?.data || 'Failed to load messages');
+      // Don't set empty map, keep existing data
+    }
   }, [name]);
 
-  useEffect(() => { fetchInbox(); }, [fetchInbox]);
+  useEffect(() => { 
+    fetchInbox(); 
+  }, [fetchInbox]);
 
   // ── Load broadcasts ──────────────────────────────────────────────────────────
   const fetchBroadcasts = useCallback(async () => {
@@ -463,7 +473,6 @@ export default function Messages() {
         await fetchBroadcasts();
       } catch (error) {
         console.error('Broadcast failed:', error);
-        // Restore input on error
         setNewMessage(content);
         setSelectedFiles(filesToUpload);
       } finally { 
