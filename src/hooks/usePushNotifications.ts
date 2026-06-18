@@ -1,3 +1,8 @@
+body: 'Service worker is working!',
+              icon: '/IKT.png',
+              requireInteraction: true,
+
+ABOVE IS THE TESING PLZ REMOVE IT FROM THE MAIN LOGIC SO THAT I WILL BE READY FOR PRODUCTION RELAESE
 // src/hooks/usePushNotifications.ts
 import { useEffect, useCallback, useState } from "react";
 import { messaging, requestNotificationPermission, onMessage } from "@/lib/firebase";
@@ -26,9 +31,9 @@ export function usePushNotifications() {
         return;
       }
 
-      console.log('✅ FCM Token obtained');
+      console.log('✅ FCM Token obtained:', token);
       const response = await api.post("/api/notifications/fcm-token", { token });
-      console.log("✅ FCM token registered with backend");
+      console.log("✅ FCM token registered with backend:", response.data);
       
     } catch (err: any) {
       console.error("❌ Error registering FCM token:", err);
@@ -40,7 +45,7 @@ export function usePushNotifications() {
     }
   }, []);
 
-  // ✅ Service Worker Notification
+  // ✅ METHOD 1: Force Notification via Service Worker Registration
   const showForcedNotification = useCallback(async (title: string, body: string, icon: string, payload: any) => {
     try {
       if (!('Notification' in window)) {
@@ -53,6 +58,7 @@ export function usePushNotifications() {
         return false;
       }
 
+      // ✅ Get the service worker registration
       let registration;
       try {
         registration = await navigator.serviceWorker.ready;
@@ -66,8 +72,9 @@ export function usePushNotifications() {
         return false;
       }
 
-      console.log('📤 Showing notification via service worker...');
+      console.log('📤 Showing forced notification via service worker...');
 
+      // ✅ Try with showNotification
       await registration.showNotification(title || "New Message", {
         body: body || "You have a new message",
         icon: icon || "/IKT.png",
@@ -76,23 +83,23 @@ export function usePushNotifications() {
         data: payload?.data || {},
         requireInteraction: true,
         silent: false,
-        tag: "notification-" + Date.now(),
+        tag: "forced-" + Date.now(),
         actions: [
           { action: "open", title: "Open App" },
           { action: "dismiss", title: "Dismiss" },
         ],
       });
 
-      console.log('✅ Notification shown successfully');
+      console.log('✅ Forced notification shown successfully');
       return true;
 
     } catch (error) {
-      console.error('❌ Service worker notification failed:', error);
+      console.error('❌ Forced notification failed:', error);
       return false;
     }
   }, []);
 
-  // ✅ Direct Notification
+  // ✅ METHOD 2: Direct Notification with Fallback
   const showDirectNotification = useCallback((title: string, body: string, icon: string, payload: any) => {
     try {
       if (!('Notification' in window)) {
@@ -143,14 +150,16 @@ export function usePushNotifications() {
     }
   }, []);
 
-  // ✅ Custom HTML Notification (Fallback)
+  // ✅ METHOD 3: HTML/CSS Custom Notification (Always works!)
   const showCustomNotification = useCallback((title: string, body: string) => {
     try {
       console.log('📤 Showing custom HTML notification...');
 
+      // Remove any existing custom notifications
       const existing = document.querySelector('.custom-notification-container');
       if (existing) existing.remove();
 
+      // Create container
       const container = document.createElement('div');
       container.className = 'custom-notification-container';
       container.style.cssText = `
@@ -164,6 +173,7 @@ export function usePushNotifications() {
         cursor: pointer;
       `;
 
+      // Create notification card
       const card = document.createElement('div');
       card.style.cssText = `
         background: #1e293b;
@@ -180,6 +190,7 @@ export function usePushNotifications() {
         background: rgba(30, 41, 59, 0.95);
       `;
 
+      // Icon
       const iconDiv = document.createElement('div');
       iconDiv.style.cssText = `
         flex-shrink: 0;
@@ -194,6 +205,7 @@ export function usePushNotifications() {
       `;
       iconDiv.textContent = '💬';
 
+      // Content
       const contentDiv = document.createElement('div');
       contentDiv.style.cssText = `
         flex: 1;
@@ -218,6 +230,7 @@ export function usePushNotifications() {
       `;
       bodyEl.textContent = body || 'You have a new message';
 
+      // Close button
       const closeBtn = document.createElement('button');
       closeBtn.style.cssText = `
         flex-shrink: 0;
@@ -234,14 +247,18 @@ export function usePushNotifications() {
       closeBtn.onmouseenter = () => closeBtn.style.color = '#f1f5f9';
       closeBtn.onmouseleave = () => closeBtn.style.color = '#64748b';
 
+      // Assemble
       contentDiv.appendChild(titleEl);
       contentDiv.appendChild(bodyEl);
       card.appendChild(iconDiv);
       card.appendChild(contentDiv);
       card.appendChild(closeBtn);
       container.appendChild(card);
+
+      // Add to DOM
       document.body.appendChild(container);
 
+      // Animation styles
       const style = document.createElement('style');
       style.textContent = `
         @keyframes slideInRight {
@@ -258,6 +275,7 @@ export function usePushNotifications() {
         document.head.appendChild(style);
       }
 
+      // Click handlers
       const closeNotification = () => {
         container.style.animation = 'slideOutRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
         setTimeout(() => container.remove(), 350);
@@ -276,8 +294,10 @@ export function usePushNotifications() {
         closeNotification();
       };
 
+      // Auto-close after 10 seconds
       setTimeout(closeNotification, 10000);
 
+      // Play sound if possible
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const oscillator = audioCtx.createOscillator();
@@ -302,12 +322,13 @@ export function usePushNotifications() {
     }
   }, []);
 
-  // ✅ Main notification handler
+  // ✅ MAIN: Try all methods
   const showNotification = useCallback(async (title: string, body: string, icon: string, payload: any) => {
     console.log('🔔 Attempting to show notification...');
 
+    // ✅ Try all methods in sequence
     const methods = [
-      { name: 'Service Worker', fn: () => showForcedNotification(title, body, icon, payload) },
+      { name: 'Forced Service Worker', fn: () => showForcedNotification(title, body, icon, payload) },
       { name: 'Direct Notification', fn: () => showDirectNotification(title, body, icon, payload) },
     ];
 
@@ -317,6 +338,7 @@ export function usePushNotifications() {
         if (result) {
           console.log(`✅ Success using: ${method.name}`);
           
+          // ✅ Also show custom notification as backup
           setTimeout(() => {
             showCustomNotification(title, body);
           }, 300);
@@ -328,7 +350,8 @@ export function usePushNotifications() {
       }
     }
 
-    console.log('📤 Using fallback: Custom HTML notification');
+    // ✅ Fallback: Always show custom HTML notification
+    console.log('📤 Using final fallback: Custom HTML notification');
     showCustomNotification(title, body);
     return false;
   }, [showForcedNotification, showDirectNotification, showCustomNotification]);
@@ -341,6 +364,18 @@ export function usePushNotifications() {
           const registration = await navigator.serviceWorker.ready;
           setServiceWorkerReady(true);
           console.log('✅ Service worker ready:', registration);
+          
+          // ✅ Test if service worker can show notifications
+          try {
+            await registration.showNotification('Test', {
+              body: 'Service worker is working!',
+              icon: '/IKT.png',
+              requireInteraction: true,
+            });
+            console.log('✅ Service worker test notification worked!');
+          } catch (testError) {
+            console.warn('⚠️ Service worker test notification failed:', testError);
+          }
         }
       } catch (error) {
         console.error('❌ Service worker init failed:', error);
@@ -373,6 +408,7 @@ export function usePushNotifications() {
 
       console.log('📨 Extracted notification data:', { title, body, icon });
 
+      // ✅ Show notification
       await showNotification(title, body, icon, payload);
     });
 
