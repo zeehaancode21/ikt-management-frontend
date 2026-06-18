@@ -1,3 +1,4 @@
+// public/firebase-messaging-sw.js
 importScripts("https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js");
 
@@ -13,17 +14,40 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// ─── Background Messages (app closed or tab not focused) ──────────────────────
-// FIX: backend now sends a DATA-ONLY message (no `notification` block), so we
-// read fields from payload.data instead of payload.notification (which is
-// always undefined now). Sending data-only is also what makes this handler
-// reliably fire at all — see FcmService.java for the backend half of this fix.
-messaging.onBackgroundMessage((payload) => {
-  console.log("Background message received:", payload);
+// ─── Handle Messages from Client ──────────────────────────────────────────────
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+    const { title, body, icon, data } = event.data;
+    console.log('📩 Service worker received notification request:', { title, body });
+    
+    // ✅ Show notification using service worker API
+    self.registration.showNotification(title || "New Message", {
+      body: body || "You have a new message",
+      icon: icon || "/IKT.png",
+      badge: "/IKT.png",
+      vibrate: [200, 100, 200],
+      data: data || {},
+      requireInteraction: true,
+      tag: "message-" + Date.now(),
+      actions: [
+        { action: "open", title: "Open App" },
+        { action: "dismiss", title: "Dismiss" },
+      ],
+    }).then(() => {
+      console.log('✅ Notification shown by service worker');
+    }).catch((error) => {
+      console.error('❌ Service worker failed to show notification:', error);
+    });
+  }
+});
 
-  const title = payload.data?.title ?? "New Message";
-  const body  = payload.data?.body  ?? "";
-  const icon  = payload.data?.image ?? "/IKT.png";
+// ─── Background Messages ──────────────────────────────────────────────────────
+messaging.onBackgroundMessage((payload) => {
+  console.log("📩 Background message received:", payload);
+
+  const title = payload.notification?.title ?? payload.data?.title ?? "New Message";
+  const body = payload.notification?.body ?? payload.data?.body ?? "";
+  const icon = payload.notification?.image ?? payload.data?.image ?? "/IKT.png";
 
   self.registration.showNotification(title, {
     body,
@@ -31,6 +55,7 @@ messaging.onBackgroundMessage((payload) => {
     badge: "/IKT.png",
     vibrate: [200, 100, 200],
     data: payload.data ?? {},
+    requireInteraction: true,
     actions: [
       { action: "open", title: "Open App" },
       { action: "dismiss", title: "Dismiss" },
@@ -44,18 +69,15 @@ self.addEventListener("notificationclick", (event) => {
 
   if (event.action === "dismiss") return;
 
-  // Open /messages page when notification is clicked
   event.waitUntil(
     clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clientList) => {
-        // If app is already open, focus it
         for (const client of clientList) {
           if (client.url.includes("/messages") && "focus" in client) {
             return client.focus();
           }
         }
-        // Otherwise open a new window
         if (clients.openWindow) {
           return clients.openWindow("/messages");
         }
