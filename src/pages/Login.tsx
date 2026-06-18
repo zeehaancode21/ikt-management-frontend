@@ -459,7 +459,7 @@ export default function Login() {
 
           <div className="divider">
             <div className="divider-line" />
-            <span className="divider-text">WorkWeaver</span>
+            <span className="divider-text">Management</span>
             <div className="divider-line" />
           </div>
 
