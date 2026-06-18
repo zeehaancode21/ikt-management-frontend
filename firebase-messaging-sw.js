@@ -14,12 +14,16 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 // ─── Background Messages (app closed or tab not focused) ──────────────────────
+// FIX: backend now sends a DATA-ONLY message (no `notification` block), so we
+// read fields from payload.data instead of payload.notification (which is
+// always undefined now). Sending data-only is also what makes this handler
+// reliably fire at all — see FcmService.java for the backend half of this fix.
 messaging.onBackgroundMessage((payload) => {
   console.log("Background message received:", payload);
 
-  const title = payload.notification?.title ?? "New Message";
-  const body  = payload.notification?.body  ?? "";
-  const icon  = payload.notification?.icon  ?? "/IKT.png";
+  const title = payload.data?.title ?? "New Message";
+  const body  = payload.data?.body  ?? "";
+  const icon  = payload.data?.image ?? "/IKT.png";
 
   self.registration.showNotification(title, {
     body,
