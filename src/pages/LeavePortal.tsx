@@ -481,9 +481,17 @@ const EmployeeView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [historyTab, setHistoryTab] = useState<"applied" | "taken">("applied");
+  
+  // ✅ Add ref to prevent double loading
+  const initialLoadDoneRef = useRef(false);
+  const loadingLockRef = useRef(false);
 
+  // ✅ Fixed: Remove loading from dependencies
   const load = useCallback(async () => {
     if (!name) return;
+    if (loadingLockRef.current) return;
+    
+    loadingLockRef.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -495,10 +503,17 @@ const EmployeeView = () => {
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
+      loadingLockRef.current = false;
     }
-  }, [name]);
+  }, [name]); // ✅ Only depend on name
 
-  useEffect(() => { load(); }, [load]);
+  // ✅ Fixed: Run only once on mount
+  useEffect(() => { 
+    if (!initialLoadDoneRef.current) {
+      initialLoadDoneRef.current = true;
+      load();
+    }
+  }, [load]);
 
   const resetForm = () => {
     setFromDate("");
@@ -772,8 +787,18 @@ const OwnerView = () => {
   const [empLeaves, setEmpLeaves] = useState<Leave[]>([]);
   const [empLoading, setEmpLoading] = useState(false);
   const [empError, setEmpError] = useState<string | null>(null);
+  
+  // ✅ Add refs to prevent double loading
+  const initialLoadDoneRef = useRef(false);
+  const loadingLockRef = useRef(false);
+  const empLoadingLockRef = useRef(false);
+  const namesLoadedRef = useRef(false);
 
+  // ✅ Fixed: Remove loading from dependencies
   const load = useCallback(async () => {
+    if (loadingLockRef.current) return;
+    
+    loadingLockRef.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -783,25 +808,51 @@ const OwnerView = () => {
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
+      loadingLockRef.current = false;
     }
-  }, []);
+  }, []); // ✅ Empty deps
 
+  // ✅ Fixed: Run only once on mount
+  useEffect(() => { 
+    if (!initialLoadDoneRef.current) {
+      initialLoadDoneRef.current = true;
+      load();
+    }
+  }, [load]);
+
+  // ✅ Fixed: Remove employeeNames from dependencies
   const loadEmployeeNames = useCallback(async () => {
-    if (employeeNames.length > 0) return;
+    if (namesLoadedRef.current) return;
+    if (empLoadingLockRef.current) return;
+    
+    empLoadingLockRef.current = true;
     setNamesLoading(true);
     try {
       const { data } = await api.get<string[]>("/employees/name", { params: { roles: ["USER", "LEAD"] } });
       setEmployeeNames(data);
+      namesLoadedRef.current = true;
     } catch {
       setEmployeeNames([]);
       toast({ title: "Failed to load employees", description: "Could not load employee list.", variant: "destructive" });
     } finally {
       setNamesLoading(false);
+      empLoadingLockRef.current = false;
     }
-  }, [employeeNames.length]);
+  }, []); // ✅ Empty deps
 
+  // ✅ Fixed: Only load when tab changes to employee
+  useEffect(() => {
+    if (ownerTab === "employee" && !namesLoadedRef.current) {
+      loadEmployeeNames();
+    }
+  }, [ownerTab, loadEmployeeNames]);
+
+  // ✅ Fixed: Remove empLoading from dependencies
   const loadEmpLeaves = useCallback(async (empName: string) => {
     if (!empName) return;
+    if (empLoadingLockRef.current) return;
+    
+    empLoadingLockRef.current = true;
     setEmpLoading(true);
     setEmpError(null);
     setEmpLeaves([]);
@@ -812,11 +863,9 @@ const OwnerView = () => {
       setEmpError(getErrorMessage(err));
     } finally {
       setEmpLoading(false);
+      empLoadingLockRef.current = false;
     }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => { if (ownerTab === "employee") loadEmployeeNames(); }, [ownerTab, loadEmployeeNames]);
+  }, []); // ✅ Empty deps
 
   const handleEmployeeSelect = (name: string) => {
     setSelectedEmployee(name);
@@ -1141,7 +1190,3 @@ const LeavePortal = () => {
 };
 
 export default LeavePortal;
-
-
-
-

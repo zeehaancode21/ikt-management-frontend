@@ -359,18 +359,6 @@ export function usePushNotifications() {
           const registration = await navigator.serviceWorker.ready;
           setServiceWorkerReady(true);
           console.log('✅ Service worker ready:', registration);
-          
-          // ✅ Test if service worker can show notifications
-          try {
-            await registration.showNotification('Test', {
-              body: 'Service worker is working!',
-              icon: '/IKT.png',
-              requireInteraction: true,
-            });
-            console.log('✅ Service worker test notification worked!');
-          } catch (testError) {
-            console.warn('⚠️ Service worker test notification failed:', testError);
-          }
         }
       } catch (error) {
         console.error('❌ Service worker init failed:', error);
@@ -380,6 +368,7 @@ export function usePushNotifications() {
     initServiceWorker();
   }, []);
 
+  // ✅ Register token and listen for messages
   useEffect(() => {
     registerToken();
 

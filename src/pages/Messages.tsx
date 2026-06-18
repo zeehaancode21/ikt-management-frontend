@@ -70,6 +70,27 @@ interface Group {
   createdAt: string;
 }
 
+interface PageResponse<T> {
+  content: T[];
+  pageable: {
+    pageNumber: number;
+    pageSize: number;
+    sort: { sorted: boolean; unsorted: boolean; empty: boolean };
+    offset: number;
+    unpaged: boolean;
+    paged: boolean;
+  };
+  last: boolean;
+  totalPages: number;
+  totalElements: number;
+  first: boolean;
+  size: number;
+  number: number;
+  sort: { sorted: boolean; unsorted: boolean; empty: boolean };
+  numberOfElements: number;
+  empty: boolean;
+}
+
 type ChatTarget =
   | { type: "user"; username: string }
   | { type: "broadcast" }
@@ -269,7 +290,31 @@ export default function Messages() {
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [inboxError, setInboxError] = useState<string | null>(null);
+  
+  // Pagination states - Inbox
+  const [inboxPage, setInboxPage] = useState(0);
+  const [inboxTotalPages, setInboxTotalPages] = useState(0);
+  const [inboxTotalElements, setInboxTotalElements] = useState(0);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [hasMoreInbox, setHasMoreInbox] = useState(true);
+  
+  // Pagination states - Conversation
+  const [convPage, setConvPage] = useState(0);
+  const [convTotalPages, setConvTotalPages] = useState(0);
+  const [convLoading, setConvLoading] = useState(false);
+  const [hasMoreConv, setHasMoreConv] = useState(true);
+  const [convTotalElements, setConvTotalElements] = useState(0);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const inboxScrollRef = useRef<HTMLDivElement>(null);
+  const convScrollRef = useRef<HTMLDivElement>(null);
+  
+  // Refs to prevent infinite loops
+  const loadingLockRef = useRef(false);
+  const convLoadingLockRef = useRef(false);
+  const initialLoadDoneRef = useRef(false);
 
   // Group management modal
   const [showGroupModal, setShowGroupModal] = useState(false);
@@ -280,9 +325,6 @@ export default function Messages() {
   const [showPollModal, setShowPollModal] = useState(false);
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["", ""]);
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // ── Load users ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -301,30 +343,61 @@ export default function Messages() {
 
   useEffect(() => { fetchGroups(); }, [fetchGroups]);
 
-  // ── Load inbox with better error handling ──────────────────────────────────
-  const fetchInbox = useCallback(async () => {
+  // ── Load inbox with pagination - FIXED ──────────────────────────────────────
+  const fetchInbox = useCallback(async (page: number = 0, reset: boolean = true) => {
+    if (loadingLockRef.current) return;
+    if (inboxLoading) return;
+    if (!reset && !hasMoreInbox) return;
+    
+    loadingLockRef.current = true;
+    setInboxLoading(true);
+    
     try {
       setInboxError(null);
-      console.log('📥 Fetching inbox...');
-      const r = await api.get<Message[]>("/messages/inbox");
-      console.log('✅ Inbox fetched:', r.data.length, 'messages');
-      const map: Record<string, Message> = {};
-      r.data.forEach((msg) => {
-        const other = msg.senderUsername === name ? msg.receiverUsername : msg.senderUsername;
-        const ex = map[other];
-        if (!ex || parseUTC(msg.sentAt) > parseUTC(ex.sentAt)) map[other] = msg;
+      
+      const r = await api.get<PageResponse<Message>>(`/messages/inbox?page=${page}&size=50`);
+      
+      const newMessages = r.data.content;
+      
+      setInboxMap(prevMap => {
+        const map: Record<string, Message> = {};
+        
+        if (!reset) {
+          Object.assign(map, prevMap);
+        }
+        
+        newMessages.forEach((msg) => {
+          const other = msg.senderUsername === name ? msg.receiverUsername : msg.senderUsername;
+          const ex = map[other];
+          if (!ex || parseUTC(msg.sentAt) > parseUTC(ex.sentAt)) {
+            map[other] = msg;
+          }
+        });
+        
+        return map;
       });
-      setInboxMap(map);
+      
+      setInboxPage(page);
+      setInboxTotalPages(r.data.totalPages);
+      setInboxTotalElements(r.data.totalElements);
+      setHasMoreInbox(!r.data.last);
+      
     } catch (error: any) {
-      console.error('❌ Error fetching inbox:', error);
+      console.error('Error fetching inbox:', error);
       setInboxError(error.response?.data || 'Failed to load messages');
-      // Don't set empty map, keep existing data
+    } finally {
+      setInboxLoading(false);
+      loadingLockRef.current = false;
     }
-  }, [name]);
+  }, [name, inboxLoading, hasMoreInbox]);
 
-  useEffect(() => { 
-    fetchInbox(); 
-  }, [fetchInbox]);
+  // Load initial inbox - runs only once
+  useEffect(() => {
+    if (!initialLoadDoneRef.current) {
+      initialLoadDoneRef.current = true;
+      fetchInbox(0, true);
+    }
+  }, []);
 
   // ── Load broadcasts ──────────────────────────────────────────────────────────
   const fetchBroadcasts = useCallback(async () => {
@@ -373,21 +446,50 @@ export default function Messages() {
     return () => { unsubDM(); unsubGroup(); };
   }, [connected, name, chatTarget, subscribe]);
 
-  // ── Fetch DM conversation ────────────────────────────────────────────────────
-  const fetchConversation = useCallback(async () => {
+  // ── Fetch DM conversation with pagination - FIXED ──────────────────────────
+  const fetchConversation = useCallback(async (page: number = 0, reset: boolean = true) => {
     if (!chatTarget || chatTarget.type !== "user") return;
+    if (convLoadingLockRef.current) return;
+    if (convLoading) return;
+    if (!reset && !hasMoreConv) return;
+    
+    convLoadingLockRef.current = true;
+    setConvLoading(true);
+    
     try {
-      const r = await api.get<Message[]>(`/messages/conversation/${chatTarget.username}`);
-      setConversation([...r.data].sort(
+      const r = await api.get<PageResponse<Message>>(
+        `/messages/conversation/${chatTarget.username}?page=${page}&size=50`
+      );
+      
+      const newMessages = [...r.data.content].sort(
         (a, b) => parseUTC(a.sentAt).getTime() - parseUTC(b.sentAt).getTime()
-      ));
-    } catch { /* ignore */ }
-  }, [chatTarget]);
+      );
+      
+      setConversation(prev => reset ? newMessages : [...prev, ...newMessages]);
+      setConvPage(page);
+      setConvTotalPages(r.data.totalPages);
+      setHasMoreConv(!r.data.last);
+      setConvTotalElements(r.data.totalElements);
+      
+    } catch { /* ignore */ } finally {
+      setConvLoading(false);
+      convLoadingLockRef.current = false;
+    }
+  }, [chatTarget, convLoading, hasMoreConv]);
 
+  // Load initial conversation when chat target changes
   useEffect(() => {
-    if (chatTarget?.type === "user") fetchConversation();
-    else setConversation([]);
-  }, [fetchConversation, chatTarget]);
+    if (chatTarget?.type === "user") {
+      setConversation([]);
+      setConvPage(0);
+      setHasMoreConv(true);
+      setConvTotalElements(0);
+      convLoadingLockRef.current = false;
+      fetchConversation(0, true);
+    } else {
+      setConversation([]);
+    }
+  }, [chatTarget]);
 
   // ── Fetch group messages ─────────────────────────────────────────────────────
   const fetchGroupMessages = useCallback(async () => {
@@ -413,7 +515,7 @@ export default function Messages() {
     if (e.target.files) {
       const files = Array.from(e.target.files);
       const validFiles = files.filter(file => {
-        const maxSize = 50 * 1024 * 1024; // 50MB limit
+        const maxSize = 50 * 1024 * 1024;
         if (file.size > maxSize) {
           alert(`${file.name} exceeds 50MB limit`);
           return false;
@@ -454,7 +556,6 @@ export default function Messages() {
     const content = newMessage.trim();
     const filesToUpload = [...selectedFiles];
     
-    // Clear input immediately for better UX
     setNewMessage("");
     setSelectedFiles([]);
 
@@ -538,7 +639,9 @@ export default function Messages() {
         attachments: attachments.map(a => a.id)
       });
       setConversation((prev) => prev.map((m) => m.id === tempId ? r.data : m));
-      await fetchInbox();
+      if (!loadingLockRef.current) {
+        fetchInbox(0, true);
+      }
     } catch (error) {
       console.error('DM send failed:', error);
       setConversation((prev) => prev.filter((m) => m.id !== tempId));
@@ -557,7 +660,18 @@ export default function Messages() {
     }
   };
 
-  const openChat = (target: ChatTarget) => { setChatTarget(target); setMobileChatOpen(true); };
+  const openChat = (target: ChatTarget) => { 
+    setChatTarget(target); 
+    setMobileChatOpen(true);
+    if (target.type === "user") {
+      setConversation([]);
+      setConvPage(0);
+      setHasMoreConv(true);
+      setConvTotalElements(0);
+      convLoadingLockRef.current = false;
+    }
+  };
+  
   const handleBack = () => setMobileChatOpen(false);
 
   // ── Group CRUD ───────────────────────────────────────────────────────────────
@@ -621,6 +735,21 @@ export default function Messages() {
     } catch { /* ignore */ }
   };
 
+  // ── Scroll handlers - FIXED ──────────────────────────────────────────────────
+  const handleInboxScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop <= clientHeight * 1.5 && hasMoreInbox && !inboxLoading && !loadingLockRef.current) {
+      fetchInbox(inboxPage + 1, false);
+    }
+  }, [hasMoreInbox, inboxLoading, inboxPage, fetchInbox]);
+
+  const handleConvScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop } = e.currentTarget;
+    if (scrollTop === 0 && hasMoreConv && !convLoading && !convLoadingLockRef.current && conversation.length > 0) {
+      fetchConversation(convPage + 1, false);
+    }
+  }, [hasMoreConv, convLoading, convPage, fetchConversation, conversation.length]);
+
   // ── UI helpers ───────────────────────────────────────────────────────────────
   const filteredUsers = users.filter(
     (u) =>
@@ -650,7 +779,6 @@ export default function Messages() {
   return (
     <div className="msg-container">
       <style>{`
-        /* ── Layout ── */
         .msg-container {
           display:flex; flex-direction:column;
           height:calc(100vh - 110px); max-height:860px; min-height:480px;
@@ -661,8 +789,6 @@ export default function Messages() {
         }
         .msg-ws-banner { background:#f59e0b; color:#000; padding:6px; text-align:center; font-size:12px; font-weight:500; }
         .msg-main { display:flex; flex:1; min-height:0; }
-
-        /* ── Sidebar ── */
         .msg-sidebar {
           width:280px; flex-shrink:0; display:flex; flex-direction:column;
           background:hsl(var(--card)); border-right:1px solid hsl(var(--border));
@@ -697,7 +823,9 @@ export default function Messages() {
           background:none; border:none; cursor:pointer; padding:2px 4px; border-radius:4px;
         }
         .msg-section-label button:hover { background:hsl(var(--accent)); }
-        .msg-sidebar-list { flex:1; overflow-y:auto; padding-bottom:8px; }
+        .msg-sidebar-list { 
+          flex:1; overflow-y:auto; padding-bottom:8px; 
+        }
         .msg-contact {
           display:flex; align-items:center; gap:10px; padding:9px 14px;
           cursor:pointer; transition:background .12s; border-radius:6px;
@@ -734,8 +862,6 @@ export default function Messages() {
         }
         .msg-icon-btn:hover { background:hsl(var(--muted)); color:hsl(var(--foreground)); }
         .msg-icon-btn.danger:hover { background:#fee2e2; color:#ef4444; }
-
-        /* ── Chat area ── */
         .msg-chat { flex:1; display:flex; flex-direction:column; min-width:0; background:hsl(var(--background)); }
         .msg-chat-header {
           display:flex; align-items:center; gap:12px; padding:14px 20px;
@@ -744,7 +870,9 @@ export default function Messages() {
         .msg-chat-header-info h3 { font-size:15px; font-weight:700; color:hsl(var(--foreground)); margin:0 0 2px; }
         .msg-chat-header-info p { font-size:12px; color:hsl(var(--muted-foreground)); margin:0; }
         .msg-online-dot { width:10px; height:10px; background:#10b981; border-radius:50%; position:absolute; bottom:1px; right:1px; border:2px solid hsl(var(--card)); }
-        .msg-messages { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:2px; }
+        .msg-messages { 
+          flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:2px; 
+        }
         .msg-day-divider { display:flex; align-items:center; gap:12px; margin:16px 0 8px; }
         .msg-day-divider::before,.msg-day-divider::after { content:''; flex:1; height:1px; background:hsl(var(--border)); }
         .msg-day-divider span { font-size:11px; color:hsl(var(--muted-foreground)); white-space:nowrap; font-weight:500; padding:0 4px; }
@@ -760,8 +888,17 @@ export default function Messages() {
         .msg-bubble-meta { display:flex; align-items:center; gap:4px; margin-top:3px; padding:0 4px; }
         .msg-bubble-meta span { font-size:10.5px; color:hsl(var(--muted-foreground)); }
         .msg-bubble-meta.mine span { color:rgba(255,255,255,.65); }
-
-        /* ── File attachments ── */
+        .msg-loading-more {
+          text-align:center; padding:10px; font-size:12px; 
+          color:hsl(var(--muted-foreground)); 
+        }
+        .msg-loading-spinner {
+          display:inline-block; width:16px; height:16px;
+          border:2px solid hsl(var(--border));
+          border-top-color:#2563eb; border-radius:50%;
+          animation: spin 0.6s linear infinite;
+          margin-right:8px;
+        }
         .file-attachment {
           display:flex; align-items:center; gap:10px; padding:8px 12px;
           border-radius:12px; cursor:pointer; transition:all .2s;
@@ -779,7 +916,6 @@ export default function Messages() {
           padding:4px; border-radius:6px; transition:background .2s;
         }
         .file-download:hover { background:rgba(0,0,0,0.1); }
-
         .selected-files {
           display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;
           padding:8px; background:hsl(var(--muted)); border-radius:8px;
@@ -805,8 +941,6 @@ export default function Messages() {
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
-
-        /* ── Input ── */
         .msg-input-area { padding:14px 20px 16px; border-top:1px solid hsl(var(--border)); background:hsl(var(--card)); }
         .msg-input-toolbar { display:flex; gap:6px; margin-bottom:8px; }
         .msg-toolbar-btn {
@@ -831,8 +965,6 @@ export default function Messages() {
         }
         .msg-send-btn:hover:not(:disabled) { background:#1d4ed8; transform:scale(1.05); }
         .msg-send-btn:disabled { opacity:.5; cursor:not-allowed; }
-
-        /* ── Empty state ── */
         .msg-empty {
           flex:1; display:flex; flex-direction:column; align-items:center;
           justify-content:center; gap:12px; color:hsl(var(--muted-foreground));
@@ -842,8 +974,6 @@ export default function Messages() {
         .msg-empty h3 { font-size:16px; font-weight:600; color:hsl(var(--foreground)); margin:0 0 4px; }
         .msg-empty p { font-size:13.5px; margin:0; max-width:280px; line-height:1.5; }
         .msg-broadcast-info { background:linear-gradient(135deg,#fff7ed,#fef3c7); border:1px solid #fcd34d; border-radius:10px; padding:12px 16px; margin:16px 20px 0; font-size:13px; color:#92400e; display:flex; align-items:center; gap:8px; }
-
-        /* ── Poll ── */
         .poll-card {
           max-width:68%; background:hsl(var(--card)); border:1px solid hsl(var(--border));
           border-radius:14px; padding:14px 16px; margin:4px 0;
@@ -862,8 +992,6 @@ export default function Messages() {
         .poll-option-label { position:relative; z-index:1; display:flex; align-items:center; flex:1; }
         .poll-option-pct { position:relative; z-index:1; font-size:11px; color:hsl(var(--muted-foreground)); flex-shrink:0; }
         .poll-footer { font-size:11px; color:hsl(var(--muted-foreground)); margin-top:6px; }
-
-        /* ── Modal overlay ── */
         .modal-overlay {
           position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.45);
           display:flex; align-items:center; justify-content:center; padding:16px;
@@ -892,15 +1020,11 @@ export default function Messages() {
         .modal-btn.primary:hover { background:#1d4ed8; }
         .modal-btn.secondary { background:hsl(var(--muted)); color:hsl(var(--foreground)); }
         .modal-btn.secondary:hover { background:hsl(var(--accent)); }
-
-        /* ── Poll modal ── */
         .poll-option-row { display:flex; gap:6px; align-items:center; margin-bottom:8px; }
         .poll-option-row input { flex:1; }
         .poll-option-row button { width:28px; height:28px; border-radius:6px; border:1px solid hsl(var(--border)); background:hsl(var(--background)); color:#ef4444; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; }
         .add-option-btn { display:flex; align-items:center; gap:6px; padding:6px 12px; border:1.5px dashed hsl(var(--border)); border-radius:8px; background:none; color:hsl(var(--muted-foreground)); font-size:13px; cursor:pointer; width:100%; justify-content:center; transition:border-color .15s, color .15s; margin-bottom:14px; }
         .add-option-btn:hover { border-color:hsl(var(--primary)); color:hsl(var(--primary)); }
-
-        /* ── Back button / mobile ── */
         .msg-back-btn { display:none; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; border:none; background:hsl(var(--muted)); color:hsl(var(--foreground)); cursor:pointer; flex-shrink:0; transition:background .15s; }
         .msg-back-btn:hover { background:hsl(var(--accent)); }
         @media (max-width:640px) {
@@ -918,11 +1042,20 @@ export default function Messages() {
 
       <div className="msg-main">
         {/* ── Sidebar ──────────────────────────────────────────────────────── */}
-        <div className={`msg-sidebar${mobileChatOpen ? " mobile-hidden" : ""}`}>
+        <div 
+          className={`msg-sidebar${mobileChatOpen ? " mobile-hidden" : ""}`}
+          ref={inboxScrollRef}
+          onScroll={handleInboxScroll}
+        >
           <div className="msg-sidebar-header">
             <div className="msg-sidebar-title">
               <span>Messages</span>
               {totalUnread > 0 && <span className="msg-badge">{totalUnread}</span>}
+              {inboxTotalElements > 0 && (
+                <span style={{ fontSize: 11, fontWeight: 400, color: 'hsl(var(--muted-foreground))' }}>
+                  ({inboxTotalElements})
+                </span>
+              )}
             </div>
             <div className="msg-search">
               <Search size={13} className="msg-search-icon" />
@@ -935,6 +1068,15 @@ export default function Messages() {
           </div>
 
           <div className="msg-sidebar-list">
+            {inboxError && (
+              <div style={{ padding: '12px 16px', color: '#ef4444', fontSize: 13, background: '#fee2e2', margin: '4px 8px', borderRadius: 8 }}>
+                ⚠️ {inboxError}
+                <button onClick={() => fetchInbox(0, true)} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', textDecoration: 'underline' }}>
+                  Retry
+                </button>
+              </div>
+            )}
+
             {/* Broadcast (owner only) */}
             {role === "OWNER" && !search && (
               <>
@@ -1030,6 +1172,13 @@ export default function Messages() {
                 </div>
               );
             })}
+
+            {inboxLoading && (
+              <div className="msg-loading-more">
+                <span className="msg-loading-spinner" />
+                Loading more...
+              </div>
+            )}
           </div>
         </div>
 
@@ -1043,7 +1192,6 @@ export default function Messages() {
             </div>
 
           ) : chatTarget.type === "broadcast" ? (
-            /* ── Broadcast channel ── */
             <>
               <div className="msg-chat-header">
                 <button className="msg-back-btn" onClick={handleBack}><ArrowLeft size={16} /></button>
@@ -1099,7 +1247,6 @@ export default function Messages() {
             </>
 
           ) : chatTarget.type === "group" ? (
-            /* ── Group chat ── */
             <>
               <div className="msg-chat-header">
                 <button className="msg-back-btn" onClick={handleBack}><ArrowLeft size={16} /></button>
@@ -1118,8 +1265,15 @@ export default function Messages() {
                 )}
               </div>
 
-              <div className="msg-messages">
-                {groupMessages.length === 0 && (
+              <div className="msg-messages" onScroll={handleConvScroll} ref={convScrollRef}>
+                {convLoading && groupMessages.length > 0 && (
+                  <div className="msg-loading-more">
+                    <span className="msg-loading-spinner" />
+                    Loading older messages...
+                  </div>
+                )}
+                
+                {groupMessages.length === 0 && !convLoading ? (
                   <div className="msg-empty" style={{ flex: 1 }}>
                     <div className="msg-empty-icon" style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
                       <Users size={28} color="#8b5cf6" />
@@ -1127,41 +1281,42 @@ export default function Messages() {
                     <h3>{chatTarget.group.name}</h3>
                     <p>This is the beginning of this group chat. Say hello!</p>
                   </div>
-                )}
-                {groupMessages.map((msg, i) => {
-                  const isMine = msg.senderUsername === name;
-                  const prev = groupMessages[i - 1];
-                  const showSender = !prev || prev.senderUsername !== msg.senderUsername;
-                  const showDivider = !prev || dateKey(msg.sentAt) !== dateKey(prev.sentAt);
-                  return (
-                    <div key={msg.id}>
-                      {showDivider && <div className="msg-day-divider"><span>{longDateLabel(msg.sentAt)}</span></div>}
-                      <div className={`msg-bubble-group ${isMine ? "mine" : "theirs"}`}>
-                        {showSender && !isMine && <div className="msg-sender-label">{msg.senderUsername}</div>}
-                        {msg.messageType === "POLL" ? (
-                          <PollBubble
-                            msg={msg}
-                            currentUser={name!}
-                            groupId={chatTarget.group.id}
-                            onVoted={(updated) =>
-                              setGroupMessages((prev) => prev.map((m) => m.id === updated.id ? updated : m))
-                            }
-                          />
-                        ) : (
-                          <>
-                            {msg.content && <div className={`msg-bubble ${isMine ? "mine" : "theirs"}`}>{msg.content}</div>}
-                            {msg.attachments?.map(attachment => (
-                              <FileAttachment key={attachment.id} attachment={attachment} isMine={isMine} />
-                            ))}
-                          </>
-                        )}
-                        <div className={`msg-bubble-meta ${isMine ? "mine" : ""}`}>
-                          <span>{fmtTime(msg.sentAt)}</span>
+                ) : (
+                  groupMessages.map((msg, i) => {
+                    const isMine = msg.senderUsername === name;
+                    const prev = groupMessages[i - 1];
+                    const showSender = !prev || prev.senderUsername !== msg.senderUsername;
+                    const showDivider = !prev || dateKey(msg.sentAt) !== dateKey(prev.sentAt);
+                    return (
+                      <div key={msg.id}>
+                        {showDivider && <div className="msg-day-divider"><span>{longDateLabel(msg.sentAt)}</span></div>}
+                        <div className={`msg-bubble-group ${isMine ? "mine" : "theirs"}`}>
+                          {showSender && !isMine && <div className="msg-sender-label">{msg.senderUsername}</div>}
+                          {msg.messageType === "POLL" ? (
+                            <PollBubble
+                              msg={msg}
+                              currentUser={name!}
+                              groupId={chatTarget.group.id}
+                              onVoted={(updated) =>
+                                setGroupMessages((prev) => prev.map((m) => m.id === updated.id ? updated : m))
+                              }
+                            />
+                          ) : (
+                            <>
+                              {msg.content && <div className={`msg-bubble ${isMine ? "mine" : "theirs"}`}>{msg.content}</div>}
+                              {msg.attachments?.map(attachment => (
+                                <FileAttachment key={attachment.id} attachment={attachment} isMine={isMine} />
+                              ))}
+                            </>
+                          )}
+                          <div className={`msg-bubble-meta ${isMine ? "mine" : ""}`}>
+                            <span>{fmtTime(msg.sentAt)}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
                 <div ref={messagesEndRef} />
               </div>
 
@@ -1209,7 +1364,6 @@ export default function Messages() {
             </>
 
           ) : (
-            /* ── DM conversation ── */
             <>
               <div className="msg-chat-header">
                 <button className="msg-back-btn" onClick={handleBack}><ArrowLeft size={16} /></button>
@@ -1220,11 +1374,19 @@ export default function Messages() {
                 ); })()}
                 <div className="msg-chat-header-info">
                   <h3>{chatTarget.username}</h3>
+                  <p>{convTotalElements} messages</p>
                 </div>
               </div>
 
-              <div className="msg-messages">
-                {conversation.length === 0 && (
+              <div className="msg-messages" onScroll={handleConvScroll} ref={convScrollRef}>
+                {convLoading && conversation.length > 0 && (
+                  <div className="msg-loading-more">
+                    <span className="msg-loading-spinner" />
+                    Loading older messages...
+                  </div>
+                )}
+                
+                {conversation.length === 0 && !convLoading ? (
                   <div className="msg-empty" style={{ flex: 1 }}>
                     <div className="msg-empty-icon">
                       {(() => { const { bg, initials } = getAvatar(chatTarget.username); return (
@@ -1234,29 +1396,30 @@ export default function Messages() {
                     <h3>{chatTarget.username}</h3>
                     <p>This is the beginning of your conversation. Say hello!</p>
                   </div>
-                )}
-                {conversation.map((msg, i) => {
-                  const isMine = msg.senderUsername === name;
-                  const prev = conversation[i - 1];
-                  const showSender = !prev || prev.senderUsername !== msg.senderUsername;
-                  const showDivider = !prev || dateKey(msg.sentAt) !== dateKey(prev.sentAt);
-                  return (
-                    <div key={msg.id}>
-                      {showDivider && <div className="msg-day-divider"><span>{longDateLabel(msg.sentAt)}</span></div>}
-                      <div className={`msg-bubble-group ${isMine ? "mine" : "theirs"}`}>
-                        {showSender && !isMine && <div className="msg-sender-label">{msg.senderUsername}</div>}
-                        {msg.content && <div className={`msg-bubble ${isMine ? "mine" : "theirs"}`}>{msg.content}</div>}
-                        {msg.attachments?.map(attachment => (
-                          <FileAttachment key={attachment.id} attachment={attachment} isMine={isMine} />
-                        ))}
-                        <div className={`msg-bubble-meta ${isMine ? "mine" : ""}`}>
-                          <span>{fmtTime(msg.sentAt)}</span>
-                          {isMine && <span style={{ fontSize: 12 }}>{msg.readByReceiver ? "✓✓" : "✓"}</span>}
+                ) : (
+                  conversation.map((msg, i) => {
+                    const isMine = msg.senderUsername === name;
+                    const prev = conversation[i - 1];
+                    const showSender = !prev || prev.senderUsername !== msg.senderUsername;
+                    const showDivider = !prev || dateKey(msg.sentAt) !== dateKey(prev.sentAt);
+                    return (
+                      <div key={msg.id}>
+                        {showDivider && <div className="msg-day-divider"><span>{longDateLabel(msg.sentAt)}</span></div>}
+                        <div className={`msg-bubble-group ${isMine ? "mine" : "theirs"}`}>
+                          {showSender && !isMine && <div className="msg-sender-label">{msg.senderUsername}</div>}
+                          {msg.content && <div className={`msg-bubble ${isMine ? "mine" : "theirs"}`}>{msg.content}</div>}
+                          {msg.attachments?.map(attachment => (
+                            <FileAttachment key={attachment.id} attachment={attachment} isMine={isMine} />
+                          ))}
+                          <div className={`msg-bubble-meta ${isMine ? "mine" : ""}`}>
+                            <span>{fmtTime(msg.sentAt)}</span>
+                            {isMine && <span style={{ fontSize: 12 }}>{msg.readByReceiver ? "✓✓" : "✓"}</span>}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
                 <div ref={messagesEndRef} />
               </div>
 
