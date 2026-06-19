@@ -1418,70 +1418,70 @@ Error generating stack: `+o.message+`
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */function T8(e=DL()){return C8().then(t=>{if(!t)throw _e.create("unsupported-browser")},t=>{throw _e.create("indexed-db-unsupported")}),dx(cx(e),"messaging").getImmediate()}async function P8(e,t){return e=cx(e),vN(e,t)}function R8(e,t){return e=cx(e),E8(e,t)}N8();const A8={apiKey:"AIzaSyDjiYxIJR6a-seO0AUsDsRA0KAqH5JatQ0",authDomain:"ik-tangience.firebaseapp.com",projectId:"ik-tangience",storageBucket:"ik-tangience.firebasestorage.app",messagingSenderId:"631990889690",appId:"1:631990889690:web:c973f976ec8360323cc9e3"},_8=zk(A8),bN=T8(_8);async function D8(){try{if(!("Notification"in window))return console.warn("This browser does not support notifications."),null;if(await Notification.requestPermission()!=="granted")return console.warn("Notification permission denied."),null;const t=await navigator.serviceWorker.register("/firebase-messaging-sw.js"),n=await P8(bN,{vapidKey:"BLpgF48wr7t568AX9GoxzU3pVQ4zm_5deZ8le-7FoXnGOcRCUwPENKZ1EGyU80FUL5tbenaFnXB4BpHYcSZyd3I",serviceWorkerRegistration:t});return console.log("FCM Token obtained:",n),n}catch(e){return console.error("Failed to get FCM token:",e),null}}function O8(){const[e,t]=p.useState(!1),n=p.useCallback(async()=>{try{if(!("Notification"in window)||Notification.permission==="denied")return;const l=await D8();if(!l)return;await me.post("/api/notifications/fcm-token",{token:l})}catch{}},[]),r=p.useCallback(async(l,c,u,d)=>{try{if(!("Notification"in window)||Notification.permission!=="granted")return!1;let f;try{f=await navigator.serviceWorker.ready}catch{return!1}return f?(await f.showNotification(l||"New Message",{body:c||"You have a new message",icon:u||"/IKT.png",badge:"/IKT.png",vibrate:[200,100,200],data:(d==null?void 0:d.data)||{},requireInteraction:!0,silent:!1,tag:"forced-"+Date.now(),actions:[{action:"open",title:"Open App"},{action:"dismiss",title:"Dismiss"}]}),!0):!1}catch{return!1}},[]),s=p.useCallback((l,c,u,d)=>{try{if(!("Notification"in window)||Notification.permission!=="granted")return!1;const f={body:c||"You have a new message",icon:u||"/IKT.png",badge:"/IKT.png",silent:!1,tag:"direct-"+Date.now(),data:(d==null?void 0:d.data)||{},requireInteraction:!0,renotify:!0};"vibrate"in navigator&&(f.vibrate=[200,100,200]);const h=new Notification(l||"New Message",f);return h.onclick=m=>{m.preventDefault(),window.focus(),window.location.pathname!=="/messages"&&(window.location.href="/messages")},setTimeout(()=>h.close(),1e4),!0}catch{return!1}},[]),o=p.useCallback((l,c)=>{try{const u=document.querySelector(".custom-notification-container");u&&u.remove();const d=document.createElement("div");d.className="custom-notification-container",d.style.cssText=`
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 999999;
-        width: 380px;
-        max-width: 90vw;
-        animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        cursor: pointer;
-      `;const f=document.createElement("div");f.style.cssText=`
-        background: #1e293b;
-        color: #f1f5f9;
-        border-radius: 16px;
-        padding: 20px 24px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-        border-left: 5px solid #3b82f6;
-        display: flex;
-        align-items: flex-start;
-        gap: 14px;
-        transition: transform 0.2s;
-        backdrop-filter: blur(10px);
-        background: rgba(30, 41, 59, 0.95);
-      `;const h=document.createElement("div");h.style.cssText=`
-        flex-shrink: 0;
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
-        background: #3b82f6;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 20px;
-      `,h.textContent="💬";const m=document.createElement("div");m.style.cssText=`
-        flex: 1;
-        min-width: 0;
-      `;const w=document.createElement("div");w.style.cssText=`
-        font-weight: 700;
-        font-size: 15px;
-        color: #f1f5f9;
-        margin-bottom: 4px;
-      `,w.textContent=l||"New Message";const x=document.createElement("div");x.style.cssText=`
-        font-size: 13.5px;
-        color: #94a3b8;
-        line-height: 1.5;
-        word-wrap: break-word;
-      `,x.textContent=c||"You have a new message";const b=document.createElement("button");b.style.cssText=`
-        flex-shrink: 0;
-        background: none;
-        border: none;
-        color: #64748b;
-        cursor: pointer;
-        font-size: 20px;
-        padding: 0 4px;
-        transition: color 0.2s;
-        line-height: 1;
-      `,b.textContent="✕",b.onmouseenter=()=>b.style.color="#f1f5f9",b.onmouseleave=()=>b.style.color="#64748b",m.appendChild(w),m.appendChild(x),f.appendChild(h),f.appendChild(m),f.appendChild(b),d.appendChild(f),document.body.appendChild(d);const y=document.createElement("style");y.textContent=`
-        @keyframes slideInRight {
-          from { transform: translateX(120%) scale(0.95); opacity: 0; }
-          to { transform: translateX(0) scale(1); opacity: 1; }
-        }
-        @keyframes slideOutRight {
-          from { transform: translateX(0) scale(1); opacity: 1; }
-          to { transform: translateX(120%) scale(0.95); opacity: 0; }
-        }
-      `,document.querySelector("#custom-notif-styles")||(y.id="custom-notif-styles",document.head.appendChild(y));const g=()=>{d.style.animation="slideOutRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards",setTimeout(()=>d.remove(),350)};return b.onclick=v=>{v.stopPropagation(),g()},d.onclick=()=>{window.focus(),window.location.pathname!=="/messages"&&(window.location.href="/messages"),g()},setTimeout(g,1e4),!0}catch{return!1}},[]),a=p.useCallback(async(l,c,u,d)=>{const f=[{name:"Forced Service Worker",fn:()=>r(l,c,u,d)},{name:"Direct Notification",fn:()=>s(l,c,u,d)}];for(const h of f)try{if(await h.fn())return!0}catch{}return o(l,c),!1},[r,s,o]);return p.useEffect(()=>{(async()=>{try{if("serviceWorker"in navigator){const c=await navigator.serviceWorker.ready;t(!0)}}catch{}})()},[]),p.useEffect(()=>{n();const l=R8(bN,async c=>{var h,m,w,x,b,y;const u=((h=c.notification)==null?void 0:h.title)??((m=c.data)==null?void 0:m.title)??"New Message",d=((w=c.notification)==null?void 0:w.body)??((x=c.data)==null?void 0:x.body)??"",f=((b=c.notification)==null?void 0:b.image)??((y=c.data)==null?void 0:y.image)??"/IKT.png";await a(u,d,f,c)});return()=>{l&&l()}},[n,a]),{reRegisterToken:n,isSupported:"Notification"in window,permissionStatus:typeof Notification<"u"?Notification.permission:"unsupported",serviceWorkerReady:e,showNotification:a}}const I8=()=>{O8();const e=Bs(),t=Jt(),n=(t==null?void 0:t.role)==="OWNER",[r,s]=p.useState(!1),[o,a]=p.useState(!1);return p.useEffect(()=>{const l=()=>{const c=window.innerWidth<768;a(c),c||s(!1)};return l(),window.addEventListener("resize",l),()=>window.removeEventListener("resize",l)},[]),p.useEffect(()=>{const l=c=>{if(r&&o){const u=c.target;!u.closest(".sidebar-wrapper")&&!u.closest(".mobile-menu-btn")&&s(!1)}};return document.addEventListener("click",l),()=>document.removeEventListener("click",l)},[r,o]),i.jsxs("div",{className:"app-layout-container",children:[i.jsx("button",{className:"mobile-menu-btn",onClick:()=>s(!r),"aria-label":"Toggle menu",children:"☰"}),i.jsxs("div",{className:`sidebar-wrapper ${r?"open":""}`,children:[i.jsx("div",{className:"sidebar-overlay",onClick:()=>s(!1)}),i.jsx("div",{className:"sidebar-container",children:i.jsx(JI,{})})]}),i.jsxs("div",{className:"main-content-container",children:[i.jsxs("header",{className:"app-header",children:[i.jsxs("h1",{className:"header-title",children:["Welcome, ",(t==null?void 0:t.name)||"User"," 👋"]}),i.jsxs("div",{className:"header-actions",children:[e.pathname.includes("leave")&&i.jsx(Eb,{showOnlyBell:!1}),e.pathname.includes("progress")&&i.jsx(Eb,{showOnlyBell:!0}),!n&&i.jsx(bM,{})]})]}),i.jsx("main",{className:`page-main ${e.pathname.includes("messages")?"messages-layout":""}`,children:i.jsx("div",{className:`page-content ${e.pathname.includes("messages")?"messages-content":""}`,children:i.jsx(y_,{})})})]}),i.jsx("style",{children:`
+       position: fixed;
+       top: 20px;
+       right: 20px;
+       z-index: 999999;
+       width: 380px;
+       max-width: 90vw;
+       animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+       cursor: pointer;
+     `;const f=document.createElement("div");f.style.cssText=`
+       background: #1e293b;
+       color: #f1f5f9;
+       border-radius: 16px;
+       padding: 20px 24px;
+       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+       border-left: 5px solid #3b82f6;
+       display: flex;
+       align-items: flex-start;
+       gap: 14px;
+       transition: transform 0.2s;
+       backdrop-filter: blur(10px);
+       background: rgba(30, 41, 59, 0.95);
+     `;const h=document.createElement("div");h.style.cssText=`
+       flex-shrink: 0;
+       width: 44px;
+       height: 44px;
+       border-radius: 50%;
+       background: #3b82f6;
+       display: flex;
+       align-items: center;
+       justify-content: center;
+       font-size: 20px;
+     `,h.textContent="💬";const m=document.createElement("div");m.style.cssText=`
+       flex: 1;
+       min-width: 0;
+     `;const w=document.createElement("div");w.style.cssText=`
+       font-weight: 700;
+       font-size: 15px;
+       color: #f1f5f9;
+       margin-bottom: 4px;
+     `,w.textContent=l||"New Message";const x=document.createElement("div");x.style.cssText=`
+       font-size: 13.5px;
+       color: #94a3b8;
+       line-height: 1.5;
+       word-wrap: break-word;
+     `,x.textContent=c||"You have a new message";const b=document.createElement("button");b.style.cssText=`
+       flex-shrink: 0;
+       background: none;
+       border: none;
+       color: #64748b;
+       cursor: pointer;
+       font-size: 20px;
+       padding: 0 4px;
+       transition: color 0.2s;
+       line-height: 1;
+     `,b.textContent="✕",b.onmouseenter=()=>b.style.color="#f1f5f9",b.onmouseleave=()=>b.style.color="#64748b",m.appendChild(w),m.appendChild(x),f.appendChild(h),f.appendChild(m),f.appendChild(b),d.appendChild(f),document.body.appendChild(d);const y=document.createElement("style");y.textContent=`
+       @keyframes slideInRight {
+         from { transform: translateX(120%) scale(0.95); opacity: 0; }
+         to { transform: translateX(0) scale(1); opacity: 1; }
+       }
+       @keyframes slideOutRight {
+         from { transform: translateX(0) scale(1); opacity: 1; }
+         to { transform: translateX(120%) scale(0.95); opacity: 0; }
+       }
+     `,document.querySelector("#custom-notif-styles")||(y.id="custom-notif-styles",document.head.appendChild(y));const g=()=>{d.style.animation="slideOutRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards",setTimeout(()=>d.remove(),350)};return b.onclick=v=>{v.stopPropagation(),g()},d.onclick=()=>{window.focus(),window.location.pathname!=="/messages"&&(window.location.href="/messages"),g()},setTimeout(g,1e4),!0}catch{return!1}},[]),a=p.useCallback(async(l,c,u,d)=>{const f=[{name:"Forced Service Worker",fn:()=>r(l,c,u,d)},{name:"Direct Notification",fn:()=>s(l,c,u,d)}];for(const h of f)try{if(await h.fn())return!0}catch{}return o(l,c),!1},[r,s,o]);return p.useEffect(()=>{(async()=>{try{if("serviceWorker"in navigator){const c=await navigator.serviceWorker.ready;t(!0)}}catch{}})()},[]),p.useEffect(()=>{n();const l=R8(bN,async c=>{var h,m,w,x,b,y;const u=((h=c.notification)==null?void 0:h.title)??((m=c.data)==null?void 0:m.title)??"New Message",d=((w=c.notification)==null?void 0:w.body)??((x=c.data)==null?void 0:x.body)??"",f=((b=c.notification)==null?void 0:b.image)??((y=c.data)==null?void 0:y.image)??"/IKT.png";await a(u,d,f,c)});return()=>{l&&l()}},[n,a]),{reRegisterToken:n,isSupported:"Notification"in window,permissionStatus:typeof Notification<"u"?Notification.permission:"unsupported",serviceWorkerReady:e,showNotification:a}}const I8=()=>{O8();const e=Bs(),t=Jt(),n=(t==null?void 0:t.role)==="OWNER",[r,s]=p.useState(!1),[o,a]=p.useState(!1);return p.useEffect(()=>{const l=()=>{const c=window.innerWidth<768;a(c),c||s(!1)};return l(),window.addEventListener("resize",l),()=>window.removeEventListener("resize",l)},[]),p.useEffect(()=>{const l=c=>{if(r&&o){const u=c.target;!u.closest(".sidebar-wrapper")&&!u.closest(".mobile-menu-btn")&&s(!1)}};return document.addEventListener("click",l),()=>document.removeEventListener("click",l)},[r,o]),i.jsxs("div",{className:"app-layout-container",children:[i.jsx("button",{className:"mobile-menu-btn",onClick:()=>s(!r),"aria-label":"Toggle menu",children:"☰"}),i.jsxs("div",{className:`sidebar-wrapper ${r?"open":""}`,children:[i.jsx("div",{className:"sidebar-overlay",onClick:()=>s(!1)}),i.jsx("div",{className:"sidebar-container",children:i.jsx(JI,{})})]}),i.jsxs("div",{className:"main-content-container",children:[i.jsxs("header",{className:"app-header",children:[i.jsxs("h1",{className:"header-title",children:["Welcome, ",(t==null?void 0:t.name)||"User"," 👋"]}),i.jsxs("div",{className:"header-actions",children:[e.pathname.includes("leave")&&i.jsx(Eb,{showOnlyBell:!1}),e.pathname.includes("progress")&&i.jsx(Eb,{showOnlyBell:!0}),!n&&i.jsx(bM,{})]})]}),i.jsx("main",{className:`page-main ${e.pathname.includes("messages")?"messages-layout":""}`,children:i.jsx("div",{className:`page-content ${e.pathname.includes("messages")?"messages-content":""}`,children:i.jsx(y_,{})})})]}),i.jsx("style",{children:`
         /* Layout Container */
         .app-layout-container {
           display: flex;
