@@ -940,14 +940,33 @@ export default function Dashboard() {
                 <p className="section-title">Clients — {selectedYear}</p>
                 <p className="section-subtitle">{clientsForYear.length} client(s) with active projects</p>
                 <div style={{ marginBottom: 18 }}>
-                  <button className="btn btn-gold" onClick={() => setShowAddProject(v => !v)}>
-                    {showAddProject ? "✕ Cancel" : "+ New Project"}
-                  </button>
+                  <button className="btn btn-gold" onClick={() => {
+  setShowAddProject(v => !v);
+  if (selectedClient) {
+    setNewProjectData(prev => ({ 
+      ...prev, 
+      client: selectedClient, 
+      year: selectedYear || "" 
+    }));
+  }
+}}>
+  {showAddProject ? "✕ Cancel" : "+ New Project"}
+</button>
                 </div>
                 <AnimatePresence>
                   {showAddProject && (
                     <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                      <AddProjectForm data={newProjectData} setData={setNewProjectData} onSave={handleAddProject} onCancel={() => setShowAddProject(false)} saving={savingProject} defaultYear={selectedYear} error={error} />
+                     <AddProjectForm 
+  data={newProjectData} 
+  setData={setNewProjectData} 
+  onSave={handleAddProject} 
+  onCancel={() => setShowAddProject(false)} 
+  saving={savingProject} 
+  defaultYear={selectedYear} 
+  defaultClient={selectedClient}
+  allProjects={allProjects}
+  error={error} 
+/>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -973,15 +992,33 @@ export default function Dashboard() {
                 <p className="section-title">{selectedClient}</p>
                 <p className="section-subtitle">{projectsForClient.length} project(s) in {selectedYear}</p>
                 <div className="section-actions">
-                  <button className="btn btn-gold" onClick={() => setShowAddProject(v => !v)}>
-                    {showAddProject ? "✕ Cancel" : "+ New Project"}
-                  </button>
+                  <button className="btn btn-gold" onClick={() => {
+  setShowAddProject(v => !v);
+  if (selectedClient) {
+    setNewProjectData(prev => ({ 
+      ...prev, 
+      client: selectedClient, 
+      year: selectedYear || "" 
+    }));
+  }
+}}>
+  {showAddProject ? "✕ Cancel" : "+ New Project"}
+</button>
                 </div>
                 <AnimatePresence>
                   {showAddProject && (
                     <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                      <AddProjectForm data={newProjectData} setData={setNewProjectData} onSave={handleAddProject} onCancel={() => setShowAddProject(false)} saving={savingProject} defaultYear={selectedYear} defaultClient={selectedClient} error={error} />
-                    </motion.div>
+                     <AddProjectForm 
+  data={newProjectData} 
+  setData={setNewProjectData} 
+  onSave={handleAddProject} 
+  onCancel={() => setShowAddProject(false)} 
+  saving={savingProject} 
+  defaultYear={selectedYear} 
+  defaultClient={selectedClient}
+  allProjects={allProjects}
+  error={error} 
+/>  </motion.div>
                   )}
                 </AnimatePresence>
                 {projectsForClient.length === 0 ? (
@@ -1306,28 +1343,93 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
 }
 
 // ─── ADD PROJECT FORM ─────────────────────────────────────────────────────────
-function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, defaultClient, error }) {
+function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, defaultClient, error, allProjects = [] }) {
   const f = (k) => data[k] || "";
   const s = (k) => (v) => setData(p => ({ ...p, [k]: v }));
+  
+  // Get all unique clients from the projects list
+  const uniqueClients = [...new Set(allProjects.map(p => p.client).filter(Boolean))].sort();
+  
+  const handleClientChange = (value) => {
+    if (value === "__new__") {
+      const newClient = prompt("Enter new client name:");
+      if (newClient && newClient.trim()) {
+        s("client")(newClient.trim());
+      }
+    } else {
+      s("client")(value);
+    }
+  };
+  
+  const isClientLocked = !!defaultClient;
+  
   return (
     <div className="add-panel">
       <p className="add-panel-title">New Project</p>
       {error && <div className="error-banner">⚠ {error}</div>}
       <div className="edit-form">
         <div className="form-row">
-          <div className="form-group"><label className="form-label">Client</label><input className="form-input" value={defaultClient || f("client")} readOnly={!!defaultClient} onChange={e => s("client")(e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Project Name *</label><input className="form-input" value={f("projectName")} onChange={e => s("projectName")(e.target.value)} /></div>
+          <div className="form-group">
+            <label className="form-label">Client {!isClientLocked && "*"}</label>
+            {isClientLocked ? (
+              <input 
+                className="form-input" 
+                value={f("client")} 
+                readOnly={true}
+                style={{ background: "var(--surface-2)", color: "var(--text-muted)" }}
+              />
+            ) : (
+              <select 
+                className="form-select" 
+                value={f("client")} 
+                onChange={e => handleClientChange(e.target.value)}
+              >
+                <option value="">Select a client...</option>
+                {uniqueClients.map(client => (
+                  <option key={client} value={client}>{client}</option>
+                ))}
+                <option value="__new__">➕ Add New Client</option>
+              </select>
+            )}
+            {isClientLocked && (
+              <small style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                Client locked to: {defaultClient}
+              </small>
+            )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Project Name *</label>
+            <input className="form-input" value={f("projectName")} onChange={e => s("projectName")(e.target.value)} />
+          </div>
         </div>
         <div className="form-row three">
-          <div className="form-group"><label className="form-label">Job Number *</label><input className="form-input" value={f("jobNumber")} onChange={e => s("jobNumber")(e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Approval Status</label><input className="form-input" placeholder="e.g. 100%" value={f("approvalStatus")} onChange={e => s("approvalStatus")(e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">FAB Status</label><input className="form-input" placeholder="e.g. 90%" value={f("fabStatus")} onChange={e => s("fabStatus")(e.target.value)} /></div>
+          <div className="form-group">
+            <label className="form-label">Job Number *</label>
+            <input className="form-input" value={f("jobNumber")} onChange={e => s("jobNumber")(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Approval Status</label>
+            <input className="form-input" placeholder="e.g. 100%" value={f("approvalStatus")} onChange={e => s("approvalStatus")(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">FAB Status</label>
+            <input className="form-input" placeholder="e.g. 90%" value={f("fabStatus")} onChange={e => s("fabStatus")(e.target.value)} />
+          </div>
         </div>
         <div className="form-row">
-          <div className="form-group"><label className="form-label">Team (Modeler/Editor/Checker)</label><input className="form-input" placeholder="e.g. FAKRU/Murthu/Panch" value={f("team")} onChange={e => s("team")(e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Year</label><input className="form-input" value={defaultYear || f("year")} readOnly={!!defaultYear} onChange={e => s("year")(e.target.value)} /></div>
+          <div className="form-group">
+            <label className="form-label">Team (Modeler/Editor/Checker)</label>
+            <input className="form-input" placeholder="e.g. FAKRU/Murthu/Panch" value={f("team")} onChange={e => s("team")(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Year</label>
+            <input className="form-input" value={defaultYear || f("year")} readOnly={!!defaultYear} onChange={e => s("year")(e.target.value)} />
+          </div>
         </div>
-        <div className="form-group"><label className="form-label">Remarks</label><textarea className="form-textarea" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} /></div>
+        <div className="form-group">
+          <label className="form-label">Remarks</label>
+          <textarea className="form-textarea" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} />
+        </div>
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
           <button className="btn btn-gold" onClick={onSave} disabled={saving}>
