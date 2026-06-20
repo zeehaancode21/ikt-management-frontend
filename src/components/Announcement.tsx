@@ -35,6 +35,8 @@ export default function Announcements() {
   }, []);
 
   useEffect(() => {
+    console.log("Announcements MOUNTED");
+  return () => console.log("Announcements UNMOUNTED");
     fetchAnnouncements();
   }, [fetchAnnouncements]);
 

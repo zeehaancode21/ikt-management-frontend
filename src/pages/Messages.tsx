@@ -414,14 +414,20 @@ export default function Messages() {
   }, [chatTarget, role, fetchBroadcasts]);
 
   // ── WebSocket subscriptions ──────────────────────────────────────────────────
+  const chatTargetRef = useRef<ChatTarget | null>(null);
+  useEffect(() => {
+    chatTargetRef.current = chatTarget;
+  }, [chatTarget]);
+
   useEffect(() => {
     if (!connected || !name) return;
 
     const unsubDM = subscribe(`/user/queue/messages`, (newMsg: Message) => {
+      const target = chatTargetRef.current;
       if (
-        chatTarget?.type === "user" &&
-        (newMsg.senderUsername === chatTarget.username ||
-          newMsg.receiverUsername === chatTarget.username)
+        target?.type === "user" &&
+        (newMsg.senderUsername === target.username ||
+          newMsg.receiverUsername === target.username)
       ) {
         setConversation((prev) =>
           prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]
@@ -436,7 +442,8 @@ export default function Messages() {
     });
 
     const unsubGroup = subscribe(`/user/queue/group-messages`, (newMsg: GroupMessage) => {
-      if (chatTarget?.type === "group" && newMsg.groupId === chatTarget.group.id) {
+      const target = chatTargetRef.current;
+      if (target?.type === "group" && newMsg.groupId === target.group.id) {
         setGroupMessages((prev) =>
           prev.some((m) => m.id === newMsg.id) ? prev.map((m) => m.id === newMsg.id ? newMsg : m) : [...prev, newMsg]
         );
@@ -444,7 +451,7 @@ export default function Messages() {
     });
 
     return () => { unsubDM(); unsubGroup(); };
-  }, [connected, name, chatTarget, subscribe]);
+  }, [connected, name, subscribe]);
 
   // ── Fetch DM conversation with pagination - FIXED ──────────────────────────
   const fetchConversation = useCallback(async (page: number = 0, reset: boolean = true) => {
