@@ -125,7 +125,7 @@ export function usePushNotifications() {
         data: payload?.data || {},
         requireInteraction: true,
         silent: false,
-        tag: "notification-" + messageId,
+        tag: "msg-" + messageId,
         actions: [
           { action: "open", title: "Open App" },
           { action: "dismiss", title: "Dismiss" },
@@ -166,10 +166,10 @@ export function usePushNotifications() {
         icon: icon || "/IKT.png", // ✅ This shows the logo
         badge: "/IKT.png",
         silent: false,
-        tag: "notification-" + messageId,
+        tag: "msg-" + messageId,
         data: payload?.data || {},
         requireInteraction: true,
-        renotify: true,
+        renotify: false,
       };
 
       if ('vibrate' in navigator) {
