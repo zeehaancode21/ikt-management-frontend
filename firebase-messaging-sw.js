@@ -48,6 +48,7 @@ messaging.onBackgroundMessage((payload) => {
   const title = payload.notification?.title ?? payload.data?.title ?? "New Message";
   const body = payload.notification?.body ?? payload.data?.body ?? "";
   const icon = payload.notification?.image ?? payload.data?.image ?? "/IKT.png";
+  const messageId = payload.data?.messageId ?? Date.now().toString();
 
   self.registration.showNotification(title, {
     body,
@@ -56,6 +57,7 @@ messaging.onBackgroundMessage((payload) => {
     vibrate: [200, 100, 200],
     data: payload.data ?? {},
     requireInteraction: true,
+    tag: "msg-" + messageId, // ✅ stable tag — replaces instead of stacking
     actions: [
       { action: "open", title: "Open App" },
       { action: "dismiss", title: "Dismiss" },
