@@ -21,10 +21,11 @@ export const WebSocketProvider = ({ children }: { children: ReactNode }) => {
     if (!token || !name) return;
 
     const client = new Client({
-     
-      // webSocketFactory: () => new SockJS(`http://${window.location.hostname}:8080/ws?token=${token}`),
-      webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8080"}/ws?token=${token}`),
-      // webSocketFactory: () => new SockJS(`http://localhost:8080/ws?token=${token}`),
+      webSocketFactory: () =>
+        new SockJS(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8080"}/ws`),
+      connectHeaders: {
+        Authorization: `Bearer ${token}`,
+      },
       debug: (str) => console.log("STOMP: ", str),
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
@@ -72,13 +73,11 @@ export const WebSocketProvider = ({ children }: { children: ReactNode }) => {
       }
     });
 
-    const subId = destination;
-    subscriptionsRef.current.set(subId, subscription);
+    subscriptionsRef.current.set(destination, subscription);
 
-    // Return unsubscribe function
     return () => {
       subscription.unsubscribe();
-      subscriptionsRef.current.delete(subId);
+      subscriptionsRef.current.delete(destination);
     };
   }, []);
 

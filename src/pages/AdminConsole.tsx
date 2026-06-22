@@ -44,8 +44,8 @@ const ROLE_COLORS: Record<string, string> = {
 const roleColor = (r: string) => ROLE_COLORS[r?.toUpperCase()] ?? "#8b5cf6";
 
 // ─── Confirm Dialog ──────────────────────────────────────────────────────────
-function ConfirmDialog({ open, message, onConfirm, onCancel }: {
-  open: boolean; message: string; onConfirm: () => void; onCancel: () => void;
+function ConfirmDialog({ open, message, onConfirm, onCancel, loading = false }: {
+  open: boolean; message: string; onConfirm: () => void; onCancel: () => void; loading?: boolean;
 }) {
   return (
     <AnimatePresence>
@@ -55,7 +55,7 @@ function ConfirmDialog({ open, message, onConfirm, onCancel }: {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onCancel}
+          onClick={() => { if (!loading) onCancel(); }}
         >
           <motion.div
             className="ac-confirm"
@@ -89,8 +89,10 @@ function ConfirmDialog({ open, message, onConfirm, onCancel }: {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
-              <button className="ac-btn ac-btn-ghost" onClick={onCancel}>Cancel</button>
-              <button className="ac-btn ac-btn-danger" onClick={onConfirm}>Delete</button>
+              <button className="ac-btn ac-btn-ghost" onClick={onCancel} disabled={loading}>Cancel</button>
+              <button className="ac-btn ac-btn-danger" onClick={onConfirm} disabled={loading} style={{ opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
+                {loading ? "Deleting…" : "Delete"}
+              </button>
             </motion.div>
           </motion.div>
         </motion.div>
@@ -452,6 +454,7 @@ function ProjectsTab() {
         message="Delete this project? This cannot be undone."
         onConfirm={handleDelete}
         onCancel={() => setDeleteId(null)}
+        loading={deleting}
       />
 
       <AnimatePresence>
@@ -733,10 +736,11 @@ function ProjectsTab() {
                       </motion.button>
                       <motion.button
                         className="ac-delete-btn"
-                        onClick={() => setDeleteId(p.id)}
+                        onClick={() => { if (!deleting && deleteId === null) setDeleteId(p.id); }}
                         title="Delete project"
-                        whileHover={{ scale: 1.1, backgroundColor: "#fee2e2", color: "#ef4444" }}
-                        whileTap={{ scale: 0.95 }}
+                        disabled={deleting || deleteId !== null}
+                        whileHover={{ scale: (deleting || deleteId !== null) ? 1 : 1.1, backgroundColor: (deleting || deleteId !== null) ? undefined : "#fee2e2", color: (deleting || deleteId !== null) ? undefined : "#ef4444" }}
+                        whileTap={{ scale: (deleting || deleteId !== null) ? 1 : 0.95 }}
                       >
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
@@ -842,6 +846,7 @@ function EmployeesTab() {
         message="Remove this employee from the system? This cannot be undone."
         onConfirm={handleDelete}
         onCancel={() => setDeleteId(null)}
+        loading={deleting}
       />
       <ErrorDialog
         open={duplicateError.open}
@@ -987,10 +992,11 @@ function EmployeesTab() {
                     </motion.span>
                     <motion.button
                       className="ac-delete-btn"
-                      onClick={() => setDeleteId(em.id)}
+                      onClick={() => { if (!deleting && deleteId === null) setDeleteId(em.id); }}
                       title="Remove employee"
-                      whileHover={{ scale: 1.1, backgroundColor: "#fee2e2", color: "#ef4444" }}
-                      whileTap={{ scale: 0.95 }}
+                      disabled={deleting || deleteId !== null}
+                      whileHover={{ scale: (deleting || deleteId !== null) ? 1 : 1.1, backgroundColor: (deleting || deleteId !== null) ? undefined : "#fee2e2", color: (deleting || deleteId !== null) ? undefined : "#ef4444" }}
+                      whileTap={{ scale: (deleting || deleteId !== null) ? 1 : 0.95 }}
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
@@ -1944,7 +1950,7 @@ export default function AdminConsole() {
               Projects (Coming Soon)
             </motion.button>
 
-            
+
           </div>
         </div>
 

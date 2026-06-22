@@ -320,6 +320,9 @@ export default function Messages() {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
   const [groupForm, setGroupForm] = useState({ name: "", description: "", members: [] as string[] });
+  const [savingGroup, setSavingGroup] = useState(false);
+const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
+const [deletingGroup, setDeletingGroup] = useState(false);
 
   // Poll creation modal
   const [showPollModal, setShowPollModal] = useState(false);
@@ -696,7 +699,8 @@ export default function Messages() {
   };
 
   const saveGroup = async () => {
-    if (!groupForm.name.trim()) return;
+    if (!groupForm.name.trim() || savingGroup) return;
+    setSavingGroup(true);
     try {
       if (editingGroup) {
         await api.put(`/groups/${editingGroup.id}`, groupForm);
@@ -705,19 +709,29 @@ export default function Messages() {
       }
       await fetchGroups();
       setShowGroupModal(false);
-    } catch { /* ignore */ }
+    } catch { /* ignore */ } finally {
+      setSavingGroup(false);
+    }
   };
 
   const deleteGroup = async (g: Group, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(`Delete group "${g.name}"?`)) return;
+    setDeleteGroupTarget(g);
+  };
+
+  const confirmDeleteGroup = async () => {
+    if (!deleteGroupTarget || deletingGroup) return;
+    setDeletingGroup(true);
     try {
-      await api.delete(`/groups/${g.id}`);
+      await api.delete(`/groups/${deleteGroupTarget.id}`);
       await fetchGroups();
-      if (chatTarget?.type === "group" && chatTarget.group.id === g.id) {
+      if (chatTarget?.type === "group" && chatTarget.group.id === deleteGroupTarget.id) {
         setChatTarget(null); setMobileChatOpen(false);
       }
-    } catch { /* ignore */ }
+      setDeleteGroupTarget(null);
+    } catch { /* ignore */ } finally {
+      setDeletingGroup(false);
+    }
   };
 
   // ── Poll ─────────────────────────────────────────────────────────────────────
@@ -1512,8 +1526,45 @@ export default function Messages() {
 
             <div className="modal-actions">
               <button className="modal-btn secondary" onClick={() => setShowGroupModal(false)}>Cancel</button>
-              <button className="modal-btn primary" onClick={saveGroup} disabled={!groupForm.name.trim()}>
-                {editingGroup ? "Save Changes" : "Create Group"}
+              <button className="modal-btn primary" onClick={saveGroup} disabled={!groupForm.name.trim() || savingGroup}>
+                {savingGroup ? (editingGroup ? "Saving…" : "Creating…") : (editingGroup ? "Save Changes" : "Create Group")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Group Confirm Modal ──────────────────────────────────────── */}
+      {deleteGroupTarget && (
+        <div className="modal-overlay" onClick={() => { if (!deletingGroup) setDeleteGroupTarget(null); }}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div className="modal-title">
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ color: "#ef4444", fontSize: 20 }}>⚠</span>
+                Delete Group
+              </span>
+              <button className="msg-icon-btn" onClick={() => { if (!deletingGroup) setDeleteGroupTarget(null); }} disabled={deletingGroup}><X size={16} /></button>
+            </div>
+            <p style={{ fontSize: 14, color: "hsl(var(--muted-foreground))", margin: "0 0 6px" }}>
+              Are you sure you want to delete
+            </p>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "hsl(var(--foreground))", margin: "0 0 18px", wordBreak: "break-word" }}>
+              "{deleteGroupTarget.name}"?
+            </p>
+            <p style={{ fontSize: 13, color: "#ef4444", margin: "0 0 20px" }}>
+              This will permanently delete the group and all its messages. This cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button className="modal-btn secondary" onClick={() => setDeleteGroupTarget(null)} disabled={deletingGroup}>Cancel</button>
+              <button
+                className="modal-btn primary"
+                onClick={confirmDeleteGroup}
+                disabled={deletingGroup}
+                style={{ background: "#ef4444", opacity: deletingGroup ? 0.6 : 1, cursor: deletingGroup ? "not-allowed" : "pointer" }}
+                onMouseEnter={e => { if (!deletingGroup) e.currentTarget.style.background = "#dc2626"; }}
+                onMouseLeave={e => { if (!deletingGroup) e.currentTarget.style.background = "#ef4444"; }}
+              >
+                {deletingGroup ? "Deleting…" : "Delete Group"}
               </button>
             </div>
           </div>

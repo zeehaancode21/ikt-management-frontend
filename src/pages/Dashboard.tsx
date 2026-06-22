@@ -662,6 +662,7 @@ export default function Dashboard() {
       "Delete Project",
       `Are you sure you want to delete "${selectedProject.projectName}"? This action cannot be undone.`,
       async () => {
+        if (deletingProjectRef.current) return;
         deletingProjectRef.current = true;
         setDeletingProject(true);
         setError("");
@@ -1271,19 +1272,22 @@ export default function Dashboard() {
                 <h3 className="confirm-title">{confirmDialog.title}</h3>
                 <p className="confirm-message">{confirmDialog.message}</p>
                 <div className="confirm-actions">
-                  <button
-                    className="confirm-cancel"
-                    onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="confirm-delete"
-                    onClick={() => confirmDialog.onConfirm?.()}
-                  >
-                    Delete
-                  </button>
-                </div>
+  <button
+    className="confirm-cancel"
+    onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+    disabled={deletingProject || deletingCoId !== null}
+  >
+    Cancel
+  </button>
+  <button
+    className="confirm-delete"
+    onClick={() => confirmDialog.onConfirm?.()}
+    disabled={deletingProject || deletingCoId !== null}
+    style={{ opacity: (deletingProject || deletingCoId !== null) ? 0.6 : 1, cursor: (deletingProject || deletingCoId !== null) ? "not-allowed" : "pointer" }}
+  >
+    {deletingProject ? <><BtnSpinner />&nbsp;Deleting…</> : (deletingCoId !== null ? <><BtnSpinner />&nbsp;Deleting…</> : "Delete")}
+  </button>
+</div>
               </motion.div>
             </motion.div>
           )}
