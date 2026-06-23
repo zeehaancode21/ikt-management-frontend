@@ -414,7 +414,7 @@ export default function Messages() {
 
   useEffect(() => {
     if (chatTarget?.type === "broadcast" && role === "OWNER") fetchBroadcasts();
-  }, [chatTarget, role, fetchBroadcasts]);
+  }, [chatTarget?.type, role, fetchBroadcasts]);
 
   // ── WebSocket subscriptions ──────────────────────────────────────────────────
   const chatTargetRef = useRef<ChatTarget | null>(null);
