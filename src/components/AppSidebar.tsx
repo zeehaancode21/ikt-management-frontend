@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { GiCctvCamera } from "react-icons/gi";
+import { User } from "lucide-react";
 import {
   Briefcase,
   CalendarDays,
@@ -25,26 +26,30 @@ export const AppSidebar = () => {
     logout();
     navigate("/login");
   };
-
+  const handleProfileClick = () => {
+    if (role !== "OWNER") {
+    navigate("/my-documents"); 
+  }
+  };
   const navItems =
     role === "OWNER"
       ? [
-          { to: "/admin", label: "Admin Console", icon: ShieldCheck },
-          { to: "/dashboard", label: "Projects", icon: Briefcase },
-          { to: "/documents", label: "Documents", icon: FolderOpen },
-          { to: "/reports", label: "Work Report", icon: FileText },
-          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
-          { to: "/messages", label: "Messages", icon: MessageSquare },
-        ]
+        { to: "/admin", label: "Admin Console", icon: ShieldCheck },
+        { to: "/dashboard", label: "Projects", icon: Briefcase },
+        { to: "/documents", label: "Documents", icon: FolderOpen },
+        { to: "/reports", label: "Work Report", icon: FileText },
+        { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+        { to: "/messages", label: "Messages", icon: MessageSquare },
+      ]
       : role === "LEAD"
-      ? [
+        ? [
           { to: "/dashboard", label: "Projects", icon: Briefcase },
           { to: "/documents", label: "Documents", icon: FolderOpen },
           { to: "/reports", label: "Work Report", icon: FileText },
           { to: "/leave", label: "Leave Report", icon: CalendarDays },
           { to: "/messages", label: "Messages", icon: MessageSquare },
         ]
-      : [
+        : [
           { to: "/leave", label: "Leave Portal", icon: CalendarDays },
           { to: "/documents", label: "Documents", icon: FolderOpen },
           { to: "/reports", label: "Work Report", icon: FileText },
@@ -66,17 +71,21 @@ export const AppSidebar = () => {
         </div>
 
         {/* USER CHIP */}
-        <div className="border-b border-sidebar-border px-6 py-4">
+        <button
+          onClick={handleProfileClick}
+          className="w-full border-b border-sidebar-border px-6 py-4 transition-colors hover:bg-sidebar-accent/50 cursor-pointer text-left"
+        >
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sidebar-accent text-sm font-semibold text-white">
               {name?.[0]?.toUpperCase() || "U"}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-white">{name || "User"}</div>
               <div className="text-xs uppercase tracking-wide text-sidebar-primary">{role}</div>
             </div>
+            <User className="h-4 w-4 text-sidebar-primary shrink-0" />
           </div>
-        </div>
+        </button>
 
         {/* NAV */}
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
@@ -104,7 +113,7 @@ export const AppSidebar = () => {
           {/* Camera Button - Owner Only */}
           {role === "OWNER" && (
             <div className="p-3 border-b border-sidebar-border">
-              <button 
+              <button
                 onClick={() => {
                   const cameraUrl = "rtsp://admin:password@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0";
                   window.open(`/camera-viewer?url=${encodeURIComponent(cameraUrl)}`, '_blank');

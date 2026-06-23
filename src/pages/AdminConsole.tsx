@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Navigate } from "react-router-dom";
 import api, { getErrorMessage } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Project {
@@ -1016,6 +1017,7 @@ function EmployeesTab() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function AdminConsole() {
   const { role } = useAuth();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<"projects" | "employees">("employees");
 
   if (role !== "OWNER") return <Navigate to="/progress" replace />;
@@ -1939,15 +1941,12 @@ export default function AdminConsole() {
             </motion.button>
             <motion.button
               className="ac-tab-btn"
-              disabled={true}
-              style={{
-                opacity: 0.4,
-                cursor: 'not-allowed',
-                filter: 'grayscale(0.3)'
-              }}
+              onClick={() => navigate("/vault")}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              <span className="ac-tab-dot" style={{ background: "#94a3b8" }} />
-              Projects (Coming Soon)
+              <span className="ac-tab-dot" style={{ background: "#8b5cf6" }} />
+              Vault
             </motion.button>
 
 

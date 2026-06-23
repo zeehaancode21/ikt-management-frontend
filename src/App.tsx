@@ -14,6 +14,8 @@ import NotFound from "./pages/NotFound";
 import Messages from "./pages/Messages";
 import DocumentManager from "./pages/DocumentManager";
 import { WebSocketProvider } from "@/context/WebSocketContext";
+import MyDocuments from "./pages/MyDocuments";
+import Vault from "./pages/Vault";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
@@ -66,7 +68,8 @@ function App() {
                 <Route path="/leave" element={<LeavePortal />} />
                 <Route path="/reports" element={<WorkReport />} />
                 <Route path="/messages" element={<Messages />} />
-                {/* Document Management - all roles */}
+                <Route path="/my-documents"element={<OwnerOrLead><MyDocuments /></OwnerOrLead>} />
+                <Route path="/vault" element={<OwnerOnly><Vault /></OwnerOnly>} />
                 <Route path="/documents" element={<DocumentManager />} />
               </Route>
 
