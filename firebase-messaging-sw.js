@@ -25,9 +25,9 @@ self.addEventListener('message', (event) => {
       body: body || "You have a new message",
       icon: icon || "/IKT.png",
       badge: "/IKT.png",
-      vibrate: [200, 100, 200],
+      
       data: data || {},
-      requireInteraction: true,
+      requireInteraction: false,
       tag: "message-" + Date.now(),
       actions: [
         { action: "open", title: "Open App" },
@@ -54,9 +54,8 @@ messaging.onBackgroundMessage((payload) => {
     body,
     icon,
     badge: "/IKT.png",
-    vibrate: [200, 100, 200],
     data: payload.data ?? {},
-    requireInteraction: true,
+    requireInteraction: false,
     tag: "msg-" + messageId, // ✅ stable tag — replaces instead of stacking
     actions: [
       { action: "open", title: "Open App" },
