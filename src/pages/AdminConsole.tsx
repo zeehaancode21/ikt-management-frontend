@@ -881,11 +881,11 @@ function EmployeesTab() {
         <form onSubmit={handleAdd} className="ac-form ac-form-4col">
           <div className="ac-field">
             <label className="ac-label">Username</label>
-            <input className="ac-input" placeholder="e.g. priya.sharma" value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="off" />
+            <input className="ac-input" placeholder="e.g. username" value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="off" />
           </div>
           <div className="ac-field">
             <label className="ac-label">Email</label>
-            <input className="ac-input" type="email" placeholder="e.g. priya@ikt.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <input className="ac-input" type="email" placeholder="e.g. username@ikt.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </div>
           <div className="ac-field">
             <label className="ac-label">Password</label>

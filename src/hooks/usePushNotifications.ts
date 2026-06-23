@@ -121,9 +121,9 @@ export function usePushNotifications() {
         body: body || "You have a new message",
         icon: icon || "/IKT.png", // ✅ This shows the logo
         badge: "/IKT.png",
-        vibrate: [200, 100, 200],
+        
         data: payload?.data || {},
-        requireInteraction: true,
+        requireInteraction: false,
         silent: false,
         tag: "msg-" + messageId,
         actions: [
@@ -168,13 +168,9 @@ export function usePushNotifications() {
         silent: false,
         tag: "msg-" + messageId,
         data: payload?.data || {},
-        requireInteraction: true,
+        requireInteraction: false,
         renotify: false,
       };
-
-      if ('vibrate' in navigator) {
-        notificationOptions.vibrate = [200, 100, 200];
-      }
 
       const notification = new Notification(title || "New Message", notificationOptions);
 
