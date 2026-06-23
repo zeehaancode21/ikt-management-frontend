@@ -209,6 +209,8 @@ export const AppLayout = () => {
         .page-content.messages-content {
           height: 100%;
           padding: 16px;
+          display: flex;       
+          width: 100%; 
         }
 
         /* Mobile Styles */
@@ -265,6 +267,8 @@ export const AppLayout = () => {
 
           .page-content.messages-content {
             padding: 12px;
+            display: flex;       
+            width: 100%; 
           }
         }
 

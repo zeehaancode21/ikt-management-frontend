@@ -27,6 +27,12 @@ export default function Announcements() {
     try {
       const res = await api.get<AnnouncementItem[]>("/notifications/announcements");
       setAnnouncements(res.data);
+
+      // Mark all unread announcements as read so bell count clears
+      const unread = res.data.filter((a: AnnouncementItem) => !a.read);
+      await Promise.all(
+        unread.map((a: AnnouncementItem) => api.put(`/notifications/${a.id}/read`))
+      );
     } catch {
       // ignore
     } finally {
@@ -35,10 +41,10 @@ export default function Announcements() {
   }, []);
 
   useEffect(() => {
-    console.log("Announcements MOUNTED");
+  console.log("Announcements MOUNTED");
+  fetchAnnouncements();
   return () => console.log("Announcements UNMOUNTED");
-    fetchAnnouncements();
-  }, [fetchAnnouncements]);
+}, [fetchAnnouncements]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {

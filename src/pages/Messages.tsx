@@ -131,8 +131,8 @@ function longDateLabel(raw: string) {
 
 // ─── Avatar helper ────────────────────────────────────────────────────────────
 const AVATAR_COLORS = [
-  "#6366f1","#8b5cf6","#ec4899","#f59e0b",
-  "#10b981","#3b82f6","#06b6d4","#ef4444",
+  "#6366f1", "#8b5cf6", "#ec4899", "#f59e0b",
+  "#10b981", "#3b82f6", "#06b6d4", "#ef4444",
 ];
 function getAvatar(username: string) {
   return {
@@ -290,27 +290,27 @@ export default function Messages() {
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [inboxError, setInboxError] = useState<string | null>(null);
-  
+
   // Pagination states - Inbox
   const [inboxPage, setInboxPage] = useState(0);
   const [inboxTotalPages, setInboxTotalPages] = useState(0);
   const [inboxTotalElements, setInboxTotalElements] = useState(0);
   const [inboxLoading, setInboxLoading] = useState(false);
   const [hasMoreInbox, setHasMoreInbox] = useState(true);
-  
+
   // Pagination states - Conversation
   const [convPage, setConvPage] = useState(0);
   const [convTotalPages, setConvTotalPages] = useState(0);
   const [convLoading, setConvLoading] = useState(false);
   const [hasMoreConv, setHasMoreConv] = useState(true);
   const [convTotalElements, setConvTotalElements] = useState(0);
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inboxScrollRef = useRef<HTMLDivElement>(null);
   const convScrollRef = useRef<HTMLDivElement>(null);
-  
+
   // Refs to prevent infinite loops
   const loadingLockRef = useRef(false);
   const convLoadingLockRef = useRef(false);
@@ -321,8 +321,8 @@ export default function Messages() {
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
   const [groupForm, setGroupForm] = useState({ name: "", description: "", members: [] as string[] });
   const [savingGroup, setSavingGroup] = useState(false);
-const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
-const [deletingGroup, setDeletingGroup] = useState(false);
+  const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
+  const [deletingGroup, setDeletingGroup] = useState(false);
 
   // Poll creation modal
   const [showPollModal, setShowPollModal] = useState(false);
@@ -333,7 +333,7 @@ const [deletingGroup, setDeletingGroup] = useState(false);
   useEffect(() => {
     api.get<UserEntry[]>("/employees")
       .then((r) => setUsers(r.data.filter((u) => u.username !== name)))
-      .catch(() => {});
+      .catch(() => { });
   }, [name]);
 
   // ── Load groups ──────────────────────────────────────────────────────────────
@@ -351,24 +351,24 @@ const [deletingGroup, setDeletingGroup] = useState(false);
     if (loadingLockRef.current) return;
     if (inboxLoading) return;
     if (!reset && !hasMoreInbox) return;
-    
+
     loadingLockRef.current = true;
     setInboxLoading(true);
-    
+
     try {
       setInboxError(null);
-      
+
       const r = await api.get<PageResponse<Message>>(`/messages/inbox?page=${page}&size=50`);
-      
+
       const newMessages = r.data.content;
-      
+
       setInboxMap(prevMap => {
         const map: Record<string, Message> = {};
-        
+
         if (!reset) {
           Object.assign(map, prevMap);
         }
-        
+
         newMessages.forEach((msg) => {
           const other = msg.senderUsername === name ? msg.receiverUsername : msg.senderUsername;
           const ex = map[other];
@@ -376,15 +376,15 @@ const [deletingGroup, setDeletingGroup] = useState(false);
             map[other] = msg;
           }
         });
-        
+
         return map;
       });
-      
+
       setInboxPage(page);
       setInboxTotalPages(r.data.totalPages);
       setInboxTotalElements(r.data.totalElements);
       setHasMoreInbox(!r.data.last);
-      
+
     } catch (error: any) {
       console.error('Error fetching inbox:', error);
       setInboxError(error.response?.data || 'Failed to load messages');
@@ -462,25 +462,25 @@ const [deletingGroup, setDeletingGroup] = useState(false);
     if (convLoadingLockRef.current) return;
     if (convLoading) return;
     if (!reset && !hasMoreConv) return;
-    
+
     convLoadingLockRef.current = true;
     setConvLoading(true);
-    
+
     try {
       const r = await api.get<PageResponse<Message>>(
         `/messages/conversation/${chatTarget.username}?page=${page}&size=50`
       );
-      
+
       const newMessages = [...r.data.content].sort(
         (a, b) => parseUTC(a.sentAt).getTime() - parseUTC(b.sentAt).getTime()
       );
-      
+
       setConversation(prev => reset ? newMessages : [...prev, ...newMessages]);
       setConvPage(page);
       setConvTotalPages(r.data.totalPages);
       setHasMoreConv(!r.data.last);
       setConvTotalElements(r.data.totalElements);
-      
+
     } catch { /* ignore */ } finally {
       setConvLoading(false);
       convLoadingLockRef.current = false;
@@ -546,7 +546,7 @@ const [deletingGroup, setDeletingGroup] = useState(false);
     files.forEach(file => {
       formData.append('files', file);
     });
-    
+
     try {
       const response = await api.post<Attachment[]>('/attachments/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -561,11 +561,11 @@ const [deletingGroup, setDeletingGroup] = useState(false);
   // ── Send with attachments ─────────────────────────────────────────────────────
   const handleSend = async () => {
     if ((!newMessage.trim() && selectedFiles.length === 0) || sending || uploading) return;
-    
+
     setSending(true);
     const content = newMessage.trim();
     const filesToUpload = [...selectedFiles];
-    
+
     setNewMessage("");
     setSelectedFiles([]);
 
@@ -586,7 +586,7 @@ const [deletingGroup, setDeletingGroup] = useState(false);
         console.error('Broadcast failed:', error);
         setNewMessage(content);
         setSelectedFiles(filesToUpload);
-      } finally { 
+      } finally {
         setSending(false);
         setUploading(false);
       }
@@ -602,8 +602,8 @@ const [deletingGroup, setDeletingGroup] = useState(false);
           attachments = await uploadFiles(filesToUpload);
           setUploading(false);
         }
-        const r = await api.post<GroupMessage>(`/groups/${chatTarget.group.id}/messages`, { 
-          content, 
+        const r = await api.post<GroupMessage>(`/groups/${chatTarget.group.id}/messages`, {
+          content,
           attachments: attachments.map(a => a.id),
           messageType: attachments.length > 0 ? "FILE" : "MESSAGE"
         });
@@ -614,7 +614,7 @@ const [deletingGroup, setDeletingGroup] = useState(false);
         console.error('Group message failed:', error);
         setNewMessage(content);
         setSelectedFiles(filesToUpload);
-      } finally { 
+      } finally {
         setSending(false);
         setUploading(false);
       }
@@ -626,7 +626,7 @@ const [deletingGroup, setDeletingGroup] = useState(false);
       setSending(false);
       return;
     }
-    
+
     const tempId = -(Date.now());
     try {
       let attachments: Attachment[] = [];
@@ -635,16 +635,16 @@ const [deletingGroup, setDeletingGroup] = useState(false);
         attachments = await uploadFiles(filesToUpload);
         setUploading(false);
       }
-      
+
       const optimistic: Message = {
         id: tempId, senderUsername: name!, receiverUsername: chatTarget.username,
         content, readByReceiver: false, sentAt: new Date().toISOString(),
         attachments
       };
       setConversation((prev) => [...prev, optimistic]);
-      
-      const r = await api.post<Message>("/messages/send", { 
-        receiverUsername: chatTarget.username, 
+
+      const r = await api.post<Message>("/messages/send", {
+        receiverUsername: chatTarget.username,
         content,
         attachments: attachments.map(a => a.id)
       });
@@ -657,21 +657,21 @@ const [deletingGroup, setDeletingGroup] = useState(false);
       setConversation((prev) => prev.filter((m) => m.id !== tempId));
       setNewMessage(content);
       setSelectedFiles(filesToUpload);
-    } finally { 
+    } finally {
       setSending(false);
       setUploading(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey && !uploading) { 
-      e.preventDefault(); 
-      handleSend(); 
+    if (e.key === "Enter" && !e.shiftKey && !uploading) {
+      e.preventDefault();
+      handleSend();
     }
   };
 
-  const openChat = (target: ChatTarget) => { 
-    setChatTarget(target); 
+  const openChat = (target: ChatTarget) => {
+    setChatTarget(target);
     setMobileChatOpen(true);
     if (target.type === "user") {
       setConversation([]);
@@ -681,7 +681,7 @@ const [deletingGroup, setDeletingGroup] = useState(false);
       convLoadingLockRef.current = false;
     }
   };
-  
+
   const handleBack = () => setMobileChatOpen(false);
 
   // ── Group CRUD ───────────────────────────────────────────────────────────────
@@ -694,7 +694,7 @@ const [deletingGroup, setDeletingGroup] = useState(false);
   const openEditGroup = (g: Group, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingGroup(g);
-    setGroupForm({ name: g.name, description: g.description ?? "", members: g.members ? g.members.split(",").map(s=>s.trim()).filter(Boolean) : [] });
+    setGroupForm({ name: g.name, description: g.description ?? "", members: g.members ? g.members.split(",").map(s => s.trim()).filter(Boolean) : [] });
     setShowGroupModal(true);
   };
 
@@ -801,13 +801,18 @@ const [deletingGroup, setDeletingGroup] = useState(false);
     <div className="msg-container">
       <style>{`
         .msg-container {
-          display:flex; flex-direction:column;
-          height:calc(100vh - 110px); max-height:860px; min-height:480px;
-          width:100%; background:hsl(var(--background));
-          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-          border-radius:12px; overflow:hidden;
-          box-shadow:0 20px 35px -10px rgba(0,0,0,0.15);
-        }
+  display:flex; flex-direction:column;
+  height:calc(100vh - 110px); max-height:860px; min-height:480px;
+  width:100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;  /* don't shrink to content if parent is flex/grid */
+  background:hsl(var(--background));
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  border-radius:12px; overflow:hidden;
+  box-shadow:0 20px 35px -10px rgba(0,0,0,0.15);
+  box-sizing:border-box;
+}
         .msg-ws-banner { background:#f59e0b; color:#000; padding:6px; text-align:center; font-size:12px; font-weight:500; }
         .msg-main { display:flex; flex:1; min-height:0; }
         .msg-sidebar {
@@ -1063,7 +1068,7 @@ const [deletingGroup, setDeletingGroup] = useState(false);
 
       <div className="msg-main">
         {/* ── Sidebar ──────────────────────────────────────────────────────── */}
-        <div 
+        <div
           className={`msg-sidebar${mobileChatOpen ? " mobile-hidden" : ""}`}
           ref={inboxScrollRef}
           onScroll={handleInboxScroll}
@@ -1293,7 +1298,7 @@ const [deletingGroup, setDeletingGroup] = useState(false);
                     Loading older messages...
                   </div>
                 )}
-                
+
                 {groupMessages.length === 0 && !convLoading ? (
                   <div className="msg-empty" style={{ flex: 1 }}>
                     <div className="msg-empty-icon" style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
@@ -1366,13 +1371,13 @@ const [deletingGroup, setDeletingGroup] = useState(false);
                   </div>
                 )}
                 <div className="msg-input-row">
-                  <input 
-                    ref={inputRef} 
-                    placeholder={`Message ${chatTarget.group.name}…`} 
-                    value={newMessage} 
-                    onChange={(e) => setNewMessage(e.target.value)} 
-                    onKeyDown={handleKeyDown} 
-                    disabled={sending || uploading} 
+                  <input
+                    ref={inputRef}
+                    placeholder={`Message ${chatTarget.group.name}…`}
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={sending || uploading}
                   />
                   <button className="msg-toolbar-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
                     <Paperclip size={13} />
@@ -1388,11 +1393,13 @@ const [deletingGroup, setDeletingGroup] = useState(false);
             <>
               <div className="msg-chat-header">
                 <button className="msg-back-btn" onClick={handleBack}><ArrowLeft size={16} /></button>
-                {(() => { const { bg, initials } = getAvatar(chatTarget.username); return (
-                  <div className="msg-avatar" style={{ background: bg, width: 40, height: 40 }}>
-                    {initials}<div className="msg-online-dot" />
-                  </div>
-                ); })()}
+                {(() => {
+                  const { bg, initials } = getAvatar(chatTarget.username); return (
+                    <div className="msg-avatar" style={{ background: bg, width: 40, height: 40 }}>
+                      {initials}<div className="msg-online-dot" />
+                    </div>
+                  );
+                })()}
                 <div className="msg-chat-header-info">
                   <h3>{chatTarget.username}</h3>
                   <p>{convTotalElements} messages</p>
@@ -1406,13 +1413,15 @@ const [deletingGroup, setDeletingGroup] = useState(false);
                     Loading older messages...
                   </div>
                 )}
-                
+
                 {conversation.length === 0 && !convLoading ? (
                   <div className="msg-empty" style={{ flex: 1 }}>
                     <div className="msg-empty-icon">
-                      {(() => { const { bg, initials } = getAvatar(chatTarget.username); return (
-                        <div style={{ width: 48, height: 48, borderRadius: "50%", background: bg, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 18, fontWeight: 700 }}>{initials}</div>
-                      ); })()}
+                      {(() => {
+                        const { bg, initials } = getAvatar(chatTarget.username); return (
+                          <div style={{ width: 48, height: 48, borderRadius: "50%", background: bg, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 18, fontWeight: 700 }}>{initials}</div>
+                        );
+                      })()}
                     </div>
                     <h3>{chatTarget.username}</h3>
                     <p>This is the beginning of your conversation. Say hello!</p>
@@ -1464,13 +1473,13 @@ const [deletingGroup, setDeletingGroup] = useState(false);
                   </div>
                 )}
                 <div className="msg-input-row">
-                  <input 
-                    ref={inputRef} 
-                    placeholder={`Message ${chatTarget.username}…`} 
-                    value={newMessage} 
-                    onChange={(e) => setNewMessage(e.target.value)} 
-                    onKeyDown={handleKeyDown} 
-                    disabled={sending || uploading} 
+                  <input
+                    ref={inputRef}
+                    placeholder={`Message ${chatTarget.username}…`}
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={sending || uploading}
                   />
                   <button className="msg-toolbar-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
                     <Paperclip size={13} />
