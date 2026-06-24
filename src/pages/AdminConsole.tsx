@@ -764,7 +764,6 @@ function EmployeesTab() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newRole, setNewRole] = useState("USER");
   const [submitting, setSubmitting] = useState(false);
@@ -791,10 +790,9 @@ function EmployeesTab() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await api.post("/auth/register", { username, email, password, role: newRole });
+      await api.post("/auth/register", { username, password, role: newRole });
       toast({ title: "✅ Employee added" });
       setUsername("");
-      setEmail("");
       setPassword("");
       setNewRole("USER");
       load();
@@ -805,11 +803,10 @@ function EmployeesTab() {
         status === 409 || status === 403 ||
         errorMsg.toLowerCase().includes("duplicate") ||
         errorMsg.toLowerCase().includes("already exists") ||
-        (errorMsg.toLowerCase().includes("username") && errorMsg.toLowerCase().includes("taken")) ||
-        (errorMsg.toLowerCase().includes("email") && errorMsg.toLowerCase().includes("taken"));
+        (errorMsg.toLowerCase().includes("username") && errorMsg.toLowerCase().includes("taken"));
 
       if (isDuplicate) {
-        setDuplicateError({ open: true, message: `The username "${username}" or email "${email}" is already registered. Please use different credentials.` });
+        setDuplicateError({ open: true, message: `The username "${username}" is already registered. Please use a different username.` });
       } else {
         toast({ title: "Failed to add employee", description: errorMsg, variant: "destructive" });
       }
@@ -875,7 +872,7 @@ function EmployeesTab() {
           </motion.div>
           <div>
             <h3 className="ac-card-title">Add New Employee</h3>
-            <p className="ac-card-sub">Set username, email, password and assign a role</p>
+            <p className="ac-card-sub">Set username, password and assign a role</p>
           </div>
         </div>
 
@@ -883,10 +880,6 @@ function EmployeesTab() {
           <div className="ac-field">
             <label className="ac-label">Username</label>
             <input className="ac-input" placeholder="e.g. username" value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="off" />
-          </div>
-          <div className="ac-field">
-            <label className="ac-label">Email</label>
-            <input className="ac-input" type="email" placeholder="e.g. username@ikt.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </div>
           <div className="ac-field">
             <label className="ac-label">Password</label>

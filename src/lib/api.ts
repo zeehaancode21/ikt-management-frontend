@@ -17,8 +17,20 @@ let pendingRequests = new Map();
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
-  if (token && !config.url?.includes("/auth/login")) {
+  
+  // DEBUG: Log what's happening
+  console.log("🔑 API Request:", {
+    url: config.url,
+    method: config.method,
+    hasToken: !!token,
+    tokenPreview: token ? token.substring(0, 20) + "..." : "NO TOKEN"
+  });
+  
+  // Always add token for authenticated requests
+  if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  } else {
+    console.warn("⚠️ No token found in localStorage for request to:", config.url);
   }
   
   // Add request ID for deduplication
@@ -33,6 +45,9 @@ api.interceptors.request.use((config) => {
   }
   
   return config;
+}, (error) => {
+  console.error("❌ Request interceptor error:", error);
+  return Promise.reject(error);
 });
 
 // Response interceptor with cache support
@@ -50,12 +65,24 @@ api.interceptors.response.use(
       pendingRequests.delete(error.config.requestId);
     }
     
+    // Handle 401 Unauthorized
     if (error.response?.status === 401) {
+      console.warn("🔒 401 Unauthorized - Clearing session");
       localStorage.removeItem("token");
       localStorage.removeItem("role");
       localStorage.removeItem("name");
-      window.location.href = "/work-weaver/login";
+      
+      // Don't redirect if we're already on login page
+      if (!window.location.pathname.includes("/login") && !window.location.pathname.includes("/work-weaver/login")) {
+        window.location.href = "/work-weaver/login";
+      }
     }
+    
+    // Handle 403 Forbidden
+    if (error.response?.status === 403) {
+      console.error("🚫 403 Forbidden - Access denied for:", error.config?.url);
+    }
+    
     return Promise.reject(error);
   }
 );

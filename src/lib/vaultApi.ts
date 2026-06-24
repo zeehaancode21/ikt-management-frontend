@@ -14,6 +14,7 @@ export interface ChecklistItem {
   uploaded: boolean;
   fileName?: string;
   uploadedAt?: string;
+  id?: number; // Document ID for view/download operations
 }
 
 export interface KycStatus {
@@ -65,6 +66,34 @@ export const saveBankDetailsFor = (username: string, data: BankDetailsForm) =>
 export const getOwnBankDetails = () =>
   api.get<BankDetailsForm>("/kyc/bank-details/me").then((r) => r.data);
 
+// ---------- Employee Document View/Download (their OWN documents) ----------
+
+export const viewOwnDocument = (docId: number) =>
+  api
+    .get(`/kyc/documents/${docId}/view`, {
+      responseType: "blob",
+    })
+    .then((r) => ({
+      blob: r.data as Blob,
+      contentType: r.headers["content-type"] as string | undefined,
+    }));
+
+export const downloadOwnDocument = (docId: number, fileName: string) =>
+  api
+    .get(`/kyc/documents/${docId}/download`, {
+      responseType: "blob",
+    })
+    .then((r) => {
+      const url = window.URL.createObjectURL(new Blob([r.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    });
+
 // ---------- Owner vault (TOTP-gated) ----------
 
 export const vaultTwoFaStatus = () =>
@@ -97,6 +126,17 @@ export const viewEmployeeVault = (username: string, vaultToken: string) =>
       headers: { "X-Vault-Token": vaultToken },
     })
     .then((r) => r.data);
+
+export const viewVaultDocument = (docId: number, vaultToken: string) =>
+  api
+    .get(`/vault/download/${docId}`, {
+      headers: { "X-Vault-Token": vaultToken },
+      responseType: "blob",
+    })
+    .then((r) => ({
+      blob: r.data as Blob,
+      contentType: r.headers["content-type"] as string | undefined,
+    }));
 
 export const downloadVaultDocument = (docId: number, vaultToken: string, fileName: string) =>
   api

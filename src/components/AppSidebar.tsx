@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { GiCctvCamera } from "react-icons/gi";
-import { User } from "lucide-react";
 import {
+  User,
   Briefcase,
   CalendarDays,
   FileText,
@@ -10,6 +10,8 @@ import {
   ShieldCheck,
   FolderOpen,
   KeyRound,
+  Lock,       
+  FileCheck2
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
@@ -28,33 +30,33 @@ export const AppSidebar = () => {
   };
   const handleProfileClick = () => {
     if (role !== "OWNER") {
-    navigate("/my-documents"); 
+    navigate("/my-profile"); 
   }
   };
   const navItems =
-    role === "OWNER"
+  role === "OWNER"
+    ? [
+      { to: "/admin", label: "Admin Console", icon: ShieldCheck },
+      { to: "/dashboard", label: "Projects", icon: Briefcase },
+      { to: "/documents", label: "Documents", icon: FolderOpen },
+      { to: "/reports", label: "Work Report", icon: FileText },
+      { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+      { to: "/messages", label: "Messages", icon: MessageSquare },
+    ]
+    : role === "LEAD"
       ? [
-        { to: "/admin", label: "Admin Console", icon: ShieldCheck },
         { to: "/dashboard", label: "Projects", icon: Briefcase },
         { to: "/documents", label: "Documents", icon: FolderOpen },
         { to: "/reports", label: "Work Report", icon: FileText },
-        { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+        { to: "/leave", label: "Leave Report", icon: CalendarDays },
         { to: "/messages", label: "Messages", icon: MessageSquare },
       ]
-      : role === "LEAD"
-        ? [
-          { to: "/dashboard", label: "Projects", icon: Briefcase },
-          { to: "/documents", label: "Documents", icon: FolderOpen },
-          { to: "/reports", label: "Work Report", icon: FileText },
-          { to: "/leave", label: "Leave Report", icon: CalendarDays },
-          { to: "/messages", label: "Messages", icon: MessageSquare },
-        ]
-        : [
-          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
-          { to: "/documents", label: "Documents", icon: FolderOpen },
-          { to: "/reports", label: "Work Report", icon: FileText },
-          { to: "/messages", label: "Messages", icon: MessageSquare },
-        ];
+      : [
+        { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+        { to: "/documents", label: "Documents", icon: FolderOpen },
+        { to: "/reports", label: "Work Report", icon: FileText },
+        { to: "/messages", label: "Messages", icon: MessageSquare },
+      ];
 
   return (
     <>
