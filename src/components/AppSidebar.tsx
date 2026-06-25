@@ -10,7 +10,6 @@ import {
   ShieldCheck,
   FolderOpen,
   KeyRound,
-  Lock,       
   FileCheck2
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -18,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
+import { UserAvatar } from "@/components/UserAvatar";
 
 export const AppSidebar = () => {
   const { name, role, logout } = useAuth();
@@ -28,35 +28,36 @@ export const AppSidebar = () => {
     logout();
     navigate("/login");
   };
+
+  // All roles can visit their own profile page
   const handleProfileClick = () => {
-    if (role !== "OWNER") {
-    navigate("/my-profile"); 
-  }
+    navigate("/my-profile");
   };
+
   const navItems =
-  role === "OWNER"
-    ? [
-      { to: "/admin", label: "Admin Console", icon: ShieldCheck },
-      { to: "/dashboard", label: "Projects", icon: Briefcase },
-      { to: "/documents", label: "Documents", icon: FolderOpen },
-      { to: "/reports", label: "Work Report", icon: FileText },
-      { to: "/leave", label: "Leave Portal", icon: CalendarDays },
-      { to: "/messages", label: "Messages", icon: MessageSquare },
-    ]
-    : role === "LEAD"
+    role === "OWNER"
       ? [
-        { to: "/dashboard", label: "Projects", icon: Briefcase },
-        { to: "/documents", label: "Documents", icon: FolderOpen },
-        { to: "/reports", label: "Work Report", icon: FileText },
-        { to: "/leave", label: "Leave Report", icon: CalendarDays },
-        { to: "/messages", label: "Messages", icon: MessageSquare },
-      ]
+          { to: "/admin", label: "Admin Console", icon: ShieldCheck },
+          { to: "/dashboard", label: "Projects", icon: Briefcase },
+          { to: "/documents", label: "Documents", icon: FolderOpen },
+          { to: "/reports", label: "Work Report", icon: FileText },
+          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+          { to: "/messages", label: "Messages", icon: MessageSquare },
+        ]
+      : role === "LEAD"
+      ? [
+          { to: "/dashboard", label: "Projects", icon: Briefcase },
+          { to: "/documents", label: "Documents", icon: FolderOpen },
+          { to: "/reports", label: "Work Report", icon: FileText },
+          { to: "/leave", label: "Leave Report", icon: CalendarDays },
+          { to: "/messages", label: "Messages", icon: MessageSquare },
+        ]
       : [
-        { to: "/leave", label: "Leave Portal", icon: CalendarDays },
-        { to: "/documents", label: "Documents", icon: FolderOpen },
-        { to: "/reports", label: "Work Report", icon: FileText },
-        { to: "/messages", label: "Messages", icon: MessageSquare },
-      ];
+          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+          { to: "/documents", label: "Documents", icon: FolderOpen },
+          { to: "/reports", label: "Work Report", icon: FileText },
+          { to: "/messages", label: "Messages", icon: MessageSquare },
+        ];
 
   return (
     <>
@@ -72,15 +73,23 @@ export const AppSidebar = () => {
           />
         </div>
 
-        {/* USER CHIP */}
+        {/* USER CHIP — shows profile picture if uploaded */}
         <button
           onClick={handleProfileClick}
           className="w-full border-b border-sidebar-border px-6 py-4 transition-colors hover:bg-sidebar-accent/50 cursor-pointer text-left"
         >
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sidebar-accent text-sm font-semibold text-white">
-              {name?.[0]?.toUpperCase() || "U"}
-            </div>
+            {name ? (
+              <UserAvatar
+                username={name}
+                size={40}
+                style={{ border: "2px solid rgba(255,255,255,0.2)" }}
+              />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sidebar-accent text-sm font-semibold text-white">
+                U
+              </div>
+            )}
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-white">{name || "User"}</div>
               <div className="text-xs uppercase tracking-wide text-sidebar-primary">{role}</div>
@@ -118,7 +127,7 @@ export const AppSidebar = () => {
               <button
                 onClick={() => {
                   const cameraUrl = "rtsp://admin:password@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0";
-                  window.open(`/camera-viewer?url=${encodeURIComponent(cameraUrl)}`, '_blank');
+                  window.open(`/camera-viewer?url=${encodeURIComponent(cameraUrl)}`, "_blank");
                 }}
                 className="w-full flex justify-center py-3 hover:bg-sidebar-accent rounded-md transition-colors group"
               >

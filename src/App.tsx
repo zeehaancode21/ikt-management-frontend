@@ -70,7 +70,7 @@ function App() {
                 <Route path="/leave" element={<LeavePortal />} />
                 <Route path="/reports" element={<WorkReport />} />
                 <Route path="/messages" element={<Messages />} />
-                <Route path="/my-profile"element={<OwnerOrLead><MyDocuments /></OwnerOrLead>} />
+                <Route path="/my-documents" element={<OwnerOrLead><MyDocuments /></OwnerOrLead>} />
                 <Route path="/vault" element={<OwnerOnly><Vault /></OwnerOnly>} />
                 <Route path="/documents" element={<DocumentManager />} />
               </Route>

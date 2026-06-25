@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getProfilePictureUrl } from "@/lib/profileApi";
+import { fetchProfilePicture } from "@/lib/profileApi";
 
 const AVATAR_COLORS = [
   "#6366f1", "#8b5cf6", "#ec4899", "#f59e0b",
@@ -28,20 +28,29 @@ interface UserAvatarProps {
  * otherwise falls back to the same colored-initials look as before, so
  * nothing looks broken for employees who haven't uploaded a photo yet.
  */
-export function UserAvatar({ username, size = 36, className = "", style = {}, showOnlineDot = false }: UserAvatarProps) {
+export function UserAvatar({
+  username,
+  size = 36,
+  className = "",
+  style = {},
+  showOnlineDot = false,
+}: UserAvatarProps) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { bg, initials } = fallbackFor(username);
 
   useEffect(() => {
     let cancelled = false;
-    setLoaded(false);
-    getProfilePictureUrl(username).then((url) => {
+    setLoading(true);
+    setPhotoUrl(null);
+
+    fetchProfilePicture(username).then((url) => {
       if (!cancelled) {
         setPhotoUrl(url);
-        setLoaded(true);
+        setLoading(false);
       }
     });
+
     return () => {
       cancelled = true;
     };
@@ -59,18 +68,19 @@ export function UserAvatar({ username, size = 36, className = "", style = {}, sh
     flexShrink: 0,
     fontWeight: 700,
     color: "#fff",
-    background: loaded && photoUrl ? "transparent" : bg,
+    background: !loading && photoUrl ? "transparent" : bg,
     fontSize: size * 0.42,
     ...style,
   };
 
   return (
     <div className={className} style={baseStyle}>
-      {loaded && photoUrl ? (
+      {!loading && photoUrl ? (
         <img
           src={photoUrl}
           alt={username}
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          onError={() => setPhotoUrl(null)}
         />
       ) : (
         initials

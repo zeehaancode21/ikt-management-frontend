@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useWebSocket } from "@/context/WebSocketContext";
+import { UserAvatar } from "@/components/UserAvatar";
 import {
   Send, Search, Users, Megaphone, Hash, ArrowLeft,
   Plus, Settings, Trash2, UserPlus, BarChart2, X, Check,
@@ -1171,7 +1172,6 @@ export default function Messages() {
               const lastMsg = inboxMap[u.username];
               const isSelected = chatTarget?.type === "user" && chatTarget.username === u.username;
               const isUnread = lastMsg && lastMsg.receiverUsername === name && !lastMsg.readByReceiver;
-              const { bg, initials } = getAvatar(u.username);
               const rc = getRoleColor(u.role);
               return (
                 <div
@@ -1179,7 +1179,7 @@ export default function Messages() {
                   className={`msg-contact ${isSelected ? "active" : ""}`}
                   onClick={() => openChat({ type: "user", username: u.username })}
                 >
-                  <div className="msg-avatar" style={{ background: bg }}>{initials}</div>
+                  <UserAvatar username={u.username} size={36} className="msg-avatar" style={{ background: undefined }} />
                   <div className="msg-contact-info">
                     <div className="msg-contact-name">
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.username}</span>
@@ -1317,7 +1317,12 @@ export default function Messages() {
                       <div key={msg.id}>
                         {showDivider && <div className="msg-day-divider"><span>{longDateLabel(msg.sentAt)}</span></div>}
                         <div className={`msg-bubble-group ${isMine ? "mine" : "theirs"}`}>
-                          {showSender && !isMine && <div className="msg-sender-label">{msg.senderUsername}</div>}
+                          {showSender && !isMine && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, paddingLeft: 6 }}>
+                              <UserAvatar username={msg.senderUsername} size={20} />
+                              <span className="msg-sender-label" style={{ marginBottom: 0, padding: 0 }}>{msg.senderUsername}</span>
+                            </div>
+                          )}
                           {msg.messageType === "POLL" ? (
                             <PollBubble
                               msg={msg}
@@ -1393,13 +1398,11 @@ export default function Messages() {
             <>
               <div className="msg-chat-header">
                 <button className="msg-back-btn" onClick={handleBack}><ArrowLeft size={16} /></button>
-                {(() => {
-                  const { bg, initials } = getAvatar(chatTarget.username); return (
-                    <div className="msg-avatar" style={{ background: bg, width: 40, height: 40 }}>
-                      {initials}<div className="msg-online-dot" />
-                    </div>
-                  );
-                })()}
+                <UserAvatar
+                  username={chatTarget.username}
+                  size={40}
+                  showOnlineDot={true}
+                />
                 <div className="msg-chat-header-info">
                   <h3>{chatTarget.username}</h3>
                   <p>{convTotalElements} messages</p>
@@ -1417,11 +1420,7 @@ export default function Messages() {
                 {conversation.length === 0 && !convLoading ? (
                   <div className="msg-empty" style={{ flex: 1 }}>
                     <div className="msg-empty-icon">
-                      {(() => {
-                        const { bg, initials } = getAvatar(chatTarget.username); return (
-                          <div style={{ width: 48, height: 48, borderRadius: "50%", background: bg, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 18, fontWeight: 700 }}>{initials}</div>
-                        );
-                      })()}
+                      <UserAvatar username={chatTarget.username} size={48} />
                     </div>
                     <h3>{chatTarget.username}</h3>
                     <p>This is the beginning of your conversation. Say hello!</p>
@@ -1526,7 +1525,7 @@ export default function Messages() {
               {users.map((u) => (
                 <div key={u.id} className="modal-member-item" onClick={() => toggleMember(u.username)}>
                   <input type="checkbox" readOnly checked={groupForm.members.includes(u.username)} />
-                  <div className="msg-avatar" style={{ background: getAvatar(u.username).bg, width: 28, height: 28, fontSize: 11 }}>{getAvatar(u.username).initials}</div>
+                  <UserAvatar username={u.username} size={28} />
                   <span style={{ fontSize: 13, flex: 1 }}>{u.username}</span>
                   <span className="msg-role-tag" style={{ background: getRoleColor(u.role) + "18", color: getRoleColor(u.role), border: `1px solid ${getRoleColor(u.role)}30`, fontSize: 10 }}>{u.role}</span>
                 </div>

@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8080';
+// Use the same env var as api.ts so it works in both dev and prod
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 export interface ProfileForm {
   fullName: string;
@@ -26,46 +27,64 @@ const getAuthHeaders = () => {
   };
 };
 
-// FIXED: Function to fetch profile picture as blob
+// In-memory cache for profile picture blob URLs so we don't re-fetch on
+// every render. Keys are usernames. Invalidated explicitly after upload.
+const pictureCache = new Map<string, string | null>();
+
+/**
+ * Returns a blob object-URL for the user's profile picture,
+ * or null if they have none.  Result is cached in memory.
+ */
 export const fetchProfilePicture = async (username: string): Promise<string | null> => {
+  if (pictureCache.has(username)) {
+    return pictureCache.get(username) ?? null;
+  }
+
   try {
     const token = localStorage.getItem('token');
-    console.log(`Fetching profile picture for ${username}...`);
-    
     const response = await axios.get(`${API_BASE_URL}/profile/picture/${username}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
+      headers: { 'Authorization': `Bearer ${token}` },
       responseType: 'blob',
     });
-    
+
     if (response.data && response.data.size > 0) {
-      console.log(`Picture fetched successfully, size: ${response.data.size} bytes`);
-      // Create an object URL from the blob
       const objectUrl = URL.createObjectURL(response.data);
+      pictureCache.set(username, objectUrl);
       return objectUrl;
     }
-    console.warn('No picture data received');
+    pictureCache.set(username, null);
     return null;
   } catch (error: any) {
-    if (error.response?.status === 404) {
-      console.log('No profile picture found for user');
-    } else {
+    if (error.response?.status !== 404) {
       console.error('Failed to fetch profile picture:', error);
     }
+    pictureCache.set(username, null);
     return null;
   }
 };
 
-// Alternative: Get the URL for direct image access
+/**
+ * Returns the raw URL string (for use in <img src> with auth headers
+ * handled externally, e.g. in MyProfile which does its own fetch).
+ */
 export const getProfilePictureUrl = (username: string): string => {
   return `${API_BASE_URL}/profile/picture/${username}`;
 };
 
+/**
+ * Clears the in-memory blob-URL cache for a user so the next render
+ * re-fetches the freshly uploaded picture.
+ */
+export const invalidateProfilePictureCache = (username: string): void => {
+  const existing = pictureCache.get(username);
+  if (existing) {
+    URL.revokeObjectURL(existing);
+  }
+  pictureCache.delete(username);
+};
+
 export const getOwnProfile = async (): Promise<ProfileResponse> => {
-  console.log('Fetching own profile...');
   const response = await axios.get(`${API_BASE_URL}/profile/me`, getAuthHeaders());
-  console.log('Profile response:', response.data);
   return response.data;
 };
 
@@ -75,9 +94,7 @@ export const getProfile = async (username: string): Promise<ProfileResponse> => 
 };
 
 export const updateOwnProfile = async (profile: ProfileForm): Promise<void> => {
-  console.log('Updating profile:', profile);
   await axios.put(`${API_BASE_URL}/profile/me`, profile, getAuthHeaders());
-  console.log('Profile updated successfully');
 };
 
 export const updateProfile = async (username: string, profile: ProfileForm): Promise<void> => {
@@ -87,24 +104,20 @@ export const updateProfile = async (username: string, profile: ProfileForm): Pro
 export const uploadOwnPicture = async (file: File): Promise<void> => {
   const formData = new FormData();
   formData.append('file', file);
-  
+
   const token = localStorage.getItem('token');
-  console.log('Uploading profile picture...');
-  
   await axios.post(`${API_BASE_URL}/profile/me/picture`, formData, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'multipart/form-data',
     }
   });
-  
-  console.log('Profile picture uploaded successfully');
 };
 
 export const uploadPicture = async (username: string, file: File): Promise<void> => {
   const formData = new FormData();
   formData.append('file', file);
-  
+
   const token = localStorage.getItem('token');
   await axios.post(`${API_BASE_URL}/profile/${username}/picture`, formData, {
     headers: {
@@ -112,9 +125,4 @@ export const uploadPicture = async (username: string, file: File): Promise<void>
       'Content-Type': 'multipart/form-data',
     }
   });
-};
-
-export const invalidateProfilePictureCache = (username: string): void => {
-  console.log('Invalidating profile picture cache for:', username);
-  // Nothing needed here as we're using object URLs
 };
