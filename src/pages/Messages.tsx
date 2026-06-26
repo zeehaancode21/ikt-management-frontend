@@ -388,7 +388,7 @@ export default function Messages() {
 
     } catch (error: any) {
       console.error('Error fetching inbox:', error);
-      setInboxError(error.response?.data || 'Failed to load messages');
+      setInboxError(error?.response?.data?.message || error?.response?.data?.error || 'Failed to load messages');
     } finally {
       setInboxLoading(false);
       loadingLockRef.current = false;
