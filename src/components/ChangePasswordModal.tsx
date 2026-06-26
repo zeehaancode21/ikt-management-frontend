@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import api from "@/lib/api";
 
 interface Props {
@@ -32,7 +33,7 @@ export default function ChangePasswordModal({ onClose }: Props) {
     }
   };
 
-  return (
+  return createPortal(
     <>
       <style>{`
         .cp-overlay {
@@ -242,6 +243,7 @@ export default function ChangePasswordModal({ onClose }: Props) {
           )}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
