@@ -73,7 +73,7 @@ import { lookupIfsc, isPlausibleAccountNumber, IfscDetails } from "@/lib/ifscLoo
 
 export default function MyProfile() {
   const { toast } = useToast();
-  const { name: username } = useAuth();
+  const { name: username, role } = useAuth();
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -193,7 +193,7 @@ export default function MyProfile() {
           getOwnProfile(),
           loadPhoto(),
           loadKyc(),
-          loadBank(),
+          role !== "OWNER" ? loadBank() : Promise.resolve(),
         ]);
 
         setForm({

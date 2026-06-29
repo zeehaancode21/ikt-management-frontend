@@ -1,5 +1,7 @@
+// src/App.tsx  — REPLACE YOUR EXISTING App.tsx WITH THIS
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { ThemeProvider } from "@/context/ThemeContext";   // ← NEW
 import { AppLayout } from "@/components/AppLayout";
 import { Toaster } from "@/components/ui/toaster";
 import { useEffect } from "react";
@@ -47,41 +49,44 @@ function App() {
       });
     }
   }, []);
+
   return (
     <AuthProvider>
-      <WebSocketProvider>
-        <BrowserRouter>
-          <div className="app-wrapper">
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/" element={<Navigate to="/login" replace />} />
+      <ThemeProvider>          {/* ← WRAP HERE */}
+        <WebSocketProvider>
+          <BrowserRouter>
+            <div className="app-wrapper">
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/" element={<Navigate to="/login" replace />} />
 
-              <Route
-                element={
-                  <RequireAuth>
-                    <AppLayout />
-                  </RequireAuth>
-                }
-              >
-                <Route path="/my-profile" element={<MyProfile />} />
-                <Route path="/admin" element={<OwnerOnly><AdminConsole /></OwnerOnly>} />
-                <Route path="/dashboard" element={<OwnerOrLead><Dashboard /></OwnerOrLead>} />
-                <Route path="/progress" element={<WorkProgress />} />
-                <Route path="/leave" element={<LeavePortal />} />
-                <Route path="/reports" element={<WorkReport />} />
-                <Route path="/messages" element={<Messages />} />
-                <Route path="/my-documents" element={<OwnerOrLead><MyDocuments /></OwnerOrLead>} />
-                <Route path="/vault" element={<OwnerOnly><Vault /></OwnerOnly>} />
-                <Route path="/documents" element={<DocumentManager />} />
-              </Route>
+                <Route
+                  element={
+                    <RequireAuth>
+                      <AppLayout />
+                    </RequireAuth>
+                  }
+                >
+                  <Route path="/my-profile" element={<MyProfile />} />
+                  <Route path="/admin" element={<OwnerOnly><AdminConsole /></OwnerOnly>} />
+                  <Route path="/dashboard" element={<OwnerOrLead><Dashboard /></OwnerOrLead>} />
+                  <Route path="/progress" element={<WorkProgress />} />
+                  <Route path="/leave" element={<LeavePortal />} />
+                  <Route path="/reports" element={<WorkReport />} />
+                  <Route path="/messages" element={<Messages />} />
+                  <Route path="/my-documents" element={<OwnerOrLead><MyDocuments /></OwnerOrLead>} />
+                  <Route path="/vault" element={<OwnerOnly><Vault /></OwnerOnly>} />
+                  <Route path="/documents" element={<DocumentManager />} />
+                </Route>
 
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
 
-            <Toaster />
-          </div>
-        </BrowserRouter>
-      </WebSocketProvider>
+              <Toaster />
+            </div>
+          </BrowserRouter>
+        </WebSocketProvider>
+      </ThemeProvider>         {/* ← CLOSE HERE */}
     </AuthProvider>
   );
 }

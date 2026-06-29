@@ -1,15 +1,22 @@
+// src/components/AppLayout.tsx  — REPLACE YOUR EXISTING AppLayout.tsx WITH THIS
 import { Outlet, useLocation } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import HolidayHover from "@/pages/HolidayHover";
 import { useAuth } from "@/context/AuthContext";
 import NotificationBell from "./NotificationBell";
+import { ThemeToggle } from "./ThemeToggle";           // ← NEW
 import { useState, useEffect } from "react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
-export const AppLayout = () => {
+// Inner component so the hook call is always at top level but conditionally rendered
+const PushNotificationsRegistrar = () => {
   usePushNotifications();
+  return null;
+};
+
+export const AppLayout = () => {
   const location = useLocation();
-  const user = useAuth(); 
+  const user = useAuth();
   const isOwner = user?.role === "OWNER";
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -24,8 +31,8 @@ export const AppLayout = () => {
       }
     };
     checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
   // Close sidebar when clicking outside on mobile
@@ -33,19 +40,30 @@ export const AppLayout = () => {
     const handleClickOutside = (e: MouseEvent) => {
       if (sidebarOpen && isMobile) {
         const target = e.target as HTMLElement;
-        if (!target.closest('.sidebar-wrapper') && !target.closest('.mobile-menu-btn')) {
+        if (
+          !target.closest(".sidebar-wrapper") &&
+          !target.closest(".mobile-menu-btn")
+        ) {
           setSidebarOpen(false);
         }
       }
     };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
   }, [sidebarOpen, isMobile]);
 
   return (
     <div className="app-layout-container">
+      {/*
+       * ── OWNER FIX ──────────────────────────────────────────────────────────
+       * Only register FCM push-notification tokens for LEAD / EMPLOYEE roles.
+       * The owner does NOT need push notifications and should NOT hit
+       * POST /api/notifications/fcm-token.
+       * ────────────────────────────────────────────────────────────────────── */}
+      {!isOwner && <PushNotificationsRegistrar />}
+
       {/* Mobile menu button */}
-      <button 
+      <button
         className="mobile-menu-btn"
         onClick={() => setSidebarOpen(!sidebarOpen)}
         aria-label="Toggle menu"
@@ -54,7 +72,7 @@ export const AppLayout = () => {
       </button>
 
       {/* SIDEBAR with mobile support */}
-      <div className={`sidebar-wrapper ${sidebarOpen ? 'open' : ''}`}>
+      <div className={`sidebar-wrapper ${sidebarOpen ? "open" : ""}`}>
         <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
         <div className="sidebar-container">
           <AppSidebar />
@@ -63,7 +81,6 @@ export const AppLayout = () => {
 
       {/* MAIN CONTENT */}
       <div className="main-content-container">
-
         {/* HEADER */}
         <header className="app-header">
           <h1 className="header-title">Welcome, {user?.name || "User"} 👋</h1>
@@ -76,16 +93,26 @@ export const AppLayout = () => {
               <HolidayHover showOnlyBell={true} />
             )}
             {!isOwner && <NotificationBell />}
+
+            {/* ── DARK / LIGHT TOGGLE ── */}
+            <ThemeToggle />
           </div>
         </header>
 
         {/* PAGE CONTENT */}
-        <main className={`page-main ${location.pathname.includes("messages") ? "messages-layout" : ""}`}>
-          <div className={`page-content ${location.pathname.includes("messages") ? "messages-content" : ""}`}>
+        <main
+          className={`page-main ${
+            location.pathname.includes("messages") ? "messages-layout" : ""
+          }`}
+        >
+          <div
+            className={`page-content ${
+              location.pathname.includes("messages") ? "messages-content" : ""
+            }`}
+          >
             <Outlet />
           </div>
         </main>
-
       </div>
 
       <style>{`
@@ -95,7 +122,8 @@ export const AppLayout = () => {
           min-height: 100vh;
           width: 100%;
           position: relative;
-          background: #f7fafc;
+          background: hsl(var(--background));
+          color: hsl(var(--foreground));
         }
 
         /* Mobile Menu Button */
@@ -128,13 +156,13 @@ export const AppLayout = () => {
 
         .sidebar-container {
           width: 220px;
-          background: white;
+          background: hsl(var(--sidebar-background));
           height: 100vh;
           position: sticky;
           top: 0;
           overflow-y: auto;
           transition: transform 0.3s ease;
-          border-right: 1px solid #e2e8f0;
+          border-right: 1px solid hsl(var(--sidebar-border));
           box-shadow: 2px 0 4px rgba(0,0,0,0.02);
         }
 
@@ -157,7 +185,7 @@ export const AppLayout = () => {
           display: flex;
           flex-direction: column;
           min-width: 0;
-          background: #f7fafc;
+          background: hsl(var(--background));
           overflow-x: hidden;
         }
 
@@ -170,8 +198,8 @@ export const AppLayout = () => {
           height: 56px;
           align-items: center;
           justify-content: space-between;
-          border-bottom: 1px solid #e2e8f0;
-          background: white;
+          border-bottom: 1px solid hsl(var(--border));
+          background: hsl(var(--card));
           padding: 0 24px;
           box-shadow: 0 1px 2px rgba(0,0,0,0.03);
         }
@@ -179,7 +207,7 @@ export const AppLayout = () => {
         .header-title {
           font-size: 14px;
           font-weight: 600;
-          color: #1a202c;
+          color: hsl(var(--foreground));
           margin: 0;
         }
 
@@ -209,8 +237,8 @@ export const AppLayout = () => {
         .page-content.messages-content {
           height: 100%;
           padding: 16px;
-          display: flex;       
-          width: 100%; 
+          display: flex;
+          width: 100%;
         }
 
         /* Mobile Styles */
@@ -254,7 +282,7 @@ export const AppLayout = () => {
 
           .header-title {
             font-size: 13px;
-            margin-left: 40px; /* Space for mobile menu button */
+            margin-left: 40px;
           }
 
           .header-actions {
@@ -267,8 +295,8 @@ export const AppLayout = () => {
 
           .page-content.messages-content {
             padding: 12px;
-            display: flex;       
-            width: 100%; 
+            display: flex;
+            width: 100%;
           }
         }
 
@@ -320,16 +348,12 @@ export const AppLayout = () => {
         }
 
         .sidebar-container::-webkit-scrollbar-track {
-          background: #f1f1f1;
+          background: transparent;
         }
 
         .sidebar-container::-webkit-scrollbar-thumb {
-          background: #cbd5e0;
+          background: hsl(var(--sidebar-border));
           border-radius: 4px;
-        }
-
-        .sidebar-container::-webkit-scrollbar-thumb:hover {
-          background: #a0aec0;
         }
 
         /* Main Content Scrollbar */
@@ -339,19 +363,14 @@ export const AppLayout = () => {
         }
 
         .page-main::-webkit-scrollbar-track {
-          background: #f1f1f1;
+          background: hsl(var(--background));
         }
 
         .page-main::-webkit-scrollbar-thumb {
-          background: #cbd5e0;
+          background: hsl(var(--border));
           border-radius: 4px;
         }
 
-        .page-main::-webkit-scrollbar-thumb:hover {
-          background: #a0aec0;
-        }
-
-        /* Mobile Scrollbar */
         @media (max-width: 768px) {
           .page-main::-webkit-scrollbar {
             width: 4px;
