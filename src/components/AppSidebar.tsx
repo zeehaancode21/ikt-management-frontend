@@ -46,16 +46,16 @@ export const AppSidebar = () => {
         ]
       : role === "LEAD"
       ? [
+          { to: "/reports", label: "Work Report", icon: FileText },
           { to: "/dashboard", label: "Projects", icon: Briefcase },
           { to: "/documents", label: "Documents", icon: FolderOpen },
-          { to: "/reports", label: "Work Report", icon: FileText },
           { to: "/leave", label: "Leave Report", icon: CalendarDays },
           { to: "/messages", label: "Messages", icon: MessageSquare },
         ]
       : [
-          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
-          { to: "/documents", label: "Documents", icon: FolderOpen },
           { to: "/reports", label: "Work Report", icon: FileText },
+          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+          { to: "/documents", label: "Documents", icon: FolderOpen },     
           { to: "/messages", label: "Messages", icon: MessageSquare },
         ];
 
