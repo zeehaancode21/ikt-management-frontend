@@ -5,6 +5,7 @@ import HolidayHover from "@/pages/HolidayHover";
 import { useAuth } from "@/context/AuthContext";
 import NotificationBell from "./NotificationBell";
 import { ThemeToggle } from "./ThemeToggle";           // ← NEW
+import { FloatingCalculator } from "./FloatingCalculator";
 import { useState, useEffect } from "react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
@@ -95,6 +96,7 @@ export const AppLayout = () => {
             {!isOwner && <NotificationBell />}
 
             {/* ── DARK / LIGHT TOGGLE ── */}
+            <FloatingCalculator />
             <ThemeToggle />
           </div>
         </header>

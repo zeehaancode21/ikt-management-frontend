@@ -22,17 +22,17 @@ const api = {
         return cached.data;
       }
     }
-    
+
     const res = await fetch(`${API_BASE}/project-status/records`, {
       headers: { "Content-Type": "application/json", ...authHeaders() },
     });
     const json = await res.json();
     if (!json.success) throw new Error(json.error);
-    
+
     apiCache.set(cacheKey, { data: json.data, timestamp: Date.now() });
     return json.data;
   },
-  
+
   async createProject(data) {
     const res = await fetch(`${API_BASE}/project-status`, {
       method: "POST",
@@ -41,11 +41,10 @@ const api = {
     });
     const json = await res.json();
     if (!json.success) throw new Error(json.error);
-    // Invalidate cache
     apiCache.delete("allProjects");
     return json.data;
   },
-  
+
   async updateProject(id, data) {
     const res = await fetch(`${API_BASE}/project-status/${id}`, {
       method: "PUT",
@@ -54,11 +53,10 @@ const api = {
     });
     const json = await res.json();
     if (!json.success) throw new Error(json.error);
-    // Invalidate cache
     apiCache.delete("allProjects");
     return json.data;
   },
-  
+
   async deleteProject(jobNumber) {
     const res = await fetch(`${API_BASE}/project-status/${jobNumber}`, {
       method: "DELETE",
@@ -69,7 +67,7 @@ const api = {
     apiCache.delete("allProjects");
     return json;
   },
-  
+
   async getChangeOrders(projectName) {
     const res = await fetch(
       `${API_BASE}/api/project-status/${encodeURIComponent(projectName)}/change-orders`,
@@ -79,7 +77,7 @@ const api = {
     if (!json.success) throw new Error(json.error);
     return json.data;
   },
-  
+
   async createChangeOrder(projectName, data) {
     const payload = Array.isArray(data) ? data : [data];
     const res = await fetch(
@@ -94,7 +92,7 @@ const api = {
     if (!json.success) throw new Error(json.error || "Failed to create change order");
     return Array.isArray(json.data) ? json.data : [json.data];
   },
-  
+
   async updateChangeOrder(projectName, id, data) {
     const res = await fetch(
       `${API_BASE}/api/project-status/${encodeURIComponent(projectName)}/change-orders/${id}`,
@@ -108,7 +106,7 @@ const api = {
     if (!json.success) throw new Error(json.error);
     return json.data;
   },
-  
+
   async deleteChangeOrder(id) {
     const res = await fetch(`${API_BASE}/api/change-orders/${id}`, {
       method: "DELETE",
@@ -125,7 +123,8 @@ const CO_STATUSES = ["APPROVAL PENDING", "APPROVED", "REJECTED", "IN REVIEW", "C
 
 const EMPTY_PROJECT = {
   client: "", projectName: "", jobNumber: "",
-  approvalStatus: "", fabStatus: "", remarks: "", team: "", year: "",
+  year: "", projectManager: "",
+  approvalStatus: "", fabStatus: "", remarks: "", team: "",
 };
 const EMPTY_CO = {
   co: "", description: "", status: "APPROVAL PENDING",
@@ -136,11 +135,11 @@ const EMPTY_CO = {
 function useDebouncedCallback(callback, delay = 500) {
   const timeoutRef = useRef();
   const callbackRef = useRef(callback);
-  
+
   useEffect(() => {
     callbackRef.current = callback;
   }, [callback]);
-  
+
   return useCallback((...args) => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -153,7 +152,7 @@ function useDebouncedCallback(callback, delay = 500) {
 
 function useAbortController() {
   const controllerRef = useRef(null);
-  
+
   const getController = useCallback(() => {
     if (controllerRef.current) {
       controllerRef.current.abort();
@@ -161,14 +160,14 @@ function useAbortController() {
     controllerRef.current = new AbortController();
     return controllerRef.current;
   }, []);
-  
+
   const abort = useCallback(() => {
     if (controllerRef.current) {
       controllerRef.current.abort();
       controllerRef.current = null;
     }
   }, []);
-  
+
   useEffect(() => {
     return () => {
       if (controllerRef.current) {
@@ -176,11 +175,11 @@ function useAbortController() {
       }
     };
   }, []);
-  
+
   return { getController, abort };
 }
 
-// ─── STYLES (same as before, kept for brevity) ────────────────────────────────
+// ─── STYLES ────────────────────────────────────────────────────────────────
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
@@ -230,22 +229,7 @@ const styles = `
     overflow-x: hidden;
   }
 
-  .topbar {
-    display: flex; align-items: center; gap: 14px; padding: 0 40px; height: 62px;
-    border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.92);
-    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-    position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-sm);
-  }
-  .topbar-logo { font-family: 'Playfair Display', serif; font-size: 1.35rem; font-weight: 700; letter-spacing: 0.02em; color: var(--indigo-dark); line-height: 1; white-space: nowrap; }
-  .topbar-logo span { color: var(--copper); }
-  .topbar-sep { width: 1px; height: 22px; background: var(--border-dark); flex-shrink: 0; }
-  .topbar-breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; overflow: hidden; min-width: 0; }
-  .breadcrumb-item { cursor: pointer; transition: color .2s; white-space: nowrap; }
-  .breadcrumb-item:hover { color: var(--indigo); }
-  .breadcrumb-active { color: var(--text-soft); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
-  .breadcrumb-sep { color: var(--text-dim); flex-shrink: 0; }
-
-  .dash-content { padding: 44px 40px; max-width: 1160px; margin: 0 auto; }
+  .dash-content { padding: 24px 32px; max-width: 1160px; margin: 0 auto; }
   .section-title { font-family: 'Playfair Display', serif; font-size: 2.2rem; font-weight: 700; letter-spacing: -0.01em; color: var(--text); line-height: 1.15; margin-bottom: 6px; }
   .section-subtitle { font-size: 0.86rem; color: var(--text-muted); font-weight: 400; margin-bottom: 32px; }
 
@@ -279,7 +263,7 @@ const styles = `
   .project-arrow { color: var(--text-dim); font-size: 1rem; transition: transform .2s, color .2s; }
   .project-card:hover .project-arrow { transform: translateX(4px); color: var(--copper); }
 
-  .modal-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(26,25,23,0.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal-overlay { position: fixed; inset: 0; z-index: 300; background: rgba(26,25,23,0.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 16px; }
   .modal-box { background: var(--surface); border: 1px solid var(--border-dark); border-radius: 20px; width: 100%; max-width: 960px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
   .modal-header { padding: 22px 26px 0; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface-2); }
   .modal-title { font-family: 'Playfair Display', serif; font-size: 1.55rem; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
@@ -292,12 +276,30 @@ const styles = `
   .modal-close { position: absolute; top: 18px; right: 22px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border-dark); background: var(--surface); color: var(--text-muted); font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .2s, color .2s, border-color .2s; z-index: 10; box-shadow: var(--shadow-sm); }
   .modal-close:hover { background: var(--rose-dim); color: var(--rose); border-color: var(--rose); }
 
-  .detail-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .detail-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .detail-section { margin-bottom: 22px; }
+  .detail-section:last-child { margin-bottom: 0; }
+  .detail-section-heading {
+    font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-weight: 600;
+    margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .detail-grid.detail-grid-status { grid-template-columns: repeat(2, 1fr); }
+  .detail-grid.detail-grid-team { grid-template-columns: repeat(3, 1fr); }
+  .detail-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; min-width: 0; }
   .detail-label { font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 5px; font-family: 'JetBrains Mono', monospace; }
   .detail-value { font-size: 0.9rem; font-weight: 500; color: var(--text); white-space: pre-wrap; word-break: break-word; }
   .detail-card.remarks { grid-column: 1 / -1; }
   .detail-card.full { grid-column: 1 / -1; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-weight: 600;
+  }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 
   .edit-form { display: flex; flex-direction: column; gap: 14px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -373,7 +375,7 @@ const styles = `
   ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
   .confirm-modal-overlay {
-    position: fixed; inset: 0; z-index: 300;
+    position: fixed; inset: 0; z-index: 400;
     background: rgba(26,25,23,0.7); backdrop-filter: blur(8px);
     display: flex; align-items: center; justify-content: center;
   }
@@ -399,8 +401,6 @@ const styles = `
     transform: scale(0.96); }
 
   @media (max-width: 640px) {
-    .topbar { padding: 0 16px; height: auto; min-height: 54px; flex-wrap: nowrap; gap: 8px; }
-    .topbar-logo { font-size: 1.1rem; }
     .dash-content { padding: 24px 16px; }
     .section-title { font-size: 1.6rem; }
     .year-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
@@ -418,6 +418,8 @@ const styles = `
     .modal-title { font-size: 1.2rem; }
     .modal-close { top: 14px; right: 14px; }
     .detail-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .detail-grid.detail-grid-status { grid-template-columns: 1fr; }
+    .detail-grid.detail-grid-team { grid-template-columns: 1fr 1fr; }
     .co-header { flex-direction: column; align-items: flex-start; }
     .confirm-modal { width: 300px; margin: 0 16px; }
   }
@@ -431,6 +433,15 @@ function getBadgeClass(status = "") {
   if (s === "REJECTED" || s === "CANCELLED") return "badge badge-rejected";
   if (s.includes("REVIEW")) return "badge badge-review";
   return "badge badge-default";
+}
+
+function getStatusColor(status = "") {
+  const s = status.toUpperCase();
+  if (s === "APPROVED" || s === "COMPLETED") return "var(--green)";
+  if (s.includes("PENDING")) return "var(--amber)";
+  if (s === "REJECTED" || s === "CANCELLED") return "var(--rose)";
+  if (s.includes("REVIEW")) return "var(--teal)";
+  return "var(--text-muted)";
 }
 
 function parseTeam(str) {
@@ -527,7 +538,6 @@ export default function Dashboard() {
   const [showAddYear, setShowAddYear] = useState(false);
   const [newYearInput, setNewYearInput] = useState("");
 
-  // Refs for preventing duplicate submissions
   const savingProjectRef = useRef(false);
   const deletingProjectRef = useRef(false);
   const savingCoRef = useRef(false);
@@ -572,30 +582,26 @@ export default function Dashboard() {
     setConfirmDialog({ isOpen: true, title, message, onConfirm, itemName });
   };
 
-  // ── OPTIMIZED SAVE PROJECT ──
   const handleSaveProject = async () => {
     if (savingProjectRef.current) return;
     savingProjectRef.current = true;
-    
-    setSavingProject(true); 
+
+    setSavingProject(true);
     setError("");
-    
+
     const originalProject = selectedProject;
     const originalAllProjects = allProjects;
     const updatedProject = { ...selectedProject, ...editProjectData };
-    
-    // Optimistic update
+
     setAllProjects(prev => prev.map(p => p.id === selectedProject.id ? updatedProject : p));
     setSelectedProject(updatedProject);
     setEditingProjectMode(false);
-    
+
     try {
       const apiUpdated = await api.updateProject(selectedProject.id, editProjectData);
-      // Sync with server response
       setAllProjects(prev => prev.map(p => p.id === apiUpdated.id ? apiUpdated : p));
       setSelectedProject(apiUpdated);
     } catch (e) {
-      // Rollback
       setAllProjects(originalAllProjects);
       setSelectedProject(originalProject);
       setEditingProjectMode(true);
@@ -606,44 +612,41 @@ export default function Dashboard() {
     }
   };
 
-  // ── OPTIMIZED ADD PROJECT ──
   const handleAddProject = async () => {
     if (savingProjectRef.current) return;
     savingProjectRef.current = true;
-    
-    setSavingProject(true); 
+
+    setSavingProject(true);
     setError("");
-    
+
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const optimisticProject = { 
-      ...newProjectData, 
-      id: tempId, 
-      year: newProjectData.year || selectedYear, 
+    const optimisticProject = {
+      ...newProjectData,
+      id: tempId,
+      year: newProjectData.year || selectedYear,
       client: newProjectData.client || selectedClient,
       _optimistic: true
     };
-    
-    // Optimistic update
+
     setAllProjects(prev => [...prev, optimisticProject]);
     if (!years.includes(optimisticProject.year)) {
       setYears(prev => [...prev, optimisticProject.year].sort((a, b) => b - a));
     }
-    
+
     const newDataBackup = { ...newProjectData };
     setNewProjectData({ ...EMPTY_PROJECT });
     setShowAddProject(false);
-    
+
     try {
-      const created = await api.createProject({ 
-        ...newProjectData, 
-        year: newProjectData.year || selectedYear 
+      const created = await api.createProject({
+        ...newProjectData,
+        year: newProjectData.year || selectedYear
       });
-      
-      setAllProjects(prev => prev.map(p => 
+
+      setAllProjects(prev => prev.map(p =>
         p.id === tempId ? { ...created, _optimistic: false } : p
       ));
     } catch (e) {
-      // Rollback
       setAllProjects(prev => prev.filter(p => p.id !== tempId));
       setNewProjectData(newDataBackup);
       setShowAddProject(true);
@@ -654,10 +657,9 @@ export default function Dashboard() {
     }
   };
 
-  // ── OPTIMIZED DELETE PROJECT ──
   const handleDeleteProject = () => {
     if (deletingProjectRef.current) return;
-    
+
     showConfirm(
       "Delete Project",
       `Are you sure you want to delete "${selectedProject.projectName}"? This action cannot be undone.`,
@@ -666,15 +668,14 @@ export default function Dashboard() {
         deletingProjectRef.current = true;
         setDeletingProject(true);
         setError("");
-        
+
         const backupProject = selectedProject;
         const backupAll = allProjects;
         const controller = getDeleteController();
-        
-        // Optimistic remove
+
         setAllProjects(prev => prev.filter(p => p.id !== selectedProject.id));
         setSelectedProject(null);
-        
+
         try {
           await api.deleteProject(selectedProject.jobNumber);
           setConfirmDialog(prev => ({ ...prev, isOpen: false }));
@@ -693,32 +694,29 @@ export default function Dashboard() {
     );
   };
 
-  // ── OPTIMIZED SAVE CO with debounce ──
   const handleSaveCo = useDebouncedCallback(async () => {
     if (savingCoRef.current) return;
     savingCoRef.current = true;
-    
+
     setSavingCo(true);
     const prevCo = changeOrders.find(c => c.id === editCoData.id);
     const originalChangeOrders = [...changeOrders];
-    
-    // Optimistic update
-    setChangeOrders(prevList => prevList.map(c => 
+
+    setChangeOrders(prevList => prevList.map(c =>
       c.id === editCoData.id ? { ...c, ...editCoData } : c
     ));
     setEditingCoId(null);
-    
+
     try {
       const updated = await api.updateChangeOrder(
-        selectedProject.projectName, 
-        editCoData.id, 
+        selectedProject.projectName,
+        editCoData.id,
         editCoData
       );
-      setChangeOrders(prevList => prevList.map(c => 
+      setChangeOrders(prevList => prevList.map(c =>
         c.id === updated.id ? updated : c
       ));
     } catch (e) {
-      // Rollback
       setChangeOrders(originalChangeOrders);
       setEditingCoId(editCoData.id);
       setError(e.message);
@@ -728,29 +726,26 @@ export default function Dashboard() {
     }
   }, 300);
 
-  // ── OPTIMIZED ADD CO ──
   const handleAddCo = async () => {
     if (addingCoRef.current) return;
     addingCoRef.current = true;
-    
+
     setAddingCo(true);
     setError("");
-    
+
     const tempId = `temp_co_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const optimisticCo = { ...newCoData, id: tempId, projectName: selectedProject.projectName, _optimistic: true };
-    
-    // Optimistic add
+
     setChangeOrders(prev => [...prev, optimisticCo]);
     const backupData = { ...newCoData };
     setNewCoData({ ...EMPTY_CO });
     setShowAddCo(false);
-    
+
     try {
       const created = await api.createChangeOrder(selectedProject.projectName, newCoData);
       const real = Array.isArray(created) ? created[0] : created;
       setChangeOrders(prev => prev.map(c => c.id === tempId ? { ...real, _optimistic: false } : c));
     } catch (e) {
-      // Rollback
       setChangeOrders(prev => prev.filter(c => c.id !== tempId));
       setNewCoData(backupData);
       setShowAddCo(true);
@@ -761,10 +756,9 @@ export default function Dashboard() {
     }
   };
 
-  // ── OPTIMIZED DELETE CO ──
   const handleDeleteCo = (id, coNumber = "") => {
     if (deletingCoRef.current === id) return;
-    
+
     showConfirm(
       "Delete Change Order",
       `Are you sure you want to delete change order "${coNumber || id}"? This action cannot be undone.`,
@@ -772,15 +766,13 @@ export default function Dashboard() {
         deletingCoRef.current = id;
         setDeletingCoId(id);
         const originalChangeOrders = [...changeOrders];
-        
-        // Optimistic remove
+
         setChangeOrders(prev => prev.filter(c => c.id !== id));
-        
+
         try {
           await api.deleteChangeOrder(id);
           setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         } catch (e) {
-          // Rollback
           setChangeOrders(originalChangeOrders);
           setError(e.message);
         } finally {
@@ -799,9 +791,9 @@ export default function Dashboard() {
       const reader = new FileReader();
       reader.onload = (e) => {
         const rows = parseCSVtoCOs(e.target.result);
-        if (rows.length === 0) { 
-          setCoImportError("No valid rows found. Make sure CSV has headers: co, description, status, amount, ifaDate, ifaPer, iffDate, iffPer, remarks"); 
-          return; 
+        if (rows.length === 0) {
+          setCoImportError("No valid rows found. Make sure CSV has headers: co, description, status, amount, ifaDate, ifaPer, iffDate, iffPer, remarks");
+          return;
         }
         setCoImportData(rows);
       };
@@ -812,47 +804,45 @@ export default function Dashboard() {
     }
   };
 
-  const handleCoDropImport = (e) => { 
-    e.preventDefault(); 
-    setCoDragging(false); 
-    const f = e.dataTransfer.files[0]; 
-    if (f) handleCoFile(f); 
+  const handleCoDropImport = (e) => {
+    e.preventDefault();
+    setCoDragging(false);
+    const f = e.dataTransfer.files[0];
+    if (f) handleCoFile(f);
   };
-  
-  const handleCoFileChange = (e) => { 
-    const f = e.target.files?.[0]; 
-    if (f) handleCoFile(f); 
+
+  const handleCoFileChange = (e) => {
+    const f = e.target.files?.[0];
+    if (f) handleCoFile(f);
   };
 
   const handleImportSave = async () => {
     if (!coImportData.length || !selectedProject) return;
     if (coImportSaving) return;
-    
+
     setCoImportSaving(true);
-    
-    const tempRows = coImportData.map((row, i) => ({ 
-      ...row, 
-      id: `temp_imp_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 5)}`, 
+
+    const tempRows = coImportData.map((row, i) => ({
+      ...row,
+      id: `temp_imp_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 5)}`,
       projectName: selectedProject.projectName,
-      _optimistic: true 
+      _optimistic: true
     }));
-    
-    // Optimistic add all rows
+
     setChangeOrders(prev => [...prev, ...tempRows]);
     const importDataBackup = [...coImportData];
     setCoImportData([]);
     setShowCoImport(false);
-    
+
     try {
       const created = await api.createChangeOrder(selectedProject.projectName, coImportData);
       const realRows = Array.isArray(created) ? created : [created];
-      
+
       setChangeOrders(prev => {
         const withoutTemps = prev.filter(c => !tempRows.find(t => t.id === c.id));
         return [...withoutTemps, ...realRows];
       });
     } catch (e) {
-      // Rollback
       setChangeOrders(prev => prev.filter(c => !tempRows.find(t => t.id === c.id)));
       setCoImportData(importDataBackup);
       setShowCoImport(true);
@@ -873,27 +863,6 @@ export default function Dashboard() {
     <>
       <style>{styles}</style>
       <div className="dash-root">
-        {/* ── TOPBAR ── */}
-        <div className="topbar">
-          <span className="topbar-logo">Project<span>Track</span></span>
-          <div className="topbar-sep" />
-          <div className="topbar-breadcrumb">
-            <span className="breadcrumb-item" onClick={() => { setSelectedYear(null); setSelectedClient(null); setSelectedProject(null); }}>YEARS</span>
-            {selectedYear && <>
-              <span className="breadcrumb-sep">›</span>
-              <span className="breadcrumb-item" onClick={() => { setSelectedClient(null); setSelectedProject(null); }}>{selectedYear}</span>
-            </>}
-            {selectedClient && <>
-              <span className="breadcrumb-sep">›</span>
-              <span className="breadcrumb-item" onClick={() => setSelectedProject(null)}>{selectedClient}</span>
-            </>}
-            {selectedProject && <>
-              <span className="breadcrumb-sep">›</span>
-              <span className="breadcrumb-active">{selectedProject.projectName}</span>
-            </>}
-          </div>
-        </div>
-
         <div className="dash-content">
           <AnimatePresence mode="wait">
 
@@ -942,32 +911,32 @@ export default function Dashboard() {
                 <p className="section-subtitle">{clientsForYear.length} client(s) with active projects</p>
                 <div style={{ marginBottom: 18 }}>
                   <button className="btn btn-gold" onClick={() => {
-  setShowAddProject(v => !v);
-  if (selectedClient) {
-    setNewProjectData(prev => ({ 
-      ...prev, 
-      client: selectedClient, 
-      year: selectedYear || "" 
-    }));
-  }
-}}>
-  {showAddProject ? "✕ Cancel" : "+ New Project"}
-</button>
+                    setShowAddProject(v => !v);
+                    if (selectedClient) {
+                      setNewProjectData(prev => ({
+                        ...prev,
+                        client: selectedClient,
+                        year: selectedYear || ""
+                      }));
+                    }
+                  }}>
+                    {showAddProject ? "✕ Cancel" : "+ New Project"}
+                  </button>
                 </div>
                 <AnimatePresence>
                   {showAddProject && (
                     <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                     <AddProjectForm 
-  data={newProjectData} 
-  setData={setNewProjectData} 
-  onSave={handleAddProject} 
-  onCancel={() => setShowAddProject(false)} 
-  saving={savingProject} 
-  defaultYear={selectedYear} 
-  defaultClient={selectedClient}
-  allProjects={allProjects}
-  error={error} 
-/>
+                      <AddProjectForm
+                        data={newProjectData}
+                        setData={setNewProjectData}
+                        onSave={handleAddProject}
+                        onCancel={() => setShowAddProject(false)}
+                        saving={savingProject}
+                        defaultYear={selectedYear}
+                        defaultClient={selectedClient}
+                        allProjects={allProjects}
+                        error={error}
+                      />
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -994,32 +963,33 @@ export default function Dashboard() {
                 <p className="section-subtitle">{projectsForClient.length} project(s) in {selectedYear}</p>
                 <div className="section-actions">
                   <button className="btn btn-gold" onClick={() => {
-  setShowAddProject(v => !v);
-  if (selectedClient) {
-    setNewProjectData(prev => ({ 
-      ...prev, 
-      client: selectedClient, 
-      year: selectedYear || "" 
-    }));
-  }
-}}>
-  {showAddProject ? "✕ Cancel" : "+ New Project"}
-</button>
+                    setShowAddProject(v => !v);
+                    if (selectedClient) {
+                      setNewProjectData(prev => ({
+                        ...prev,
+                        client: selectedClient,
+                        year: selectedYear || ""
+                      }));
+                    }
+                  }}>
+                    {showAddProject ? "✕ Cancel" : "+ New Project"}
+                  </button>
                 </div>
                 <AnimatePresence>
                   {showAddProject && (
                     <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                     <AddProjectForm 
-  data={newProjectData} 
-  setData={setNewProjectData} 
-  onSave={handleAddProject} 
-  onCancel={() => setShowAddProject(false)} 
-  saving={savingProject} 
-  defaultYear={selectedYear} 
-  defaultClient={selectedClient}
-  allProjects={allProjects}
-  error={error} 
-/>  </motion.div>
+                      <AddProjectForm
+                        data={newProjectData}
+                        setData={setNewProjectData}
+                        onSave={handleAddProject}
+                        onCancel={() => setShowAddProject(false)}
+                        saving={savingProject}
+                        defaultYear={selectedYear}
+                        defaultClient={selectedClient}
+                        allProjects={allProjects}
+                        error={error}
+                      />
+                    </motion.div>
                   )}
                 </AnimatePresence>
                 {projectsForClient.length === 0 ? (
@@ -1101,67 +1071,11 @@ export default function Dashboard() {
                         <div className="co-header">
                           <span className="co-title">Change Orders</span>
                           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            {/* <button className="btn btn-ghost btn-sm" onClick={() => { setShowCoImport(v => !v); setCoImportData([]); setCoImportError(""); }}>
-                              {showCoImport ? "✕ Cancel Import" : "⬆ Import File"}
-                            </button> */}
                             <button className="btn btn-teal btn-sm" onClick={() => { setShowAddCo(v => !v); setEditingCoId(null); }}>
                               {showAddCo ? "✕ Cancel" : "+ Add CO"}
                             </button>
                           </div>
                         </div>
-
-                        {showCoImport && (
-                          <div style={{ margin: "12px 0", padding: "18px", background: "rgba(61,79,124,0.04)", border: "1px solid rgba(61,79,124,0.14)", borderRadius: 12 }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: "var(--indigo)", marginBottom: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>Import Change Orders from File</p>
-                            <div
-                              onDragOver={e => { e.preventDefault(); setCoDragging(true); }}
-                              onDragLeave={() => setCoDragging(false)}
-                              onDrop={handleCoDropImport}
-                              onClick={() => coFileRef.current?.click()}
-                              style={{ border: `2px dashed ${coDragging ? "var(--indigo)" : "var(--border-dark)"}`, borderRadius: 10, padding: "24px 16px", textAlign: "center", cursor: "pointer", background: coDragging ? "var(--indigo-dim)" : "transparent", transition: "all 0.2s", marginBottom: 12 }}
-                            >
-                              <div style={{ fontSize: 26, marginBottom: 6 }}>📂</div>
-                              <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Drop a CSV file here, or click to browse</p>
-                              <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Supports .csv files. Columns: co, description, status, amount, ifaDate, ifaPer, iffDate, iffPer, remarks</p>
-                              <input ref={coFileRef} type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={handleCoFileChange} />
-                            </div>
-                            {coImportError && <p style={{ color: "var(--rose)", fontSize: 12, marginBottom: 10 }}>{coImportError}</p>}
-                            {coImportData.length > 0 && (
-                              <>
-                                <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>{coImportData.length} row(s) detected — review and edit before saving:</p>
-                                <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid var(--border)", marginBottom: 10 }}>
-                                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                                    <thead>
-                                      <tr style={{ background: "var(--surface-2)" }}>
-                                        {["CO", "Description", "Status", "Amount", "IFA Date", "IFA%", "IFF Date", "IFF%", "Remarks"].map(h => (
-                                          <th key={h} style={{ padding: "7px 10px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600, textTransform: "uppercase", fontSize: 10, borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>{h}</th>
-                                        ))}
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {coImportData.map((row, i) => (
-                                        <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                                          {["co", "description", "status", "amount", "ifaDate", "ifaPer", "iffDate", "iffPer", "remarks"].map(field => (
-                                            <td key={field} style={{ padding: "6px 8px" }}>
-                                              <input style={{ background: "var(--surface-2)", border: "1px solid var(--border-dark)", borderRadius: 5, padding: "4px 7px", color: "var(--text)", fontSize: 12, minWidth: field === "description" ? 120 : 60, width: "100%", outline: "none" }}
-                                                value={row[field] ?? ""} onChange={e => { const upd = [...coImportData]; upd[i] = { ...upd[i], [field]: e.target.value }; setCoImportData(upd); }} />
-                                            </td>
-                                          ))}
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                                <div style={{ display: "flex", gap: 8 }}>
-                                  <button className="btn btn-gold btn-sm" onClick={handleImportSave} disabled={coImportSaving}>
-                                    {coImportSaving ? <><BtnSpinner />&nbsp;Saving…</> : "Save All to Project"}
-                                  </button>
-                                  <button className="btn btn-ghost btn-sm" onClick={() => { setCoImportData([]); setCoImportError(""); }}>Clear</button>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
 
                         <AnimatePresence>
                           {showAddCo && (
@@ -1272,22 +1186,22 @@ export default function Dashboard() {
                 <h3 className="confirm-title">{confirmDialog.title}</h3>
                 <p className="confirm-message">{confirmDialog.message}</p>
                 <div className="confirm-actions">
-  <button
-    className="confirm-cancel"
-    onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
-    disabled={deletingProject || deletingCoId !== null}
-  >
-    Cancel
-  </button>
-  <button
-    className="confirm-delete"
-    onClick={() => confirmDialog.onConfirm?.()}
-    disabled={deletingProject || deletingCoId !== null}
-    style={{ opacity: (deletingProject || deletingCoId !== null) ? 0.6 : 1, cursor: (deletingProject || deletingCoId !== null) ? "not-allowed" : "pointer" }}
-  >
-    {deletingProject ? <><BtnSpinner />&nbsp;Deleting…</> : (deletingCoId !== null ? <><BtnSpinner />&nbsp;Deleting…</> : "Delete")}
-  </button>
-</div>
+                  <button
+                    className="confirm-cancel"
+                    onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                    disabled={deletingProject || deletingCoId !== null}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="confirm-delete"
+                    onClick={() => confirmDialog.onConfirm?.()}
+                    disabled={deletingProject || deletingCoId !== null}
+                    style={{ opacity: (deletingProject || deletingCoId !== null) ? 0.6 : 1, cursor: (deletingProject || deletingCoId !== null) ? "not-allowed" : "pointer" }}
+                  >
+                    {deletingProject ? <><BtnSpinner />&nbsp;Deleting…</> : (deletingCoId !== null ? <><BtnSpinner />&nbsp;Deleting…</> : "Delete")}
+                  </button>
+                </div>
               </motion.div>
             </motion.div>
           )}
@@ -1297,21 +1211,88 @@ export default function Dashboard() {
   );
 }
 
-// ─── PROJECT DETAILS VIEW ─────────────────────────────────────────────────────
+// ─── PROJECT DETAILS VIEW ────────────────────────────────────────────────────
 function ProjectDetailsView({ project }) {
   const team = parseTeam(project.team);
+
   return (
-    <div className="detail-grid">
-      <div className="detail-card"><p className="detail-label">Client</p><p className="detail-value">{project.client || "—"}</p></div>
-      <div className="detail-card"><p className="detail-label">Job Number</p><p className="detail-value" style={{ fontFamily: "'JetBrains Mono',monospace" }}>{project.jobNumber || "N/A"}</p></div>
-      <div className="detail-card"><p className="detail-label">Year</p><p className="detail-value">{project.year || "—"}</p></div>
-      <div className="detail-card"><p className="detail-label">Approval Status</p><p className="detail-value">{project.approvalStatus ? <span style={{ color: "var(--teal)", fontWeight: 600 }}>{project.approvalStatus}</span> : "—"}</p></div>
-      <div className="detail-card"><p className="detail-label">FAB Status</p><p className="detail-value">{project.fabStatus ? <span style={{ color: "var(--copper)", fontWeight: 600 }}>{project.fabStatus}</span> : "—"}</p></div>
-      <div className="detail-card" />
-      <div className="detail-card"><p className="detail-label">Modeler</p><p className="detail-value">{team.modeler}</p></div>
-      <div className="detail-card"><p className="detail-label">Editor</p><p className="detail-value">{team.editor}</p></div>
-      <div className="detail-card"><p className="detail-label">Checker</p><p className="detail-value">{team.checker}</p></div>
-      {project.remarks && <div className="detail-card remarks"><p className="detail-label">Remarks</p><p className="detail-value">{project.remarks}</p></div>}
+    <div>
+      <div className="detail-section">
+        <p className="detail-section-heading">Project Identification</p>
+        <div className="detail-grid">
+          <div className="detail-card">
+            <p className="detail-label">Client</p>
+            <p className="detail-value">{project.client || "—"}</p>
+          </div>
+          <div className="detail-card">
+            <p className="detail-label">Job Number</p>
+            <p className="detail-value" style={{ fontFamily: "'JetBrains Mono',monospace" }}>{project.jobNumber || "N/A"}</p>
+          </div>
+          <div className="detail-card">
+            <p className="detail-label">Year</p>
+            <p className="detail-value">{project.year || "—"}</p>
+          </div>
+          <div className="detail-card">
+            <p className="detail-label">Project Manager</p>
+            <p className="detail-value">{project.projectManager || "—"}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="detail-section">
+        <p className="detail-section-heading">Status</p>
+        <div className="detail-grid detail-grid-status">
+          <div className="detail-card">
+            <p className="detail-label">Approval Status</p>
+            <p className="detail-value">
+              {project.approvalStatus ? (
+                <span className="status-pill" style={{ color: getStatusColor(project.approvalStatus) }}>
+                  <span className="status-dot" style={{ background: getStatusColor(project.approvalStatus) }} />
+                  {project.approvalStatus}
+                </span>
+              ) : "—"}
+            </p>
+          </div>
+          <div className="detail-card">
+            <p className="detail-label">FAB Status</p>
+            <p className="detail-value">
+              {project.fabStatus ? (
+                <span className="status-pill" style={{ color: "var(--copper)" }}>
+                  <span className="status-dot" style={{ background: "var(--copper)" }} />
+                  {project.fabStatus}
+                </span>
+              ) : "—"}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="detail-section">
+        <p className="detail-section-heading">Team</p>
+        <div className="detail-grid detail-grid-team">
+          <div className="detail-card">
+            <p className="detail-label">Modeler</p>
+            <p className="detail-value">{team.modeler}</p>
+          </div>
+          <div className="detail-card">
+            <p className="detail-label">Editor</p>
+            <p className="detail-value">{team.editor}</p>
+          </div>
+          <div className="detail-card">
+            <p className="detail-label">Checker</p>
+            <p className="detail-value">{team.checker}</p>
+          </div>
+        </div>
+      </div>
+
+      {project.remarks && (
+        <div className="detail-section">
+          <p className="detail-section-heading">Remarks</p>
+          <div className="detail-card full">
+            <p className="detail-value">{project.remarks}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1328,12 +1309,16 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
       </div>
       <div className="form-row three">
         <div className="form-group"><label className="form-label">Job Number</label><input className="form-input" value={f("jobNumber")} onChange={e => s("jobNumber")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label">Year</label><input className="form-input" value={f("year")} onChange={e => s("year")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label">Project Manager</label><input className="form-input" value={f("projectManager")} onChange={e => s("projectManager")(e.target.value)} /></div>
+      </div>
+      <div className="form-row three">
         <div className="form-group"><label className="form-label">Approval Status</label><input className="form-input" placeholder="e.g. 100%" value={f("approvalStatus")} onChange={e => s("approvalStatus")(e.target.value)} /></div>
         <div className="form-group"><label className="form-label">FAB Status</label><input className="form-input" placeholder="e.g. 90%" value={f("fabStatus")} onChange={e => s("fabStatus")(e.target.value)} /></div>
+        <div className="form-group"></div>
       </div>
       <div className="form-row">
-        <div className="form-group"><label className="form-label">Team (Modeler/Editor/Checker)</label><input className="form-input" placeholder="e.g. FAKRU/Murthu/Panch" value={f("team")} onChange={e => s("team")(e.target.value)} /></div>
-        <div className="form-group"><label className="form-label">Year</label><input className="form-input" value={f("year")} onChange={e => s("year")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label">Team (Modeler/Editor/Checker)</label><input className="form-input" placeholder="e.g. Modeler/Editor/Checker" value={f("team")} onChange={e => s("team")(e.target.value)} /></div>
       </div>
       <div className="form-group"><label className="form-label">Remarks</label><textarea className="form-textarea" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} /></div>
       <div className="form-actions">
@@ -1350,10 +1335,9 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
 function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, defaultClient, error, allProjects = [] }) {
   const f = (k) => data[k] || "";
   const s = (k) => (v) => setData(p => ({ ...p, [k]: v }));
-  
-  // Get all unique clients from the projects list
+
   const uniqueClients = [...new Set(allProjects.map(p => p.client).filter(Boolean))].sort();
-  
+
   const handleClientChange = (value) => {
     if (value === "__new__") {
       const newClient = prompt("Enter new client name:");
@@ -1364,9 +1348,9 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
       s("client")(value);
     }
   };
-  
+
   const isClientLocked = !!defaultClient;
-  
+
   return (
     <div className="add-panel">
       <p className="add-panel-title">New Project</p>
@@ -1376,16 +1360,16 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
           <div className="form-group">
             <label className="form-label">Client {!isClientLocked && "*"}</label>
             {isClientLocked ? (
-              <input 
-                className="form-input" 
-                value={f("client")} 
+              <input
+                className="form-input"
+                value={f("client")}
                 readOnly={true}
                 style={{ background: "var(--surface-2)", color: "var(--text-muted)" }}
               />
             ) : (
-              <select 
-                className="form-select" 
-                value={f("client")} 
+              <select
+                className="form-select"
+                value={f("client")}
                 onChange={e => handleClientChange(e.target.value)}
               >
                 <option value="">Select a client...</option>
@@ -1412,6 +1396,16 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
             <input className="form-input" value={f("jobNumber")} onChange={e => s("jobNumber")(e.target.value)} />
           </div>
           <div className="form-group">
+            <label className="form-label">Year</label>
+            <input className="form-input" value={defaultYear || f("year")} readOnly={!!defaultYear} onChange={e => s("year")(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Project Manager</label>
+            <input className="form-input" value={f("projectManager")} onChange={e => s("projectManager")(e.target.value)} />
+          </div>
+        </div>
+        <div className="form-row three">
+          <div className="form-group">
             <label className="form-label">Approval Status</label>
             <input className="form-input" placeholder="e.g. 100%" value={f("approvalStatus")} onChange={e => s("approvalStatus")(e.target.value)} />
           </div>
@@ -1419,15 +1413,12 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
             <label className="form-label">FAB Status</label>
             <input className="form-input" placeholder="e.g. 90%" value={f("fabStatus")} onChange={e => s("fabStatus")(e.target.value)} />
           </div>
+          <div className="form-group"></div>
         </div>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Team (Modeler/Editor/Checker)</label>
             <input className="form-input" placeholder="e.g. FAKRU/Murthu/Panch" value={f("team")} onChange={e => s("team")(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Year</label>
-            <input className="form-input" value={defaultYear || f("year")} readOnly={!!defaultYear} onChange={e => s("year")(e.target.value)} />
           </div>
         </div>
         <div className="form-group">
