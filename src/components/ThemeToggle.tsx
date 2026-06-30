@@ -1,6 +1,6 @@
 // src/components/ThemeToggle.tsx
 import { Moon, Sun } from "lucide-react";
-import { useTheme } from "../context/Themecontext";
+import { useTheme } from "../context/ThemeContext";
 
 export const ThemeToggle = () => {
   const { theme, toggleTheme } = useTheme();
