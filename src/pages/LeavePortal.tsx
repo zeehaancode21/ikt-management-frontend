@@ -527,9 +527,10 @@ const EmployeeView = () => {
     if (!name) return "User name is required. Please log in again.";
     if (!fromDate) return "Please select a date.";
     if (dateMode === "range" && !toDate) return "Please select an end date.";
-    const fromDateObj = new Date(fromDate);
-    const today = new Date(getToday());
-    if (fromDateObj < today) return "Cannot apply for leave on past dates.";
+    // COMMENTING THE DATE CHECK
+    // const fromDateObj = new Date(fromDate);
+    // const today = new Date(getToday());
+    // if (fromDateObj < today) return "Cannot apply for leave on past dates.";
     if (dateMode === "range") {
       const toDateObj = new Date(toDate);
       if (toDateObj < fromDateObj) return "End date cannot be before start date.";
@@ -576,7 +577,7 @@ const EmployeeView = () => {
 
   const pendingCount = leaves.filter((l) => l.status?.toUpperCase() === "PENDING").length;
   const approvedCount = leaves.filter((l) => l.status?.toUpperCase() === "APPROVED").length;
-  const minDate = getMinDate();
+  // const minDate = getMinDate();  commenting out the min date check for testing purposes
 
   return (
     <div className="space-y-6">
@@ -627,7 +628,8 @@ const EmployeeView = () => {
               id="from"
               type="date"
               required
-              min={minDate}
+              // COMMENTING OUT THE MIN DATE CHECK FOR TESTING PURPOSES
+              // min={minDate}
               value={fromDate}
               onChange={(e) => {
                 setFromDate(e.target.value);
@@ -645,7 +647,7 @@ const EmployeeView = () => {
                 id="to"
                 type="date"
                 required
-                min={fromDate || minDate}
+                // min={fromDate || minDate}  COMMENTING OUT THE MIN DATE CHECK FOR TESTING PURPOSES
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
               />

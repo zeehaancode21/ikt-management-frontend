@@ -742,10 +742,25 @@ export default function Messages() {
     setShowPollModal(true);
   };
 
+  // Duplicate check (case-insensitive, trimmed) — "Yes" and "yes " are the same option
+  const normalizedPollOptions = pollOptions.map(o => o.trim().toLowerCase());
+  const duplicatePollOptionIndexes = new Set<number>();
+  normalizedPollOptions.forEach((val, idx) => {
+    if (!val) return;
+    const firstIdx = normalizedPollOptions.indexOf(val);
+    if (firstIdx !== idx) {
+      duplicatePollOptionIndexes.add(idx);
+      duplicatePollOptionIndexes.add(firstIdx);
+    }
+  });
+  const hasDuplicatePollOptions = duplicatePollOptionIndexes.size > 0;
+
   const sendPoll = async () => {
     if (!pollQuestion.trim() || chatTarget?.type !== "group") return;
     const opts = pollOptions.map(o => o.trim()).filter(Boolean);
     if (opts.length < 2) return;
+    const uniqueOpts = new Set(opts.map(o => o.toLowerCase()));
+    if (uniqueOpts.size !== opts.length) return; // block duplicate options
     try {
       const r = await api.post<GroupMessage>(`/groups/${chatTarget.group.id}/polls`, {
         question: pollQuestion.trim(), options: opts,
@@ -1596,7 +1611,10 @@ export default function Messages() {
               <div className="poll-option-row" key={i}>
                 <input
                   className="modal-input"
-                  style={{ marginBottom: 0 }}
+                  style={{
+                    marginBottom: 0,
+                    borderColor: duplicatePollOptionIndexes.has(i) ? "#ef4444" : undefined,
+                  }}
                   placeholder={`Option ${i + 1}`}
                   value={opt}
                   onChange={(e) => {
@@ -1612,6 +1630,11 @@ export default function Messages() {
                 )}
               </div>
             ))}
+            {hasDuplicatePollOptions && (
+              <div style={{ color: "#ef4444", fontSize: 12, marginTop: -4, marginBottom: 8 }}>
+                Poll options must be unique — you've repeated an option.
+              </div>
+            )}
             {pollOptions.length < 8 && (
               <button className="add-option-btn" onClick={() => setPollOptions([...pollOptions, ""])}>
                 <Plus size={13} /> Add Option
@@ -1622,7 +1645,11 @@ export default function Messages() {
               <button className="modal-btn secondary" onClick={() => setShowPollModal(false)}>Cancel</button>
               <button
                 className="modal-btn primary"
-                disabled={!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2}
+                disabled={
+                  !pollQuestion.trim() ||
+                  pollOptions.filter(o => o.trim()).length < 2 ||
+                  hasDuplicatePollOptions
+                }
                 onClick={sendPoll}
               >
                 Send Poll
