@@ -115,6 +115,28 @@ export default function Login() {
     }
   };
 
+  // Handle admin link click with ripple effect
+  const handleAdminClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    const link = e.currentTarget;
+    const rect = link.getBoundingClientRect();
+    
+    // Create ripple
+    const ripple = document.createElement('span');
+    ripple.className = 'ripple-effect';
+    const size = Math.max(rect.width, rect.height);
+    ripple.style.width = ripple.style.height = `${size}px`;
+    ripple.style.left = `${e.clientX - rect.left - size/2}px`;
+    ripple.style.top = `${e.clientY - rect.top - size/2}px`;
+    link.appendChild(ripple);
+    
+    // Remove ripple after animation
+    setTimeout(() => ripple.remove(), 600);
+    
+    // Open email client
+    window.location.href = 'mailto:zeeshaanm10114@gmail.com?subject=Access%20Request%20-%20IK%20Tangience&body=Dear%20Administrator%2C%0A%0AI%20would%20like%20to%20request%20access%20to%20the%20system.%0A%0AThank%20you.';
+  };
+
   return (
     <>
       <style>{`
@@ -328,13 +350,173 @@ export default function Login() {
           font-family: 'DM Mono', monospace;
         }
 
+        /* Enhanced Footer Styles */
         .footer-text {
-          margin-top: 20px;
-          text-align: center; font-size: 12px;
-          color: rgba(255,255,255,0.2);
+          margin-top: 18px;
+          text-align: center;
           animation: fadeUp 0.5s 0.4s both;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
         }
-        .footer-text span { color: #63b3ed; font-weight: 500; }
+
+        .footer-label {
+          font-size: 12px;
+          color: rgba(255,255,255,0.25);
+          letter-spacing: 0.04em;
+          font-weight: 400;
+        }
+
+        .admin-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 18px 8px 16px;
+          border-radius: 30px;
+          background: rgba(99,179,237,0.08);
+          border: 1px solid rgba(99,179,237,0.15);
+          color: #63b3ed;
+          font-size: 13px;
+          font-weight: 500;
+          text-decoration: none;
+          cursor: pointer;
+          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          position: relative;
+          overflow: hidden;
+          font-family: 'Outfit', sans-serif;
+        }
+
+        /* Shimmer effect on hover */
+        .admin-link::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(90deg, 
+            transparent 0%,
+            rgba(99,179,237,0.1) 50%,
+            transparent 100%
+          );
+          transform: translateX(-100%);
+          transition: transform 0.6s ease;
+        }
+
+        .admin-link:hover::before {
+          transform: translateX(100%);
+        }
+
+        .admin-link:hover {
+          background: rgba(99,179,237,0.15);
+          border-color: rgba(99,179,237,0.35);
+          transform: translateY(-2px) scale(1.02);
+          box-shadow: 0 8px 25px rgba(99,179,237,0.2);
+          color: #7fc3f0;
+        }
+
+        .admin-link:active {
+          transform: scale(0.97);
+        }
+
+        .link-icon {
+          display: flex;
+          align-items: center;
+          opacity: 0.7;
+          transition: all 0.3s ease;
+        }
+
+        .admin-link:hover .link-icon {
+          opacity: 1;
+          transform: scale(1.1) rotate(-5deg);
+        }
+
+        .link-arrow {
+          display: flex;
+          align-items: center;
+          opacity: 0.4;
+          transition: all 0.3s ease;
+        }
+
+        .admin-link:hover .link-arrow {
+          opacity: 1;
+          transform: translateX(3px);
+        }
+
+        /* Pulse animation for the link */
+        .admin-link::after {
+          content: '';
+          position: absolute;
+          inset: -2px;
+          border-radius: 30px;
+          background: linear-gradient(90deg, 
+            transparent 0%,
+            rgba(99,179,237,0.15) 50%,
+            transparent 100%
+          );
+          opacity: 0;
+          animation: pulseGlow 3s ease-in-out infinite;
+        }
+
+        @keyframes pulseGlow {
+          0%, 100% { opacity: 0; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.02); }
+        }
+
+        .footer-hint {
+          font-size: 11px;
+          color: rgba(255,255,255,0.15);
+          letter-spacing: 0.03em;
+          margin-top: 2px;
+          opacity: 0;
+          animation: fadeUp 0.5s 0.55s both;
+        }
+
+        /* Tooltip */
+        .admin-link .tooltip-text {
+          display: none;
+          position: absolute;
+          bottom: calc(100% + 10px);
+          left: 50%;
+          transform: translateX(-50%);
+          background: rgba(0,0,0,0.9);
+          color: #fff;
+          padding: 4px 12px;
+          border-radius: 6px;
+          font-size: 11px;
+          white-space: nowrap;
+          font-weight: 400;
+          border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .admin-link .tooltip-text::after {
+          content: '';
+          position: absolute;
+          top: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+          border: 6px solid transparent;
+          border-top-color: rgba(0,0,0,0.9);
+        }
+
+        .admin-link:hover .tooltip-text {
+          display: block;
+          animation: fadeUp 0.2s ease;
+        }
+
+        /* Ripple effect */
+        @keyframes ripple {
+          from { transform: scale(0); opacity: 0.8; }
+          to { transform: scale(4); opacity: 0; }
+        }
+
+        .ripple-effect {
+          position: absolute;
+          border-radius: 50%;
+          background: rgba(99,179,237,0.3);
+          width: 20px;
+          height: 20px;
+          animation: ripple 0.6s ease-out forwards;
+          pointer-events: none;
+        }
 
         /* Floating label animation on focus */
         @keyframes shimmer {
@@ -463,9 +645,30 @@ export default function Login() {
             <div className="divider-line" />
           </div>
 
-          <p className="footer-text">
-            Need access? Contact your <span>administrator</span>
-          </p>
+          <div className="footer-text">
+            <span className="footer-label">Need access to the system?</span>
+            <a 
+              href="#"
+              className="admin-link"
+              onClick={handleAdminClick}
+            >
+              <span className="tooltip-text">📧 Send email</span>
+              <span className="link-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                  <polyline points="22,6 12,13 2,6"/>
+                </svg>
+              </span>
+              Contact Administrator
+              <span className="link-arrow">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                  <polyline points="12,5 19,12 12,19"/>
+                </svg>
+              </span>
+            </a>
+            <span className="footer-hint">We'll respond within 24 hours</span>
+          </div>
         </div>
       </div>
     </>
