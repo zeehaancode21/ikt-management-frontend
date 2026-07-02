@@ -106,7 +106,7 @@ export default function Login() {
       if (role === "OWNER" || role === "LEAD") {
         navigate("/dashboard");
       } else {
-        navigate("/leave");
+        navigate("/reports");
       }
     } catch (err: any) {
       setError(err?.response?.data?.message || "Invalid username or password");

@@ -38,6 +38,7 @@ interface Leave {
   fromDate: string;
   toDate: string;
   dateType: string;
+  halfSession?: string | null;
   days: number;
   reason: string;
   status?: string;
@@ -47,6 +48,22 @@ interface Leave {
 
 const LEAVE_LIMIT = 12;
 const MIN_DATE_OFFSET = 1;
+
+const DATE_TYPE_LABELS: Record<string, string> = {
+  SINGLE: "Single day",
+  RANGE: "Date range",
+  HALF_DAY: "Half day",
+};
+
+const formatDateType = (dateType?: string, halfSession?: string | null) => {
+  if (!dateType) return "";
+  const base = DATE_TYPE_LABELS[dateType] ?? dateType.toLowerCase().replace(/_/g, " ");
+  if (dateType === "HALF_DAY" && halfSession) {
+    const sessionLabel = halfSession === "SECOND_HALF" ? "2nd half" : "1st half";
+    return `${base} · ${sessionLabel}`;
+  }
+  return base;
+};
 
 /* ─── Helpers ───────────────────────────────────────────── */
 
@@ -451,6 +468,9 @@ const AppliedLeavesTable = ({ leaves }: { leaves: Leave[] }) => {
                   : <>{fmt(l.fromDate)} <span className="text-muted-foreground font-normal">→</span> {fmt(l.toDate)}</>
                 }
               </div>
+              {l.dateType && (
+                <p className="text-xs text-muted-foreground">{formatDateType(l.dateType, l.halfSession)}</p>
+              )}
               {l.reason && (
                 <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
                   {l.reason}
@@ -472,7 +492,8 @@ const EmployeeView = () => {
   const { name } = useAuth();
 
   const [leaveType, setLeaveType] = useState("SICK");
-  const [dateMode, setDateMode] = useState<"single" | "range">("single");
+  const [dateMode, setDateMode] = useState<"single" | "range" | "half">("single");
+  const [halfSession, setHalfSession] = useState<"FIRST_HALF" | "SECOND_HALF">("FIRST_HALF");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [reason, setReason] = useState("");
@@ -521,6 +542,7 @@ const EmployeeView = () => {
     setReason("");
     setLeaveType("SICK");
     setDateMode("single");
+    setHalfSession("FIRST_HALF");
   };
 
   const validateForm = (): string | null => {
@@ -532,6 +554,7 @@ const EmployeeView = () => {
     // const today = new Date(getToday());
     // if (fromDateObj < today) return "Cannot apply for leave on past dates.";
     if (dateMode === "range") {
+      const fromDateObj = new Date(fromDate);
       const toDateObj = new Date(toDate);
       if (toDateObj < fromDateObj) return "End date cannot be before start date.";
       const days = calcDays(fromDate, toDate);
@@ -550,15 +573,21 @@ const EmployeeView = () => {
       return;
     }
     setSubmitting(true);
-    const effectiveToDate = dateMode === "single" ? fromDate : toDate;
+    const effectiveToDate = dateMode === "range" ? toDate : fromDate;
+    const dateType = dateMode === "half" ? "HALF_DAY" : dateMode.toUpperCase();
+    let days: number;
+    if (dateMode === "range") days = calcDays(fromDate, toDate);
+    else if (dateMode === "half") days = 0.5;
+    else days = 1;
     try {
       await api.post("/leaves/request", {
         employeeName: name,
         leaveType,
         fromDate,
         toDate: effectiveToDate,
-        dateType: dateMode.toUpperCase(),
-        days: dateMode === "single" ? 1 : calcDays(fromDate, toDate),
+        dateType,
+        halfSession: dateMode === "half" ? halfSession : null,
+        days,
         reason: reason.trim(),
       });
       toast({
@@ -613,17 +642,18 @@ const EmployeeView = () => {
 
           <div className="space-y-2">
             <Label>Date Type</Label>
-            <Select value={dateMode} onValueChange={(val) => setDateMode(val as "single" | "range")}>
+            <Select value={dateMode} onValueChange={(val) => setDateMode(val as "single" | "range" | "half")}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="single">Single Date</SelectItem>
                 <SelectItem value="range">Date Range</SelectItem>
+                <SelectItem value="half">Half Day</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="from">{dateMode === "single" ? "Date" : "From Date"}</Label>
+            <Label htmlFor="from">{dateMode === "range" ? "From Date" : "Date"}</Label>
             <Input
               id="from"
               type="date"
@@ -656,6 +686,20 @@ const EmployeeView = () => {
                   Duration: {calcDays(fromDate, toDate)} day{calcDays(fromDate, toDate) !== 1 ? "s" : ""}
                 </p>
               )}
+            </div>
+          )}
+
+          {dateMode === "half" && (
+            <div className="space-y-2">
+              <Label>Half Day Session</Label>
+              <Select value={halfSession} onValueChange={(val) => setHalfSession(val as "FIRST_HALF" | "SECOND_HALF")}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="FIRST_HALF">First Half (Morning)</SelectItem>
+                  <SelectItem value="SECOND_HALF">Second Half (Afternoon)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Duration: 0.5 day</p>
             </div>
           )}
 
@@ -1150,7 +1194,7 @@ const OwnerView = () => {
                               {isSingleDay ? fmt(l.fromDate) : <>{fmt(l.fromDate)} <span className="text-muted-foreground font-normal">→</span> {fmt(l.toDate)}</>}
                             </div>
                             {l.dateType && (
-                              <span className="text-xs text-muted-foreground capitalize">{l.dateType.toLowerCase()} day</span>
+                              <span className="text-xs text-muted-foreground">{formatDateType(l.dateType, l.halfSession)}</span>
                             )}
                             {l.reason && (
                               <p className="text-xs text-muted-foreground line-clamp-2">{l.reason}</p>
@@ -1190,5 +1234,4 @@ const LeavePortal = () => {
     </>
   );
 };
-
 export default LeavePortal;

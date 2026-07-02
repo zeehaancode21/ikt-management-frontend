@@ -52,7 +52,8 @@ type WorkType =
   | "CHECKING"
   | "MODELING"
   | "TRAINING"
-  | "PRACTICING";
+  | "PRACTICING"
+  | "MISCELLANEOUS";
 
 const WORK_TYPE_LABELS: Record<WorkType, string> = {
   E_PLAN: "E Plan",
@@ -64,6 +65,7 @@ const WORK_TYPE_LABELS: Record<WorkType, string> = {
   MODELING: "Modeling",
   TRAINING: "Training",
   PRACTICING: "Practicing",
+  MISCELLANEOUS: "Miscellaneous",
 };
 
 const WORK_TYPE_COLORS: Record<WorkType, string> = {
@@ -76,6 +78,7 @@ const WORK_TYPE_COLORS: Record<WorkType, string> = {
   MODELING: "bg-purple-100 text-purple-700",
   TRAINING: "bg-orange-100 text-orange-700",
   PRACTICING: "bg-teal-100 text-teal-700",
+  MISCELLANEOUS: "bg-slate-100 text-slate-700",
 };
 
 interface WorkEntry {
@@ -512,7 +515,7 @@ const EmployeeView = () => {
 
   // Helper function to check if work type requires client/project
   const isClientProjectOptional = (workType: WorkType | "") => {
-    return workType === "TRAINING" || workType === "PRACTICING";
+    return workType === "TRAINING" || workType === "PRACTICING" || workType === "MISCELLANEOUS";
   };
 
   /* Fetch clients */
@@ -944,7 +947,7 @@ const EmployeeView = () => {
                               {(Object.keys(WORK_TYPE_LABELS) as WorkType[]).map((k) => (
                                 <SelectItem key={k} value={k} className="text-xs">
                                   <div className="flex items-center gap-1.5">
-                                    {(k === "TRAINING" || k === "PRACTICING") && <GraduationCap className="h-2.5 w-2.5" />}
+                                    {(k === "TRAINING" || k === "PRACTICING" || k === "MISCELLANEOUS") && <GraduationCap className="h-2.5 w-2.5" />}
                                     {WORK_TYPE_LABELS[k]}
                                   </div>
                                 </SelectItem>
