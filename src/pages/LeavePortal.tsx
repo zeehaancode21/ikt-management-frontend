@@ -76,6 +76,11 @@ const calcDays = (from: string, to: string) => {
   }
 };
 
+const formatDays = (n: number) => {
+  const rounded = Math.round(n * 10) / 10; // keep 1 decimal, avoid float noise
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+};
+
 const fmt = (d: string) => {
   try {
     return format(new Date(d), "MMM d, yyyy");
@@ -319,7 +324,7 @@ const LeaveTakenSummary = ({ leaves }: { leaves: Leave[] }) => {
     const tick = (now: number) => {
       const progress = Math.min((now - start) / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplayed(Math.round(eased * takenDays));
+      setDisplayed(Math.round(eased * takenDays * 10) / 10);
       if (progress < 1) {
         animationFrameRef.current = requestAnimationFrame(tick);
       }
@@ -378,7 +383,7 @@ const LeaveTakenSummary = ({ leaves }: { leaves: Leave[] }) => {
               transition: "opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1), color 0.4s ease",
             }}
           >
-            {displayed}
+            {formatDays(displayed)}
           </span>
           <span className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
             {takenDays === 1 ? "day" : "days"}

@@ -173,6 +173,7 @@ function FileAttachment({ attachment, isMine }: { attachment: Attachment; isMine
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // Forces a real "Save As" download — always available via the 📥 button.
   const handleDownload = async () => {
     try {
       const response = await api.get(`/attachments/${attachment.id}/download`, {
@@ -191,23 +192,46 @@ function FileAttachment({ attachment, isMine }: { attachment: Attachment; isMine
     }
   };
 
-  const handlePreview = () => {
-    const ext = attachment.originalName.split('.').pop()?.toLowerCase();
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext || '')) {
-      window.open(`/api/attachments/${attachment.id}/preview`, '_blank');
-    } else {
+  // Default action: open the file for viewing instead of downloading it.
+  // Must go through the authenticated `api` client (not window.open on a
+  // bare URL) because the backend requires the Authorization header on
+  // every request — a plain window.open() would 401.
+  const handleView = async () => {
+    try {
+      const response = await api.get(`/attachments/${attachment.id}/preview`, {
+        responseType: 'blob'
+      });
+      const contentType = response.headers['content-type'] || attachment.fileType || 'application/octet-stream';
+      const blob = new Blob([response.data], { type: contentType });
+      const url = window.URL.createObjectURL(blob);
+      const opened = window.open(url, '_blank');
+      // If a popup blocker prevented the tab from opening, fall back to download
+      // so the user still gets the file. Otherwise revoke the blob once the
+      // new tab has had time to load it.
+      if (!opened) {
+        handleDownload();
+        window.URL.revokeObjectURL(url);
+      } else {
+        setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+      }
+    } catch (error) {
+      console.error('View failed, falling back to download:', error);
       handleDownload();
     }
   };
 
   return (
-    <div className={`file-attachment ${isMine ? 'mine' : 'theirs'}`} onClick={handlePreview}>
+    <div className={`file-attachment ${isMine ? 'mine' : 'theirs'}`} onClick={handleView}>
       <div className="file-icon">{getFileIcon()}</div>
       <div className="file-info">
         <div className="file-name">{attachment.originalName}</div>
         <div className="file-size">{formatFileSize(attachment.fileSize)}</div>
       </div>
-      <button className="file-download" onClick={(e) => { e.stopPropagation(); handleDownload(); }}>
+      <button
+        className="file-download"
+        title="Download"
+        onClick={(e) => { e.stopPropagation(); handleDownload(); }}
+      >
         📥
       </button>
     </div>
