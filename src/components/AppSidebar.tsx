@@ -66,11 +66,7 @@ export const AppSidebar = () => {
       <aside className="flex h-screen w-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
         {/* LOGO */}
         <div className="flex items-center justify-center border-b border-sidebar-border px-10 py-15">
-          <img
-            src="/IKT.png"
-            alt="IK Tangience Logo"
-            className="h-100 w-auto object-contain"
-          />
+          <img src="/finalised-logo.png" alt="IKT Logo" className="h-100 w-auto object-contain" />
         </div>
 
         {/* USER CHIP — shows profile picture if uploaded */}

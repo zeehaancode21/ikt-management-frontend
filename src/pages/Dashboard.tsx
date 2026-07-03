@@ -397,6 +397,43 @@ const styles = `
   .confirm-delete { background: var(--rose-dim); border: none;
     color: var(--rose); padding: 8px 20px; border-radius: 40px;
     font-weight: 600; cursor: pointer; transition: all .2s; }
+  .client-modal-overlay {
+    position: fixed; inset: 0; z-index: 420;
+    background: rgba(26,25,23,0.7); backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .client-modal {
+    background: var(--surface); border-radius: 22px; width: 100%; max-width: 400px;
+    padding: 30px 26px 24px; border: 1px solid var(--border); box-shadow: var(--shadow-lg);
+  }
+  .client-modal-icon {
+    width: 48px; height: 48px; border-radius: 14px; background: var(--indigo-dim);
+    color: var(--indigo); display: flex; align-items: center; justify-content: center;
+    font-size: 22px; margin-bottom: 14px;
+  }
+  .client-modal-title { font-family: 'Playfair Display', serif; font-size: 1.35rem;
+    font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .client-modal-subtitle { color: var(--text-muted); font-size: 0.82rem; margin-bottom: 20px; line-height: 1.4; }
+  .client-modal-input-wrap { position: relative; margin-bottom: 6px; }
+  .client-modal-input {
+    background: var(--surface-2); border: 1.5px solid var(--border-dark); border-radius: 10px;
+    color: var(--text); font-family: 'Outfit', sans-serif; font-size: 0.95rem;
+    padding: 12px 14px; outline: none; width: 100%; transition: border-color .2s, box-shadow .2s;
+  }
+  .client-modal-input:focus { border-color: var(--indigo); box-shadow: 0 0 0 3px var(--indigo-dim); }
+  .client-modal-error { color: var(--rose); font-size: 0.76rem; margin: 8px 0 0; min-height: 16px; }
+  .client-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; }
+  .client-modal-cancel { background: var(--surface); border: 1px solid var(--border-dark);
+    color: var(--text-muted); padding: 9px 18px; border-radius: 40px;
+    font-weight: 500; font-size: 0.85rem; cursor: pointer; transition: all .2s; }
+  .client-modal-cancel:hover { background: var(--surface-2); color: var(--text); }
+  .client-modal-add { background: var(--indigo); border: none;
+    color: #fff; padding: 9px 20px; border-radius: 40px;
+    font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all .2s;
+    box-shadow: 0 1px 3px rgba(61,79,124,0.25); }
+  .client-modal-add:hover:not(:disabled) { background: var(--indigo-dark); box-shadow: 0 3px 10px rgba(61,79,124,0.3); transform: translateY(-1px); }
+  .client-modal-add:disabled { opacity: 0.5; cursor: not-allowed; }
+
   .confirm-delete:hover { background: rgba(185,28,58,0.2);
     transform: scale(0.96); }
 
@@ -1331,22 +1368,97 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
   );
 }
 
+// ─── ADD NEW CLIENT MODAL ──────────────────────────────────────────────────────
+function AddClientModal({ existingClients = [], onAdd, onCancel }) {
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const handleAdd = () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError("Please enter a client name.");
+      return;
+    }
+    const isDuplicate = existingClients.some(
+      (c) => c.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (isDuplicate) {
+      setError("This client already exists — pick it from the list instead.");
+      return;
+    }
+    onAdd(trimmed);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") handleAdd();
+    if (e.key === "Escape") onCancel();
+  };
+
+  return (
+    <motion.div
+      className="client-modal-overlay"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onCancel}
+    >
+      <motion.div
+        className="client-modal"
+        initial={{ opacity: 0, scale: 0.94, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.94, y: 12 }}
+        transition={{ duration: 0.18 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="client-modal-icon">✦</div>
+        <p className="client-modal-title">Add New Client</p>
+        <p className="client-modal-subtitle">
+          This client will be added to your list and available for this and future projects.
+        </p>
+        <div className="client-modal-input-wrap">
+          <input
+            ref={inputRef}
+            className="client-modal-input"
+            placeholder="e.g. Whitfield Development Co."
+            value={name}
+            onChange={(e) => { setName(e.target.value); if (error) setError(""); }}
+            onKeyDown={handleKeyDown}
+          />
+        </div>
+        <p className="client-modal-error">{error}</p>
+        <div className="client-modal-actions">
+          <button className="client-modal-cancel" onClick={onCancel}>Cancel</button>
+          <button className="client-modal-add" onClick={handleAdd} disabled={!name.trim()}>
+            Add Client
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ─── ADD PROJECT FORM ─────────────────────────────────────────────────────────
 function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, defaultClient, error, allProjects = [] }) {
   const f = (k) => data[k] || "";
   const s = (k) => (v) => setData(p => ({ ...p, [k]: v }));
+  const [showAddClient, setShowAddClient] = useState(false);
 
   const uniqueClients = [...new Set(allProjects.map(p => p.client).filter(Boolean))].sort();
 
   const handleClientChange = (value) => {
     if (value === "__new__") {
-      const newClient = prompt("Enter new client name:");
-      if (newClient && newClient.trim()) {
-        s("client")(newClient.trim());
-      }
+      setShowAddClient(true);
     } else {
       s("client")(value);
     }
+  };
+
+  const handleAddNewClient = (newClient) => {
+    s("client")(newClient);
+    setShowAddClient(false);
   };
 
   const isClientLocked = !!defaultClient;
@@ -1432,6 +1544,16 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
           </button>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showAddClient && (
+          <AddClientModal
+            existingClients={uniqueClients}
+            onAdd={handleAddNewClient}
+            onCancel={() => setShowAddClient(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

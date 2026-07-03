@@ -15,6 +15,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
   Table,
   TableBody,
   TableCell,
@@ -39,6 +47,7 @@ import {
   FileText,
   GraduationCap,
   Pencil,
+  ChevronDown,
 } from "lucide-react";
 
 /* ─── Types ─────────────────────────────────────────────── */
@@ -85,10 +94,13 @@ interface WorkEntry {
   localId: string;
   client: string;
   project: string;
-  workType: WorkType | "";
+  workTypes: WorkType[];
   time: string;
   description: string;
 }
+
+// Work types that don't require a client/project to be selected (e.g. training days)
+const OPTIONAL_WORK_TYPES = new Set<WorkType>(["TRAINING", "PRACTICING", "MISCELLANEOUS"]);
 
 interface Report {
   id: string | number;
@@ -107,7 +119,7 @@ const createEntry = (): WorkEntry => ({
   localId: crypto.randomUUID(),
   client: "",
   project: "",
-  workType: "",
+  workTypes: [],
   time: "",
   description: "",
 });
@@ -500,7 +512,7 @@ const EmployeeView = () => {
   const totalHours = entries.reduce((s, e) => s + (parseFloat(e.time) || 0), 0);
   const progressPercent = Math.min(100, (totalHours / 8) * 100);
   const hasAnyData = entries.some(
-    (e) => e.client || e.project || e.workType || e.time || e.description
+    (e) => e.client || e.project || e.workTypes.length > 0 || e.time || e.description
   );
   const showProgress = hasInteracted && (hasAnyData || totalHours > 0);
 
@@ -513,9 +525,11 @@ const EmployeeView = () => {
   }, {});
   const groupedDates = Object.keys(reportsByDate).sort((a, b) => a.localeCompare(b));
 
-  // Helper function to check if work type requires client/project
-  const isClientProjectOptional = (workType: WorkType | "") => {
-    return workType === "TRAINING" || workType === "PRACTICING" || workType === "MISCELLANEOUS";
+  // Helper function to check if the selected work type(s) require client/project.
+  // Only optional when EVERY selected type is one of the no-client types (e.g. Training).
+  // If mixed with a real work type (e.g. E Plan + Training), client/project is still required.
+  const isClientProjectOptional = (workTypes: WorkType[]) => {
+    return workTypes.length > 0 && workTypes.every((wt) => OPTIONAL_WORK_TYPES.has(wt));
   };
 
   /* Fetch clients */
@@ -603,16 +617,40 @@ const EmployeeView = () => {
     const existingReports = reports.filter((r) => toDateKey(r.date) === newDate);
 
     if (existingReports.length > 0) {
-      // Enter edit mode: pre-fill entries from existing reports
+      // Enter edit mode: pre-fill entries from existing reports.
+      // Reports that share the same client/project/description are merged into
+      // a single row with multiple work types selected (multi-select support),
+      // with their individual times summed back into the row's total time.
       setIsEditMode(true);
-      const loadedEntries: WorkEntry[] = existingReports.map((r) => ({
-        localId: String(r.id),
-        client: r.client ?? "",
-        project: r.project ?? "",
-        workType: r.workType ?? "",
-        time: String(r.time ?? ""),
-        description: r.description ?? "",
-      }));
+      const groups = new Map<string, WorkEntry & { _ids: string[] }>();
+      existingReports.forEach((r) => {
+        const client = r.client ?? "";
+        const project = r.project ?? "";
+        const description = r.description ?? "";
+        const key = `${client}|||${project}|||${description}`;
+        const existingGroup = groups.get(key);
+        const rTime = parseFloat(String(r.time ?? "")) || 0;
+        if (existingGroup) {
+          if (r.workType && !existingGroup.workTypes.includes(r.workType)) {
+            existingGroup.workTypes.push(r.workType);
+          }
+          existingGroup.time = String((parseFloat(existingGroup.time) || 0) + rTime);
+          existingGroup._ids.push(String(r.id));
+        } else {
+          groups.set(key, {
+            localId: String(r.id),
+            client,
+            project,
+            workTypes: r.workType ? [r.workType] : [],
+            time: String(rTime),
+            description,
+            _ids: [String(r.id)],
+          });
+        }
+      });
+      const loadedEntries: WorkEntry[] = Array.from(groups.values()).map(
+        ({ _ids, ...entry }) => entry
+      );
       setEntries(loadedEntries);
 
       // Pre-fetch projects for all clients present in existing entries
@@ -650,14 +688,48 @@ const EmployeeView = () => {
   };
 
   /* Entry helpers */
-  const updateEntry = (localId: string, field: keyof WorkEntry, value: string) => {
+  const updateEntry = (localId: string, field: "client" | "project" | "time" | "description", value: string) => {
     if (!hasInteracted) setHasInteracted(true);
     setEntries((prev) =>
       prev.map((e) => {
         if (e.localId !== localId) return e;
         const updated = { ...e, [field]: value };
         if (field === "client") { updated.project = ""; fetchProjects(value); }
-        if (field === "workType" && isClientProjectOptional(value as WorkType)) {
+        return updated;
+      })
+    );
+  };
+
+  // Toggle a work type on/off for a given row (multi-select).
+ // Toggle a work type on/off for a given row (multi-select),
+  // with TRAINING / PRACTICING / MISCELLANEOUS treated as exclusive:
+  // picking one of them clears every other selection (and vice versa).
+  const toggleWorkType = (localId: string, workType: WorkType) => {
+    if (!hasInteracted) setHasInteracted(true);
+    setEntries((prev) =>
+      prev.map((e) => {
+        if (e.localId !== localId) return e;
+        const isSelected = e.workTypes.includes(workType);
+
+        let updatedTypes: WorkType[];
+        if (isSelected) {
+          // Just deselecting — simple removal.
+          updatedTypes = e.workTypes.filter((t) => t !== workType);
+        } else if (OPTIONAL_WORK_TYPES.has(workType)) {
+          // Selecting an exclusive type (Training/Practicing/Miscellaneous):
+          // it becomes the ONLY selected type.
+          updatedTypes = [workType];
+        } else {
+          // Selecting a normal type: drop any exclusive type that was
+          // previously selected, then add this one alongside the rest.
+          updatedTypes = [
+            ...e.workTypes.filter((t) => !OPTIONAL_WORK_TYPES.has(t)),
+            workType,
+          ];
+        }
+
+        const updated = { ...e, workTypes: updatedTypes };
+        if (isClientProjectOptional(updatedTypes)) {
           updated.client = "";
           updated.project = "";
         }
@@ -689,14 +761,15 @@ const EmployeeView = () => {
 
     // Check for incomplete entries
     const incompleteEntry = entries.find((e) => {
-      if (isClientProjectOptional(e.workType)) {
-        return !e.workType || !e.time || !e.description.trim();
+      if (e.workTypes.length === 0) return true;
+      if (isClientProjectOptional(e.workTypes)) {
+        return !e.time || !e.description.trim();
       }
-      return !e.client || !e.project || !e.workType || !e.time || !e.description.trim();
+      return !e.client || !e.project || !e.time || !e.description.trim();
     });
 
     if (incompleteEntry) {
-      toast({ title: "Incomplete Rows", description: "Please fill in all required fields for every row.", variant: "destructive" });
+      toast({ title: "Incomplete Rows", description: "Please fill in all required fields — including at least one type — for every row.", variant: "destructive" });
       return;
     }
 
@@ -708,14 +781,22 @@ const EmployeeView = () => {
 
     setSubmitting(true);
     try {
-      const payload = entries.map((e) => ({
-        client: isClientProjectOptional(e.workType) ? e.workType : e.client,
-        project: isClientProjectOptional(e.workType) ? `${e.workType} Activity` : e.project,
-        workType: e.workType,
-        time: parseFloat(e.time),
-        description: e.description.trim(),
-        date: date, // Include date in the payload
-      }));
+      // Each row can have multiple work types selected. Since a single backend
+      // record only stores one work type, expand each row into one record per
+      // selected type (client/project/description shared; time split evenly
+      // across the selected types so totals stay accurate downstream).
+      const payload = entries.flatMap((e) => {
+        const optional = isClientProjectOptional(e.workTypes);
+        const splitTime = parseFloat((parseFloat(e.time) / e.workTypes.length).toFixed(2));
+        return e.workTypes.map((wt) => ({
+          client: optional ? wt : e.client,
+          project: optional ? `${WORK_TYPE_LABELS[wt]} Activity` : e.project,
+          workType: wt,
+          time: splitTime,
+          description: e.description.trim(),
+          date: date, // Include date in the payload
+        }));
+      });
 
       if (isEditMode) {
         // ── UPDATE existing report ──
@@ -819,15 +900,21 @@ const EmployeeView = () => {
                 <Input
                   id="date"
                   type="date"
+                  disabled={isEditMode}
                   className={`w-36 h-8 text-sm focus:ring-indigo-100 ${
                     isEditMode
-                      ? "border-amber-300 focus:border-amber-400"
+                      ? "border-amber-300 bg-amber-50/60 text-slate-500 cursor-not-allowed"
                       : "border-slate-200 focus:border-indigo-400"
                   }`}
                   value={date}
                   onChange={(e) => handleDateChange(e.target.value)}
                   max={today}
                 />
+                {isEditMode && (
+                  <p className="text-[9px] text-amber-600">
+                    Locked while editing — Cancel to pick a different date.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -877,7 +964,7 @@ const EmployeeView = () => {
                 </TableHeader>
                 <TableBody>
                   {entries.map((entry, index) => {
-                    const isOptional = isClientProjectOptional(entry.workType);
+                    const isOptional = isClientProjectOptional(entry.workTypes);
                     const safeClients = Array.isArray(clients) ? clients : [];
                     return (
                       <TableRow
@@ -936,24 +1023,66 @@ const EmployeeView = () => {
                           </Select>
                         </TableCell>
                         <TableCell className="py-1.5">
-                          <Select
-                            value={entry.workType}
-                            onValueChange={(v) => updateEntry(entry.localId, "workType", v)}
-                          >
-                            <SelectTrigger className="h-7 text-xs border-slate-200 focus:border-indigo-400">
-                              <SelectValue placeholder="Type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(Object.keys(WORK_TYPE_LABELS) as WorkType[]).map((k) => (
-                                <SelectItem key={k} value={k} className="text-xs">
-                                  <div className="flex items-center gap-1.5">
-                                    {(k === "TRAINING" || k === "PRACTICING" || k === "MISCELLANEOUS") && <GraduationCap className="h-2.5 w-2.5" />}
-                                    {WORK_TYPE_LABELS[k]}
-                                  </div>
-                                </SelectItem>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                className="flex h-7 w-full items-center justify-between gap-1 rounded-md border border-slate-200 bg-white px-2 text-xs hover:border-indigo-300 focus:border-indigo-400 focus:outline-none"
+                              >
+                                <span className={`truncate ${entry.workTypes.length === 0 ? "text-slate-400" : "text-slate-700"}`}>
+                                  {entry.workTypes.length === 0
+                                    ? "Select type(s)"
+                                    : entry.workTypes.length === 1
+                                    ? WORK_TYPE_LABELS[entry.workTypes[0]]
+                                    : `${entry.workTypes.length} types selected`}
+                                </span>
+                                <ChevronDown className="h-3 w-3 shrink-0 text-slate-400" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="max-h-[320px] overflow-y-auto">
+                              <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-slate-400">
+                                Select one or more
+                              </DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              {(Object.keys(WORK_TYPE_LABELS) as WorkType[]).map((k) => {
+                                // If an exclusive type (Training/Practicing/Misc) is already
+                                // selected, block every other option until it's deselected.
+                                const hasExclusiveSelected = entry.workTypes.some((t) =>
+                                  OPTIONAL_WORK_TYPES.has(t)
+                                );
+                                const isDisabled =
+                                  hasExclusiveSelected && !entry.workTypes.includes(k);
+
+                                return (
+                                  <DropdownMenuCheckboxItem
+                                    key={k}
+                                    checked={entry.workTypes.includes(k)}
+                                    disabled={isDisabled}
+                                    onCheckedChange={() => toggleWorkType(entry.localId, k)}
+                                    onSelect={(e) => e.preventDefault()}
+                                    className={`text-xs ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                                  >
+                                    <div className="flex items-center gap-1.5">
+                                      {(k === "TRAINING" || k === "PRACTICING" || k === "MISCELLANEOUS") && <GraduationCap className="h-2.5 w-2.5" />}
+                                      {WORK_TYPE_LABELS[k]}
+                                    </div>
+                                  </DropdownMenuCheckboxItem>
+                                );
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          {entry.workTypes.length > 1 && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {entry.workTypes.map((wt) => (
+                                <span
+                                  key={wt}
+                                  className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium ${WORK_TYPE_COLORS[wt] ?? "bg-slate-100 text-slate-600"}`}
+                                >
+                                  {WORK_TYPE_LABELS[wt]}
+                                </span>
                               ))}
-                            </SelectContent>
-                          </Select>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="py-1.5">
                           <Input

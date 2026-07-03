@@ -197,6 +197,10 @@ function FileAttachment({ attachment, isMine }: { attachment: Attachment; isMine
   // bare URL) because the backend requires the Authorization header on
   // every request — a plain window.open() would 401.
   const handleView = async () => {
+    // Open the tab synchronously (before any await) so the browser still
+    // treats it as part of the user's click and doesn't pop-up-block it.
+    const tab = window.open('', '_blank');
+
     try {
       const response = await api.get(`/attachments/${attachment.id}/preview`, {
         responseType: 'blob'
@@ -204,19 +208,21 @@ function FileAttachment({ attachment, isMine }: { attachment: Attachment; isMine
       const contentType = response.headers['content-type'] || attachment.fileType || 'application/octet-stream';
       const blob = new Blob([response.data], { type: contentType });
       const url = window.URL.createObjectURL(blob);
-      const opened = window.open(url, '_blank');
-      // If a popup blocker prevented the tab from opening, fall back to download
-      // so the user still gets the file. Otherwise revoke the blob once the
-      // new tab has had time to load it.
-      if (!opened) {
-        handleDownload();
-        window.URL.revokeObjectURL(url);
-      } else {
+
+      if (tab) {
+        tab.location.href = url;
         setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+      } else {
+        // Genuinely blocked before we even had the file — fall back once.
+        window.URL.revokeObjectURL(url);
+        handleDownload();
       }
     } catch (error) {
-      console.error('View failed, falling back to download:', error);
-      handleDownload();
+      console.error('Preview failed:', error);
+      if (tab) tab.close();
+      // Don't auto-fallback to /download here — if /preview 404'd, /download
+      // will very likely 404 too, and you'd fire two failing requests per click.
+      alert(`Couldn't open "${attachment.originalName}". Please try downloading it instead.`);
     }
   };
 
@@ -1466,7 +1472,9 @@ export default function Messages() {
                   </div>
                 ) : (
                   conversation.map((msg, i) => {
-                    const isMine = msg.senderUsername === name;
+                  const isMine = msg.senderUsername === name;
+  console.log('DEBUG', { senderUsername: msg.senderUsername, name, isMine });
+
                     const prev = conversation[i - 1];
                     const showSender = !prev || prev.senderUsername !== msg.senderUsername;
                     const showDivider = !prev || dateKey(msg.sentAt) !== dateKey(prev.sentAt);
