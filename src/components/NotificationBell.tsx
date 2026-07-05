@@ -160,7 +160,7 @@ export default function NotificationBell() {
                             ? "bg-indigo-100 text-indigo-600"
                             : "bg-green-100 text-green-600"
                         }`}>
-                          {n.type === "ANNOUNCEMENT" ? "Announcement" : "Message"}
+                          {n.type === "ANNOUNCEMENT" ? "Announcement" : "Noor"}
                         </span>
                         <p className="text-[10px] text-slate-400">{fmt(n.createdAt)}</p>
                       </div>

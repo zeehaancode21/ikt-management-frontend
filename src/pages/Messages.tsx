@@ -34,6 +34,7 @@ interface GroupMessage {
 interface Broadcast {
   id: number;
   targetUsername: string;
+  senderUsername?: string;
   content: string;
   type: string;
   read: boolean;
@@ -1292,7 +1293,7 @@ export default function Messages() {
                     <div key={bc.id}>
                       {showDivider && <div className="msg-day-divider"><span>{longDateLabel(bc.createdAt)}</span></div>}
                       <div className="msg-bubble-group broadcast-msg">
-                        <div className="msg-sender-label">{bc.targetUsername}</div>
+                        <div className="msg-sender-label">{bc.senderUsername || "Noor"}</div>
                         <div className="msg-bubble broadcast">{bc.content}</div>
                         {bc.attachments?.map(attachment => (
                           <FileAttachment key={attachment.id} attachment={attachment} isMine={false} />

@@ -595,8 +595,11 @@ export default function Dashboard() {
   }, []);
 
   const filteredByYear = allProjects.filter(p => p.year === selectedYear);
-  const clientsForYear = [...new Set(filteredByYear.map(p => p.client))];
-  const projectsForClient = filteredByYear.filter(p => p.client === selectedClient);
+  const clientsForYear = [...new Set(filteredByYear.map(p => p.client))]
+    .sort((a, b) => (a || "").localeCompare(b || "", undefined, { sensitivity: "base" }));
+  const projectsForClient = filteredByYear
+    .filter(p => p.client === selectedClient)
+    .sort((a, b) => (a.projectName || "").localeCompare(b.projectName || "", undefined, { sensitivity: "base" }));
 
   useEffect(() => {
     if (selectedProject && activeTab === "change") {
@@ -1446,7 +1449,8 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
   const s = (k) => (v) => setData(p => ({ ...p, [k]: v }));
   const [showAddClient, setShowAddClient] = useState(false);
 
-  const uniqueClients = [...new Set(allProjects.map(p => p.client).filter(Boolean))].sort();
+  const uniqueClients = [...new Set(allProjects.map(p => p.client).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
   const handleClientChange = (value) => {
     if (value === "__new__") {

@@ -10,14 +10,186 @@ import {
   ShieldCheck,
   FolderOpen,
   KeyRound,
-  FileCheck2
+  FileCheck2,
+  Globe,
+  ArrowUpRight
 } from "lucide-react";
+
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
 import { UserAvatar } from "@/components/UserAvatar";
+
+// ── Company website ───────────────────────────────────────────────────────
+// Change these two values to update the link shown under the logo.
+const COMPANY_WEBSITE_URL = "https://www.iktangience.com";
+const COMPANY_WEBSITE_LABEL = "IK Tangience";
+
+// ── Animated styles for the logo / website block ──────────────────────────
+const sidebarStyles = `
+  @keyframes sb-fade-in {
+    from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @keyframes sb-glow-pulse {
+    0%, 100% { opacity: 0.35; transform: translate(-50%, -50%) scale(1); }
+    50%      { opacity: 0.6;  transform: translate(-50%, -50%) scale(1.15); }
+  }
+
+  @keyframes sb-border-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes sb-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  @keyframes sb-globe-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .sb-logo-block {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 26px 22px 20px;
+    overflow: hidden;
+  }
+
+  .sb-logo-glow {
+    position: absolute;
+    top: 34px;
+    left: 50%;
+    width: 140px;
+    height: 140px;
+    background: radial-gradient(circle, hsl(var(--sidebar-primary) / 0.5) 0%, transparent 70%);
+    filter: blur(18px);
+    pointer-events: none;
+    animation: sb-glow-pulse 4s ease-in-out infinite;
+  }
+
+  .sb-logo-img {
+    position: relative;
+    height: 6rem;
+    width: auto;
+    object-fit: contain;
+    animation: sb-fade-in 0.5s ease-out;
+    filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.35));
+    transition: transform 0.35s ease;
+  }
+  .sb-logo-img:hover {
+    transform: translateY(-2px) scale(1.03);
+  }
+
+  /* Outer wrapper carries the animated rotating gradient "border" */
+  .sb-site-link {
+    position: relative;
+    display: block;
+    width: 100%;
+    border-radius: 12px;
+    padding: 1.5px;
+    overflow: hidden;
+    text-decoration: none;
+    animation: sb-fade-in 0.6s ease-out 0.1s backwards;
+  }
+
+  .sb-site-link::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 220%;
+    height: 220%;
+    background: conic-gradient(
+      from 0deg,
+      hsl(var(--sidebar-primary)) 0deg,
+      transparent 100deg,
+      transparent 260deg,
+      hsl(var(--sidebar-primary)) 360deg
+    );
+    animation: sb-border-spin 4s linear infinite;
+    opacity: 0.55;
+    transition: opacity 0.3s ease;
+  }
+  .sb-site-link:hover::before {
+    opacity: 1;
+    animation-duration: 2s;
+  }
+
+  .sb-site-content {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 10.5px;
+    padding: 9px 12px;
+    background: hsl(var(--sidebar-background, 222 47% 11%));
+    background-clip: padding-box;
+    transition: background 0.3s ease;
+  }
+  .sb-site-content:hover {
+    background: hsl(var(--sidebar-accent));
+  }
+
+  .sb-site-globe {
+    flex-shrink: 0;
+    height: 14px;
+    width: 14px;
+    color: hsl(var(--sidebar-primary));
+    animation: sb-globe-spin 7s linear infinite;
+  }
+  .sb-site-link:hover .sb-site-globe {
+    animation-duration: 1.4s;
+  }
+
+  .sb-site-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: hsl(var(--sidebar-foreground) / 0.85);
+    background: linear-gradient(
+      90deg,
+      hsl(var(--sidebar-foreground) / 0.85) 0%,
+      hsl(var(--sidebar-foreground) / 0.85) 40%,
+      #fff 50%,
+      hsl(var(--sidebar-foreground) / 0.85) 60%,
+      hsl(var(--sidebar-foreground) / 0.85) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    transition: color 0.3s ease;
+  }
+  .sb-site-link:hover .sb-site-text {
+    animation: sb-shimmer 1.6s ease-in-out infinite;
+    color: transparent;
+  }
+
+  .sb-site-arrow {
+    flex-shrink: 0;
+    height: 13px;
+    width: 13px;
+    color: hsl(var(--sidebar-primary));
+    opacity: 0;
+    transform: translate(-4px, 4px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  .sb-site-link:hover .sb-site-arrow {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+`;
 
 export const AppSidebar = () => {
   const { name, role, logout } = useAuth();
@@ -61,12 +233,29 @@ export const AppSidebar = () => {
 
   return (
     <>
+      <style>{sidebarStyles}</style>
       {showCP && <ChangePasswordModal onClose={() => setShowCP(false)} />}
 
       <aside className="flex h-screen w-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
         {/* LOGO */}
-        <div className="flex items-center justify-center border-b border-sidebar-border px-10 py-15">
-          <img src="/finalised-logo.png" alt="IKT Logo" className="h-100 w-auto object-contain" />
+        <div className="sb-logo-block border-b border-sidebar-border">
+          <div className="sb-logo-glow" />
+          <img src="/finalised-logo.png" alt="Company Logo" className="sb-logo-img" />
+
+          {/* Company website link */}
+          <a
+            href={COMPANY_WEBSITE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`Visit ${COMPANY_WEBSITE_LABEL}`}
+            className="sb-site-link"
+          >
+            <div className="sb-site-content">
+              <Globe className="sb-site-globe" />
+              <span className="sb-site-text">{COMPANY_WEBSITE_LABEL}</span>
+              <ArrowUpRight className="sb-site-arrow" />
+            </div>
+          </a>
         </div>
 
         {/* USER CHIP — shows profile picture if uploaded */}
