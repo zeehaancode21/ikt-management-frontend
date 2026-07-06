@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
+type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED" | "REAPPROVAL_PENDING";
 type WorkStatus = "IN_PROGRESS" | "COMPLETED" | "BLOCKED";
 
 interface Props {
@@ -12,6 +12,7 @@ const styles: Record<string, string> = {
   PENDING: "bg-warning/15 text-warning border-warning/30",
   APPROVED: "bg-success/15 text-success border-success/30",
   REJECTED: "bg-destructive/15 text-destructive border-destructive/30",
+  REAPPROVAL_PENDING: "bg-amber-500/15 text-amber-600 border-amber-500/30",
   IN_PROGRESS: "bg-primary/15 text-primary border-primary/30",
   COMPLETED: "bg-success/15 text-success border-success/30",
   BLOCKED: "bg-destructive/15 text-destructive border-destructive/30",
@@ -21,6 +22,7 @@ const labels: Record<string, string> = {
   PENDING: "Pending",
   APPROVED: "Approved",
   REJECTED: "Rejected",
+  REAPPROVAL_PENDING: "Reapproval Requested",
   IN_PROGRESS: "In Progress",
   COMPLETED: "Completed",
   BLOCKED: "Blocked",

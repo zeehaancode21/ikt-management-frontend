@@ -42,6 +42,16 @@ interface Leave {
   days: number;
   reason: string;
   status?: string;
+  // Populated only while status === "REAPPROVAL_PENDING" — the employee's
+  // proposed changes to an already-approved leave. The fields above still
+  // hold the original, currently-approved values until an owner accepts it.
+  pendingFromDate?: string | null;
+  pendingToDate?: string | null;
+  pendingDateType?: string | null;
+  pendingHalfSession?: string | null;
+  pendingLeaveType?: string | null;
+  pendingReason?: string | null;
+  pendingDays?: number | null;
 }
 
 /* ─── Constants ─────────────────────────────────────────── */
@@ -63,6 +73,18 @@ const formatDateType = (dateType?: string, halfSession?: string | null) => {
     return `${base} · ${sessionLabel}`;
   }
   return base;
+};
+
+// A leave can only be changed ("reapproval") while it is APPROVED and its
+// start date hasn't arrived yet — mirrors the same check the backend enforces.
+const canRequestChange = (l: Leave) => {
+  if (l.status?.toUpperCase() !== "APPROVED") return false;
+  if (!l.fromDate) return false;
+  const from = new Date(l.fromDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  from.setHours(0, 0, 0, 0);
+  return from.getTime() > today.getTime();
 };
 
 /* ─── Helpers ───────────────────────────────────────────── */
@@ -424,7 +446,17 @@ const LEAVE_TYPE_COLORS: Record<string, { bg: string; text: string; border: stri
   UNPAID:      { bg: "bg-slate-100", text: "text-slate-600",  border: "border-slate-200" },
 };
 
-const AppliedLeavesTable = ({ leaves }: { leaves: Leave[] }) => {
+const AppliedLeavesTable = ({
+  leaves,
+  onRequestChange,
+  onCancelReapproval,
+  cancelingId,
+}: {
+  leaves: Leave[];
+  onRequestChange?: (l: Leave) => void;
+  onCancelReapproval?: (l: Leave) => void;
+  cancelingId?: string | number | null;
+}) => {
   if (leaves.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground animate-fade-in-up">
@@ -444,6 +476,7 @@ const AppliedLeavesTable = ({ leaves }: { leaves: Leave[] }) => {
       {sortedLeaves.map((l, index) => {
         const colors = LEAVE_TYPE_COLORS[l.leaveType] ?? { bg: "bg-muted", text: "text-foreground", border: "border-border" };
         const isSingleDay = l.fromDate === l.toDate;
+        const isReapproval = l.status?.toUpperCase() === "REAPPROVAL_PENDING";
         return (
           <div
             key={l.id}
@@ -482,6 +515,54 @@ const AppliedLeavesTable = ({ leaves }: { leaves: Leave[] }) => {
                 </p>
               )}
             </div>
+
+            {/* ── Reapproval: show the employee's proposed changes ── */}
+            {isReapproval && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <p className="mb-1.5 text-xs font-semibold text-amber-700">
+                  Reapproval requested — awaiting owner's decision
+                </p>
+                <div className="flex items-center gap-2 text-xs text-amber-800 flex-wrap">
+                  <span className="line-through opacity-60">
+                    {l.fromDate === l.toDate ? fmt(l.fromDate) : `${fmt(l.fromDate)} → ${fmt(l.toDate)}`}
+                  </span>
+                  <span>→</span>
+                  <span className="font-semibold">
+                    {l.pendingFromDate === l.pendingToDate
+                      ? fmt(l.pendingFromDate || "")
+                      : `${fmt(l.pendingFromDate || "")} → ${fmt(l.pendingToDate || "")}`}
+                  </span>
+                </div>
+                {l.pendingReason && l.pendingReason !== l.reason && (
+                  <p className="mt-1 text-xs text-amber-700 line-clamp-2">New reason: {l.pendingReason}</p>
+                )}
+                {onCancelReapproval && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onCancelReapproval(l)}
+                    disabled={cancelingId === l.id}
+                    className="btn-hover-scale mt-2 h-7 text-xs"
+                  >
+                    {cancelingId === l.id ? <Spinner className="h-3 w-3 mr-1" /> : null}Cancel Request
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* ── Request a change to an approved, not-yet-started leave ── */}
+            {!isReapproval && onRequestChange && canRequestChange(l) && (
+              <div className="mt-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onRequestChange(l)}
+                  className="btn-hover-scale h-7 text-xs"
+                >
+                  Request Change
+                </Button>
+              </div>
+            )}
           </div>
         );
       })}
@@ -507,6 +588,16 @@ const EmployeeView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [historyTab, setHistoryTab] = useState<"applied" | "taken">("applied");
+
+  // ── Reapproval (change-request) modal state ──────────────────────────
+  const [reapprovalTarget, setReapprovalTarget] = useState<Leave | null>(null);
+  const [reDateMode, setReDateMode] = useState<"single" | "range" | "half">("single");
+  const [reHalfSession, setReHalfSession] = useState<"FIRST_HALF" | "SECOND_HALF">("FIRST_HALF");
+  const [reFromDate, setReFromDate] = useState("");
+  const [reToDate, setReToDate] = useState("");
+  const [reReason, setReReason] = useState("");
+  const [reSubmitting, setReSubmitting] = useState(false);
+  const [cancelingId, setCancelingId] = useState<string | number | null>(null);
   
   // ✅ Add ref to prevent double loading
   const initialLoadDoneRef = useRef(false);
@@ -609,8 +700,90 @@ const EmployeeView = () => {
     }
   };
 
+  // ── Reapproval (change-request) handlers ──────────────────────────────
+  const openReapproval = (l: Leave) => {
+    setReapprovalTarget(l);
+    const mode = l.dateType === "HALF_DAY" ? "half" : l.dateType === "RANGE" ? "range" : "single";
+    setReDateMode(mode as "single" | "range" | "half");
+    setReHalfSession((l.halfSession as "FIRST_HALF" | "SECOND_HALF") || "FIRST_HALF");
+    setReFromDate(l.fromDate ? l.fromDate.slice(0, 10) : "");
+    setReToDate(l.toDate ? l.toDate.slice(0, 10) : "");
+    setReReason(l.reason || "");
+  };
+
+  const closeReapproval = () => {
+    if (reSubmitting) return;
+    setReapprovalTarget(null);
+  };
+
+  const validateReapproval = (): string | null => {
+    if (!reFromDate) return "Please select a date.";
+    if (reDateMode === "range" && !reToDate) return "Please select an end date.";
+    if (reDateMode === "range") {
+      const days = calcDays(reFromDate, reToDate);
+      if (new Date(reToDate) < new Date(reFromDate)) return "End date cannot be before start date.";
+      if (days > 30) return "Leave duration cannot exceed 30 days. Please contact your manager.";
+    }
+    if (!reReason.trim()) return "Please provide a reason for the change.";
+    if (reReason.trim().length < 10) return "Reason must be at least 10 characters.";
+    return null;
+  };
+
+  const submitReapproval = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!reapprovalTarget) return;
+    const validationError = validateReapproval();
+    if (validationError) {
+      toast({ title: "Validation Error", description: validationError, variant: "destructive" });
+      return;
+    }
+    setReSubmitting(true);
+    const effectiveToDate = reDateMode === "range" ? reToDate : reFromDate;
+    const newDateType = reDateMode === "half" ? "HALF_DAY" : reDateMode.toUpperCase();
+    let newDays: number;
+    if (reDateMode === "range") newDays = calcDays(reFromDate, effectiveToDate);
+    else if (reDateMode === "half") newDays = 0.5;
+    else newDays = 1;
+    try {
+      await api.post(`/leaves/${reapprovalTarget.id}/reapproval`, {
+        fromDate: reFromDate,
+        toDate: effectiveToDate,
+        dateType: newDateType,
+        halfSession: reDateMode === "half" ? reHalfSession : null,
+        leaveType: reapprovalTarget.leaveType,
+        days: newDays,
+        reason: reReason.trim(),
+      });
+      toast({
+        title: "Change Requested",
+        description: "Your reapproval request has been sent for the owner's review.",
+        className: "border-green-500 bg-green-500 text-white animate-success-bounce",
+      });
+      setReapprovalTarget(null);
+      await load();
+    } catch (err) {
+      toast({ title: "Failed to request change", description: getErrorMessage(err) || "An unexpected error occurred.", variant: "destructive" });
+    } finally {
+      setReSubmitting(false);
+    }
+  };
+
+  const cancelReapproval = async (l: Leave) => {
+    setCancelingId(l.id);
+    try {
+      await api.delete(`/leaves/${l.id}/reapproval`);
+      toast({ title: "Request Withdrawn", description: "Your reapproval request has been cancelled." });
+      await load();
+    } catch (err) {
+      toast({ title: "Failed to cancel", description: getErrorMessage(err) || "An unexpected error occurred.", variant: "destructive" });
+    } finally {
+      setCancelingId(null);
+    }
+  };
+
   const pendingCount = leaves.filter((l) => l.status?.toUpperCase() === "PENDING").length;
   const approvedCount = leaves.filter((l) => l.status?.toUpperCase() === "APPROVED").length;
+  const reapprovalCount = leaves.filter((l) => l.status?.toUpperCase() === "REAPPROVAL_PENDING").length;
   // const minDate = getMinDate();  commenting out the min date check for testing purposes
 
   return (
@@ -754,6 +927,11 @@ const EmployeeView = () => {
                     {approvedCount} approved
                   </span>
                 )}
+                {reapprovalCount > 0 && (
+                  <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+                    {reapprovalCount} reapproval pending
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -812,12 +990,141 @@ const EmployeeView = () => {
               </button>
             </div>
           ) : historyTab === "applied" ? (
-            <AppliedLeavesTable leaves={leaves} />
+            <AppliedLeavesTable
+              leaves={leaves}
+              onRequestChange={openReapproval}
+              onCancelReapproval={cancelReapproval}
+              cancelingId={cancelingId}
+            />
           ) : (
             <LeaveTakenSummary leaves={leaves} />
           )}
         </div>
       </section>
+
+      {/* ── Reapproval (Request Change) Modal ─────────────────────────── */}
+      {reapprovalTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 animate-fade-slide-down"
+          onClick={closeReapproval}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl max-h-[85vh] overflow-y-auto custom-scrollbar"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-semibold">Request a Change</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Propose new details for your approved leave. It'll go back to your manager for reapproval.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeReapproval}
+                className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-4 rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+              Currently approved:{" "}
+              <span className="font-medium text-foreground">
+                {reapprovalTarget.fromDate === reapprovalTarget.toDate
+                  ? fmt(reapprovalTarget.fromDate)
+                  : `${fmt(reapprovalTarget.fromDate)} → ${fmt(reapprovalTarget.toDate)}`}
+              </span>{" "}
+              · {formatDateType(reapprovalTarget.dateType, reapprovalTarget.halfSession)}
+            </div>
+
+            <form onSubmit={submitReapproval} className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Date Type</Label>
+                <Select value={reDateMode} onValueChange={(val) => setReDateMode(val as "single" | "range" | "half")}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">Single Date</SelectItem>
+                    <SelectItem value="range">Date Range</SelectItem>
+                    <SelectItem value="half">Half Day</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="re-from">{reDateMode === "range" ? "New From Date" : "New Date"}</Label>
+                <Input
+                  id="re-from"
+                  type="date"
+                  required
+                  value={reFromDate}
+                  onChange={(e) => {
+                    setReFromDate(e.target.value);
+                    if (reToDate && e.target.value && new Date(reToDate) < new Date(e.target.value)) {
+                      setReToDate("");
+                    }
+                  }}
+                />
+              </div>
+
+              {reDateMode === "range" && (
+                <div className="space-y-2">
+                  <Label htmlFor="re-to">New To Date</Label>
+                  <Input
+                    id="re-to"
+                    type="date"
+                    required
+                    value={reToDate}
+                    onChange={(e) => setReToDate(e.target.value)}
+                  />
+                  {reFromDate && reToDate && (
+                    <p className="text-xs text-muted-foreground">
+                      Duration: {calcDays(reFromDate, reToDate)} day{calcDays(reFromDate, reToDate) !== 1 ? "s" : ""}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {reDateMode === "half" && (
+                <div className="space-y-2">
+                  <Label>Half Day Session</Label>
+                  <Select value={reHalfSession} onValueChange={(val) => setReHalfSession(val as "FIRST_HALF" | "SECOND_HALF")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="FIRST_HALF">First Half (Morning)</SelectItem>
+                      <SelectItem value="SECOND_HALF">Second Half (Afternoon)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="re-reason">Reason for the change</Label>
+                <Textarea
+                  id="re-reason"
+                  required
+                  rows={3}
+                  maxLength={500}
+                  value={reReason}
+                  onChange={(e) => setReReason(e.target.value)}
+                  placeholder="Explain why you need to change your approved leave..."
+                />
+                <p className="text-xs text-muted-foreground text-right">{reReason.length}/500 characters</p>
+              </div>
+
+              <div className="md:col-span-2 flex gap-2">
+                <Button type="submit" disabled={reSubmitting} className="btn-hover-scale">
+                  {reSubmitting ? (<><Spinner className="text-primary-foreground mr-2" />Submitting...</>) : "Submit for Reapproval"}
+                </Button>
+                <Button type="button" variant="outline" onClick={closeReapproval} disabled={reSubmitting} className="btn-hover-scale">
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1011,6 +1318,7 @@ const OwnerView = () => {
               <div className="space-y-3">
                 {leaves.map((l, index) => {
                   const colors = LEAVE_TYPE_COLORS[l.leaveType] ?? { bg: "bg-muted", text: "text-foreground", border: "border-border" };
+                  const isReapproval = l.status?.toUpperCase() === "REAPPROVAL_PENDING";
                   return (
                     <div
                       key={l.id}
@@ -1036,18 +1344,42 @@ const OwnerView = () => {
                       <div className="mb-3 space-y-1 pl-0">
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
                           <CalendarCheck2 className="h-3 w-3 flex-shrink-0" />
-                          {fmt(l.fromDate)}
-                          {l.fromDate !== l.toDate && <><span>→</span>{fmt(l.toDate)}</>}
+                          {isReapproval && <span className="line-through opacity-60">{fmt(l.fromDate)}{l.fromDate !== l.toDate && <> → {fmt(l.toDate)}</>}</span>}
+                          {!isReapproval && (
+                            <>
+                              {fmt(l.fromDate)}
+                              {l.fromDate !== l.toDate && <><span>→</span>{fmt(l.toDate)}</>}
+                            </>
+                          )}
                         </div>
-                        {l.reason && (
+                        {l.reason && !isReapproval && (
                           <p className="text-xs text-muted-foreground line-clamp-1" title={l.reason}>{l.reason}</p>
                         )}
                       </div>
 
+                      {/* ── Reapproval: show what the employee wants to change it to ── */}
+                      {isReapproval && (
+                        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                          <p className="mb-1.5 text-xs font-semibold text-amber-700">Requested change</p>
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-800 flex-wrap">
+                            <CalendarCheck2 className="h-3 w-3 flex-shrink-0" />
+                            {l.pendingFromDate === l.pendingToDate
+                              ? fmt(l.pendingFromDate || "")
+                              : <>{fmt(l.pendingFromDate || "")} <span>→</span> {fmt(l.pendingToDate || "")}</>}
+                            {l.pendingDateType && (
+                              <span className="font-normal text-amber-700">· {formatDateType(l.pendingDateType, l.pendingHalfSession)}</span>
+                            )}
+                          </div>
+                          {l.pendingReason && (
+                            <p className="mt-1 text-xs text-amber-700 line-clamp-2" title={l.pendingReason}>{l.pendingReason}</p>
+                          )}
+                        </div>
+                      )}
+
                       {/* ── Row 3: status + action buttons ── */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <StatusBadge status={l.status} />
-                        {l.status?.toUpperCase() === "PENDING" && (
+                        {(l.status?.toUpperCase() === "PENDING" || isReapproval) && (
                           <>
                             <Button
                               size="sm"
@@ -1055,7 +1387,8 @@ const OwnerView = () => {
                               disabled={actingId === l.id}
                               className="btn-hover-scale h-7 text-xs flex-1 sm:flex-none"
                             >
-                              {actingId === l.id ? <Spinner className="h-3 w-3 mr-1" /> : null}Approve
+                              {actingId === l.id ? <Spinner className="h-3 w-3 mr-1" /> : null}
+                              {isReapproval ? "Approve Change" : "Approve"}
                             </Button>
                             <Button
                               size="sm"
@@ -1064,7 +1397,8 @@ const OwnerView = () => {
                               disabled={actingId === l.id}
                               className="btn-hover-scale h-7 text-xs flex-1 sm:flex-none"
                             >
-                              {actingId === l.id ? <Spinner className="h-3 w-3 mr-1" /> : null}Reject
+                              {actingId === l.id ? <Spinner className="h-3 w-3 mr-1" /> : null}
+                              {isReapproval ? "Reject Change" : "Reject"}
                             </Button>
                           </>
                         )}

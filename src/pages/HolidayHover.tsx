@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Tesseract from "tesseract.js";
 import { Bell } from "lucide-react";
 import "@/HolidayHover.css";
@@ -234,56 +235,61 @@ const HolidayHover = ({
         </div>
       )}
 
-      {/* MODAL */}
-      {open && (
-        <div
-          className="holiday-overlay"
-          onClick={() => setOpen(false)}
-        >
+      {/* MODAL — rendered via portal straight into <body> so it always
+          sits above the sidebar, no matter which stacking context (header,
+          sidebar, etc.) it was triggered from. This is what fixes the
+          "modal gets cut off behind the sidebar on desktop" issue. */}
+      {open &&
+        createPortal(
           <div
-            className="holiday-modal"
-            onClick={(e) => e.stopPropagation()}
+            className="holiday-overlay"
+            onClick={() => setOpen(false)}
           >
-            <div className="holiday-header">
-              <h2 className="text-lg font-bold">
-                📅 Government Holidays 2026
-              </h2>
+            <div
+              className="holiday-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="holiday-header">
+                <h2 className="text-lg font-bold">
+                  📅 Government Holidays 2026
+                </h2>
 
-              <button onClick={() => setOpen(false)}>
-                ✕
-              </button>
-            </div>
+                <button onClick={() => setOpen(false)}>
+                  ✕
+                </button>
+              </div>
 
-            <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
-              {loading ? (
-                <div className="text-center text-gray-500">
-                  Loading...
-                </div>
-              ) : (
-                holidays.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex justify-between rounded-xl border p-4 shadow-sm hover:shadow-md"
-                  >
-                    <div>
-                      <h3 className="font-semibold">
-                        {item.name}
-                      </h3>
-                      <p className="text-xs text-gray-500">
-                        {item.day}
-                      </p>
-                    </div>
-
-                    <div className="font-bold text-blue-600">
-                      {item.date}
-                    </div>
+              <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
+                {loading ? (
+                  <div className="text-center text-gray-500">
+                    Loading...
                   </div>
-                ))
-              )}
+                ) : (
+                  holidays.map((item, index) => (
+                    <div
+                      key={index}
+                      className="flex justify-between rounded-xl border p-4 shadow-sm hover:shadow-md"
+                    >
+                      <div>
+                        <h3 className="font-semibold">
+                          {item.name}
+                        </h3>
+                        <p className="text-xs text-gray-500">
+                          {item.day}
+                        </p>
+                      </div>
+
+                      <div className="font-bold text-blue-600">
+                        {item.date}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </>
   );
 };
