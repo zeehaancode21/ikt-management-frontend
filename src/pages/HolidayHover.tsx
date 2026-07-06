@@ -4,6 +4,7 @@ import Tesseract from "tesseract.js";
 import { Bell } from "lucide-react";
 import "@/HolidayHover.css";
 import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/context/ThemeContext";
 import { toast } from "sonner";
 
 interface HolidayType {
@@ -23,6 +24,7 @@ const HolidayHover = ({
   const [openMessages, setOpenMessages] = useState(false);
 
   const { role } = useAuth();
+  const { theme } = useTheme();
   const userRole = role?.toLowerCase();
 
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -171,7 +173,7 @@ const HolidayHover = ({
           <img
             src={
               window.location.origin +
-              "/holidays.png"
+              (theme === "dark" ? "/holidays-dark.png" : "/holidays.png")
             }
             alt="Holiday"
             className="holiday-logo"
@@ -208,27 +210,26 @@ const HolidayHover = ({
                   No announcements
                 </div>
               ) : (
-               announcements.map((item: any, index: number) => (
-  <div
-    key={index}
-    onClick={() => markAsRead(index)}
-    className={`cursor-pointer border-b p-4 hover:bg-gray-100 ${
-      item.read ? "bg-gray-100 text-gray-500" : "bg-white"
-    }`}
-  >
-    <div className="font-semibold">
-      {item.owner}
-    </div>
+                announcements.map((item: any, index: number) => (
+                  <div
+                    key={index}
+                    onClick={() => markAsRead(index)}
+                    className={`cursor-pointer border-b p-4 hover:bg-gray-100 ${item.read ? "bg-gray-100 text-gray-500" : "bg-white"
+                      }`}
+                  >
+                    <div className="font-semibold">
+                      {item.owner}
+                    </div>
 
-    <div className="text-sm">
-      {item.text}
-    </div>
+                    <div className="text-sm">
+                      {item.text}
+                    </div>
 
-    <div className="text-xs text-gray-400">
-      {item.time}
-    </div>
-  </div>
-))
+                    <div className="text-xs text-gray-400">
+                      {item.time}
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           )}

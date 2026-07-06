@@ -60,7 +60,7 @@ const sidebarStyles = `
     align-items: center;
     gap: 14px;
     padding: 26px 22px 20px;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .sb-logo-glow {
@@ -269,40 +269,99 @@ const sidebarStyles = `
   }
 
   @keyframes sb-magic-msg {
-    0%   { opacity: 0; transform: translate(-50%, 4px) scale(0.9); }
-    12%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
-    85%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
-    100% { opacity: 0; transform: translate(-50%, -6px) scale(0.95); }
+    0%   { opacity: 0; transform: translate(-50%, 6px) scale(0.85); filter: blur(4px); }
+    12%  { opacity: 1; transform: translate(-50%, 0) scale(1.04); filter: blur(0); }
+    18%  { transform: translate(-50%, 0) scale(1); }
+    88%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -10px) scale(0.92); filter: blur(3px); }
   }
-  .sb-magic-message {
+
+  @keyframes sb-magic-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  @keyframes sb-magic-glow-pulse {
+    0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+    50%      { opacity: 0.9; transform: translate(-50%, -50%) scale(1.12); }
+  }
+
+  .sb-magic-message-wrap {
     position: absolute;
-    top: calc(100% + 6px);
+    top: calc(100% + 10px);
     left: 50%;
+    transform: translateX(-50%);
     z-index: 30;
-    white-space: nowrap;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    color: hsl(var(--sidebar-primary));
-    background: hsl(var(--sidebar-background, 222 47% 11%));
-    border: 1px solid hsl(var(--sidebar-border));
-    padding: 4px 12px;
-    border-radius: 999px;
+    width: max-content;
+    max-width: 200px;
     pointer-events: none;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-    animation: sb-magic-msg 1.7s ease forwards;
+    animation: sb-magic-msg 2.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  .sb-magic-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 90%;
+    height: 140%;
+    background: radial-gradient(circle, hsl(var(--sidebar-primary) / 0.55) 0%, transparent 70%);
+    filter: blur(12px);
+    transform: translate(-50%, -50%);
+    animation: sb-magic-glow-pulse 1.4s ease-in-out infinite;
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .sb-magic-message {
+    position: relative;
+    display: block;
+    text-align: center;
+    white-space: normal;
+    word-wrap: break-word;
+    font-size: 12.5px;
+    line-height: 1.35;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: white;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--sidebar-primary)),
+      hsl(var(--sidebar-primary) / 0.75) 45%,
+      hsl(var(--sidebar-primary))
+    );
+    background-size: 250% 250%;
+    animation: sb-magic-shimmer 3s linear infinite;
+    padding: 8px 16px;
+    border-radius: 14px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.2);
   }
 `;
 
 // A little professional flourish — one is picked at random each time the
 // logo is clicked and shown briefly beneath it.
 const LOGO_MAGIC_MESSAGES = [
-  "✨ Great work starts here.",
-  "🚀 Let's build something great.",
-  "💡 Ideas into action.",
-  "🌟 Excellence, every day.",
-  "🔥 Momentum activated.",
-  "🤝 Better together.",
+  "✨ From model to metal.",
+  "🚀 Detailed to perfection.",
+  "💡 Where accuracy meets steel.",
+  "🌟 Detailing done right, the first time.",
+  "🔥 Framing the future in steel.",
+  "🤝 Precision in every joint.",
+  "🎛️ Built on accuracy.",
+  "🛠️ Crafting with care, every time.",
+  "🔩 Where every detail counts.",
+  "🏗️ Engineering excellence, one frame at a time.",
+  "📐 From blueprint to brilliance.",
+  "⚡ Fast, precise, and flawless.",
+  "💎 Detailing that shines.",
+  "🧩 Every piece in its place.",
+  "🌐 Global standards, local expertise.",
+  "🎯 Targeting perfection in every cut.",
+  "🕰️ Timeless quality, modern precision.",
+  "💪 Strength in every structure.",
+  "🌿 Sustainable steel solutions.",
+  "📊 Data-driven detailing for superior results."
 ];
 
 type LogoParticle = {
@@ -352,13 +411,16 @@ export const AppSidebar = () => {
 
     setParticles(next);
     setLogoBurstKey((k) => k + 1);
-    setMagicMessage(LOGO_MAGIC_MESSAGES[Math.floor(Math.random() * LOGO_MAGIC_MESSAGES.length)]);
+
+    // Select and display a random magic message
+    const message = LOGO_MAGIC_MESSAGES[Math.floor(Math.random() * LOGO_MAGIC_MESSAGES.length)];
+    setMagicMessage(message);
 
     if (magicTimeoutRef.current) window.clearTimeout(magicTimeoutRef.current);
     magicTimeoutRef.current = window.setTimeout(() => {
       setParticles([]);
       setMagicMessage(null);
-    }, 1700);
+    }, 2500);
   };
 
   const handleLogout = () => {
@@ -374,25 +436,25 @@ export const AppSidebar = () => {
   const navItems =
     role === "OWNER"
       ? [
-          { to: "/admin", label: "Admin Console", icon: ShieldCheck },
-          { to: "/dashboard", label: "Projects", icon: Briefcase },
-          { to: "/documents", label: "Documents", icon: FolderOpen },
-          { to: "/reports", label: "Work Report", icon: FileText },
-          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
-          { to: "/messages", label: "Messages", icon: MessageSquare },
-        ]
+        { to: "/admin", label: "Admin Console", icon: ShieldCheck },
+        { to: "/dashboard", label: "Projects", icon: Briefcase },
+        { to: "/documents", label: "Documents", icon: FolderOpen },
+        { to: "/reports", label: "Work Report", icon: FileText },
+        { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+        { to: "/messages", label: "Messages", icon: MessageSquare },
+      ]
       : role === "LEAD"
-      ? [
+        ? [
           { to: "/reports", label: "Work Report", icon: FileText },
           { to: "/dashboard", label: "Projects", icon: Briefcase },
           { to: "/documents", label: "Documents", icon: FolderOpen },
           { to: "/leave", label: "Leave Report", icon: CalendarDays },
           { to: "/messages", label: "Messages", icon: MessageSquare },
         ]
-      : [
+        : [
           { to: "/reports", label: "Work Report", icon: FileText },
           { to: "/leave", label: "Leave Portal", icon: CalendarDays },
-          { to: "/documents", label: "Documents", icon: FolderOpen },     
+          { to: "/documents", label: "Documents", icon: FolderOpen },
           { to: "/messages", label: "Messages", icon: MessageSquare },
         ];
 
@@ -447,7 +509,14 @@ export const AppSidebar = () => {
               )
             )}
 
-            {magicMessage && <span className="sb-magic-message">{magicMessage}</span>}
+            {/* Magic Message - now displayed with better visibility */}
+            {/* Magic Message - now displayed with better visibility */}
+            {magicMessage && (
+              <div className="sb-magic-message-wrap">
+                <span className="sb-magic-glow" />
+                <span className="sb-magic-message">{magicMessage}</span>
+              </div>
+            )}
           </button>
 
           {/* Company website link */}

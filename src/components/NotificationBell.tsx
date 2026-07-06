@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Bell, Megaphone, MessageCircle, Check } from "lucide-react";
+import { Bell, Megaphone, MessageCircle, Check, Loader2 } from "lucide-react";
 import api from "@/lib/api";
 
 interface Notification {
@@ -13,6 +13,8 @@ interface Notification {
 export default function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
+  const [markingAllRead, setMarkingAllRead] = useState(false); // NEW: blocks dropdown during bulk mark-all
+  const [markingId, setMarkingId] = useState<number | null>(null); // NEW: tracks which single item is in flight
   const ref = useRef<HTMLDivElement>(null);
 
   // Only fetch UNREAD notifications
@@ -33,34 +35,46 @@ export default function NotificationBell() {
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
+      if (markingAllRead) return; // don't let outside clicks close it mid-request
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
       }
     };
     if (open) document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
+  }, [open, markingAllRead]);
 
-  const handleOpen = () => setOpen((v) => !v);
+  const handleOpen = () => {
+    if (markingAllRead) return;
+    setOpen((v) => !v);
+  };
 
   /** Mark a single notification as read and remove it from the list */
   const handleMarkRead = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (markingId !== null || markingAllRead) return; // block double-clicks / overlap
+    setMarkingId(id);
     try {
       await api.put(`/notifications/${id}/read`);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
     } catch {
       // ignore
+    } finally {
+      setMarkingId(null);
     }
   };
 
   /** Mark all as read */
   const handleMarkAllRead = async () => {
+    if (markingAllRead) return;
+    setMarkingAllRead(true);
     try {
       await api.put("/notifications/read-all");
       setNotifications([]);
     } catch {
       // ignore
+    } finally {
+      setMarkingAllRead(false);
     }
   };
 
@@ -115,16 +129,36 @@ export default function NotificationBell() {
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllRead}
-                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 transition-colors"
+                disabled={markingAllRead}
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Check className="h-3 w-3" />
-                Mark all read
+                {markingAllRead ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Marking...
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-3 w-3" />
+                    Mark all read
+                  </>
+                )}
               </button>
             )}
           </div>
 
           {/* List */}
-          <div className="max-h-96 overflow-y-auto">
+          <div className="max-h-96 overflow-y-auto relative">
+            {/* Blocking overlay while mark-all-read is in flight */}
+            {markingAllRead && (
+              <div className="absolute inset-0 z-10 bg-white/70 backdrop-blur-[1px] flex items-center justify-center">
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="h-5 w-5 text-indigo-500 animate-spin" />
+                  <p className="text-xs font-medium text-slate-500">Marking all as read…</p>
+                </div>
+              </div>
+            )}
+
             {notifications.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-10 px-4 text-center">
                 <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
@@ -137,47 +171,59 @@ export default function NotificationBell() {
               </div>
             ) : (
               <div className="divide-y divide-border/30">
-                {notifications.map((n) => (
-                  <div
-                    key={n.id}
-                    className="group flex items-start gap-3 px-4 py-3.5 bg-blue-50/60 hover:bg-blue-50 transition-colors"
-                  >
-                    {/* Icon */}
-                    <div className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                      n.type === "ANNOUNCEMENT"
-                        ? "bg-indigo-100 text-indigo-600"
-                        : "bg-green-100 text-green-600"
-                    }`}>
-                      {n.type === "ANNOUNCEMENT"
-                        ? <Megaphone className="h-3.5 w-3.5" />
-                        : <MessageCircle className="h-3.5 w-3.5" />}
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-slate-800 leading-snug font-medium">{n.content}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                          n.type === "ANNOUNCEMENT"
-                            ? "bg-indigo-100 text-indigo-600"
-                            : "bg-green-100 text-green-600"
-                        }`}>
-                          {n.type === "ANNOUNCEMENT" ? "Announcement" : "Noor"}
-                        </span>
-                        <p className="text-[10px] text-slate-400">{fmt(n.createdAt)}</p>
-                      </div>
-                    </div>
-
-                    {/* Dismiss button */}
-                    <button
-                      onClick={(e) => handleMarkRead(n.id, e)}
-                      className="opacity-0 group-hover:opacity-100 flex-shrink-0 w-6 h-6 rounded-full bg-white border border-border/50 hover:bg-green-50 hover:border-green-300 flex items-center justify-center transition-all"
-                      title="Dismiss"
+                {notifications.map((n) => {
+                  const isMarking = markingId === n.id;
+                  return (
+                    <div
+                      key={n.id}
+                      className="group flex items-start gap-3 px-4 py-3.5 bg-blue-50/60 hover:bg-blue-50 transition-colors"
                     >
-                      <Check className="h-3 w-3 text-slate-400 hover:text-green-600" />
-                    </button>
-                  </div>
-                ))}
+                      {/* Icon */}
+                      <div className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                        n.type === "ANNOUNCEMENT"
+                          ? "bg-indigo-100 text-indigo-600"
+                          : "bg-green-100 text-green-600"
+                      }`}>
+                        {n.type === "ANNOUNCEMENT"
+                          ? <Megaphone className="h-3.5 w-3.5" />
+                          : <MessageCircle className="h-3.5 w-3.5" />}
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-800 leading-snug font-medium">{n.content}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                            n.type === "ANNOUNCEMENT"
+                              ? "bg-indigo-100 text-indigo-600"
+                              : "bg-green-100 text-green-600"
+                          }`}>
+                            {n.type === "ANNOUNCEMENT" ? "Announcement" : "Noor"}
+                          </span>
+                          <p className="text-[10px] text-slate-400">{fmt(n.createdAt)}</p>
+                        </div>
+                      </div>
+
+                      {/* Dismiss button */}
+                      <button
+                        onClick={(e) => handleMarkRead(n.id, e)}
+                        disabled={isMarking || markingId !== null}
+                        className={`flex-shrink-0 w-6 h-6 rounded-full bg-white border border-border/50 flex items-center justify-center transition-all disabled:cursor-not-allowed ${
+                          isMarking
+                            ? "opacity-100"
+                            : "opacity-0 group-hover:opacity-100 hover:bg-green-50 hover:border-green-300"
+                        }`}
+                        title="Dismiss"
+                      >
+                        {isMarking ? (
+                          <Loader2 className="h-3 w-3 text-indigo-500 animate-spin" />
+                        ) : (
+                          <Check className="h-3 w-3 text-slate-400 hover:text-green-600" />
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

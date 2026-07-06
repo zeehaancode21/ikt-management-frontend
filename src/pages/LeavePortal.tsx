@@ -525,7 +525,7 @@ const AppliedLeavesTable = ({
             {/* ── Bottom row: dates + reason ── */}
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground flex-wrap">
-                <CalendarCheck2 className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                <CalendarCheck2 className="h-3.5 w-3.5 flex-shrink-0" style={{ color: 'var(--foreground)' }} />
                 {isSingleDay
                   ? fmt(l.fromDate)
                   : <>{fmt(l.fromDate)} <span className="text-muted-foreground font-normal">→</span> {fmt(l.toDate)}</>
@@ -1068,7 +1068,7 @@ const EmployeeView = () => {
                 historyTab === "taken" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <CalendarCheck2 className="h-3.5 w-3.5" />
+           <CalendarCheck2 className="h-3.5 w-3.5" style={{ color: 'var(--foreground)' }} />
               Taken
               {approvedCount > 0 && (
                 <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
@@ -1437,7 +1437,7 @@ const OwnerView = () => {
               </div>
             ) : leaves.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground animate-fade-in-up">
-                <CalendarCheck2 className="h-8 w-8 opacity-30" />
+            <CalendarCheck2 className="h-8 w-8 opacity-30" style={{ color: 'var(--foreground)' }} /> 
                 <p className="text-sm">No pending leave requests.</p>
               </div>
             ) : (
@@ -1469,7 +1469,7 @@ const OwnerView = () => {
                       {/* ── Row 2: dates + reason ── */}
                       <div className="mb-3 space-y-1 pl-0">
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
-                          <CalendarCheck2 className="h-3 w-3 flex-shrink-0" />
+                          <CalendarCheck2 className="h-3 w-3 flex-shrink-0" style={{ color: 'var(--foreground)' }} />
                           {isReapproval && <span className="line-through opacity-60">{fmt(l.fromDate)}{l.fromDate !== l.toDate && <> → {fmt(l.toDate)}</>}</span>}
                           {!isReapproval && (
                             <>
@@ -1488,7 +1488,7 @@ const OwnerView = () => {
                         <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
                           <p className="mb-1.5 text-xs font-semibold text-amber-700">Requested change</p>
                           <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-800 flex-wrap">
-                            <CalendarCheck2 className="h-3 w-3 flex-shrink-0" />
+                         <CalendarCheck2 className="h-3 w-3 flex-shrink-0" style={{ color: 'var(--foreground)' }} />
                             {l.pendingFromDate === l.pendingToDate
                               ? fmt(l.pendingFromDate || "")
                               : <>{fmt(l.pendingFromDate || "")} <span>→</span> {fmt(l.pendingToDate || "")}</>}
@@ -1556,7 +1556,7 @@ const OwnerView = () => {
 
             {!selectedEmployee ? (
               <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
-                <CalendarCheck2 className="h-8 w-8 opacity-30" />
+                <CalendarCheck2 className="h-8 w-8 opacity-30" style={{ color: 'var(--foreground)' }} />
                 <p className="text-sm">Select an employee above to view their leave history.</p>
               </div>
             ) : empLoading ? (
@@ -1655,7 +1655,7 @@ const OwnerView = () => {
                           {/* Row 2: dates + dateType + reason */}
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 text-sm font-semibold text-foreground flex-wrap">
-                              <CalendarCheck2 className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                             <CalendarCheck2 className="h-3.5 w-3.5 flex-shrink-0" style={{ color: 'var(--foreground)' }} />
                               {isSingleDay ? fmt(l.fromDate) : <>{fmt(l.fromDate)} <span className="text-muted-foreground font-normal">→</span> {fmt(l.toDate)}</>}
                             </div>
                             {l.dateType && (
