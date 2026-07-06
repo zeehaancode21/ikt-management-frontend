@@ -160,9 +160,10 @@ export const AppLayout = () => {
           width: 220px;
           background: hsl(var(--sidebar-background));
           height: 100vh;
+          height: 100dvh; /* real visible viewport height on mobile browsers (accounts for address bar) */
           position: sticky;
           top: 0;
-          overflow-y: auto;
+          overflow: hidden; /* the inner AppSidebar handles its own nav scrolling; footer must never be clipped */
           transition: transform 0.3s ease;
           border-right: 1px solid hsl(var(--sidebar-border));
           box-shadow: 2px 0 4px rgba(0,0,0,0.02);

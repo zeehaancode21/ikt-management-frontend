@@ -236,7 +236,7 @@ export const AppSidebar = () => {
       <style>{sidebarStyles}</style>
       {showCP && <ChangePasswordModal onClose={() => setShowCP(false)} />}
 
-      <aside className="flex h-screen w-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+      <aside className="flex h-full w-full min-h-0 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
         {/* LOGO */}
         <div className="sb-logo-block border-b border-sidebar-border">
           <div className="sb-logo-glow" />
@@ -284,7 +284,7 @@ export const AppSidebar = () => {
         </button>
 
         {/* NAV */}
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -305,7 +305,7 @@ export const AppSidebar = () => {
         </nav>
 
         {/* FOOTER */}
-        <div className="border-t border-sidebar-border">
+        <div className="shrink-0 border-t border-sidebar-border">
           {/* Camera Button - Owner Only */}
           {role === "OWNER" && (
             <div className="p-3 border-b border-sidebar-border">

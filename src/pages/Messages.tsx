@@ -1014,7 +1014,7 @@ export default function Messages() {
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
-        .msg-input-area { padding:14px 20px 16px; border-top:1px solid hsl(var(--border)); background:hsl(var(--card)); }
+        .msg-input-area { padding:14px 20px 16px; border-top:1px solid hsl(var(--border)); background:hsl(var(--card)); width:100%; box-sizing:border-box; }
         .msg-input-toolbar { display:flex; gap:6px; margin-bottom:8px; }
         .msg-toolbar-btn {
           display:flex; align-items:center; gap:5px; padding:4px 10px;
@@ -1024,15 +1024,16 @@ export default function Messages() {
         }
         .msg-toolbar-btn:hover { border-color:hsl(var(--primary)); color:hsl(var(--primary)); }
         .msg-input-row {
-          display:flex; align-items:flex-end; gap:10px;
+          display:flex; align-items:flex-end; gap:8px;
           background:hsl(var(--background)); border:1.5px solid hsl(var(--border));
           border-radius:12px; padding:6px 6px 6px 16px; transition:border-color .15s;
+          width:100%; max-width:100%; box-sizing:border-box; overflow:hidden;
         }
         .msg-input-row:focus-within { border-color:hsl(var(--primary)); }
-        .msg-input-row input { flex:1; border:none; background:transparent; color:hsl(var(--foreground)); font-size:14px; outline:none; padding:6px 0; }
+        .msg-input-row input { flex:1 1 auto; min-width:0; border:none; background:transparent; color:hsl(var(--foreground)); font-size:14px; outline:none; padding:6px 0; }
         .msg-input-row input::placeholder { color:hsl(var(--muted-foreground)); }
         .msg-send-btn {
-          width:36px; height:36px; border-radius:9px; border:none; background:#2563eb; color:#fff;
+          width:36px; height:36px; min-width:36px; border-radius:9px; border:none; background:#2563eb; color:#fff;
           display:flex; align-items:center; justify-content:center; cursor:pointer;
           flex-shrink:0; transition:background .15s, transform .1s;
         }
@@ -1108,6 +1109,10 @@ export default function Messages() {
           .msg-chat.mobile-visible { transform:translateX(0); }
           .msg-back-btn { display:flex; }
           .msg-bubble,.poll-card { max-width:82%; }
+          .msg-input-area { padding:10px 12px 12px; }
+          .msg-input-row { padding:4px 4px 4px 12px; gap:6px; }
+          .msg-send-btn { width:32px; height:32px; min-width:32px; }
+          .msg-toolbar-btn { padding:4px 8px; }
         }
       `}</style>
 

@@ -46,7 +46,7 @@ interface Leave {
 
 /* ─── Constants ─────────────────────────────────────────── */
 
-const LEAVE_LIMIT = 12;
+const LEAVE_LIMIT = 24;
 const MIN_DATE_OFFSET = 1;
 
 const DATE_TYPE_LABELS: Record<string, string> = {
