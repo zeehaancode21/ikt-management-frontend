@@ -12,13 +12,14 @@ import {
   KeyRound,
   FileCheck2,
   Globe,
-  ArrowUpRight
+  ArrowUpRight,
+  Sparkles,
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
 import { UserAvatar } from "@/components/UserAvatar";
 
@@ -189,12 +190,176 @@ const sidebarStyles = `
     opacity: 1;
     transform: translate(0, 0);
   }
+
+  /* ── Logo click "magic" effect ─────────────────────────────────────── */
+  .sb-logo-btn {
+    position: relative;
+    display: inline-flex;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 999px;
+  }
+  .sb-logo-btn:focus-visible {
+    outline: 2px solid hsl(var(--sidebar-primary));
+    outline-offset: 4px;
+  }
+  .sb-logo-btn:active .sb-logo-img {
+    transform: scale(0.94);
+  }
+
+  @keyframes sb-logo-pop {
+    0%   { transform: scale(1) rotate(0deg); }
+    35%  { transform: scale(1.16) rotate(-5deg); }
+    65%  { transform: scale(0.94) rotate(4deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+  .sb-logo-pop {
+    animation: sb-logo-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes sb-shockwave {
+    0%   { transform: translate(-50%, -50%) scale(0.25); opacity: 0.85; border-width: 3px; }
+    100% { transform: translate(-50%, -50%) scale(2.4);  opacity: 0;    border-width: 0.5px; }
+  }
+  .sb-shockwave-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    border: 3px solid hsl(var(--sidebar-primary));
+    pointer-events: none;
+    animation: sb-shockwave 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .sb-shockwave-ring.sb-ring-delay {
+    animation-delay: 0.1s;
+    width: 96px;
+    height: 96px;
+    border-color: #fff;
+    opacity: 0.6;
+  }
+
+  @keyframes sb-particle-fly {
+    0%   { transform: translate(-50%, -50%) translate(0, 0) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -50%) translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+  }
+  .sb-particle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: sb-particle-fly 0.8s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+    box-shadow: 0 0 6px 1px currentColor;
+  }
+
+  @keyframes sb-sparkle-spin {
+    0%   { transform: translate(-50%, -50%) translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -50%) translate(var(--tx), var(--ty)) rotate(180deg) scale(0.3); opacity: 0; }
+  }
+  .sb-sparkle-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    pointer-events: none;
+    animation: sb-sparkle-spin 0.85s ease-out forwards;
+  }
+
+  @keyframes sb-magic-msg {
+    0%   { opacity: 0; transform: translate(-50%, 4px) scale(0.9); }
+    12%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    85%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -6px) scale(0.95); }
+  }
+  .sb-magic-message {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    z-index: 30;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: hsl(var(--sidebar-primary));
+    background: hsl(var(--sidebar-background, 222 47% 11%));
+    border: 1px solid hsl(var(--sidebar-border));
+    padding: 4px 12px;
+    border-radius: 999px;
+    pointer-events: none;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    animation: sb-magic-msg 1.7s ease forwards;
+  }
 `;
+
+// A little professional flourish — one is picked at random each time the
+// logo is clicked and shown briefly beneath it.
+const LOGO_MAGIC_MESSAGES = [
+  "✨ Great work starts here.",
+  "🚀 Let's build something great.",
+  "💡 Ideas into action.",
+  "🌟 Excellence, every day.",
+  "🔥 Momentum activated.",
+  "🤝 Better together.",
+];
+
+type LogoParticle = {
+  id: number;
+  tx: number;
+  ty: number;
+  delay: number;
+  size: number;
+  colorClass: string;
+  isIcon: boolean;
+};
 
 export const AppSidebar = () => {
   const { name, role, logout } = useAuth();
   const navigate = useNavigate();
   const [showCP, setShowCP] = useState(false);
+
+  // ── Logo click "magic" effect ────────────────────────────────────────
+  const [logoBurstKey, setLogoBurstKey] = useState(0);
+  const [particles, setParticles] = useState<LogoParticle[]>([]);
+  const [magicMessage, setMagicMessage] = useState<string | null>(null);
+  const magicTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (magicTimeoutRef.current) window.clearTimeout(magicTimeoutRef.current);
+    };
+  }, []);
+
+  const handleLogoClick = () => {
+    const PARTICLE_COUNT = 14;
+    const colors = ["text-yellow-300", "text-cyan-300", "text-white", "text-indigo-300", "text-emerald-300"];
+    const next: LogoParticle[] = Array.from({ length: PARTICLE_COUNT }).map((_, i) => {
+      const angle = (360 / PARTICLE_COUNT) * i + (Math.random() * 18 - 9);
+      const dist = 55 + Math.random() * 45;
+      const rad = (angle * Math.PI) / 180;
+      return {
+        id: Date.now() + i,
+        tx: Math.cos(rad) * dist,
+        ty: Math.sin(rad) * dist,
+        delay: Math.random() * 0.06,
+        size: 4 + Math.random() * 4,
+        colorClass: colors[i % colors.length],
+        isIcon: i % 4 === 0,
+      };
+    });
+
+    setParticles(next);
+    setLogoBurstKey((k) => k + 1);
+    setMagicMessage(LOGO_MAGIC_MESSAGES[Math.floor(Math.random() * LOGO_MAGIC_MESSAGES.length)]);
+
+    if (magicTimeoutRef.current) window.clearTimeout(magicTimeoutRef.current);
+    magicTimeoutRef.current = window.setTimeout(() => {
+      setParticles([]);
+      setMagicMessage(null);
+    }, 1700);
+  };
 
   const handleLogout = () => {
     logout();
@@ -240,7 +405,50 @@ export const AppSidebar = () => {
         {/* LOGO */}
         <div className="sb-logo-block border-b border-sidebar-border">
           <div className="sb-logo-glow" />
-          <img src="/finalised-logo.png" alt="Company Logo" className="sb-logo-img" />
+
+          <button
+            type="button"
+            onClick={handleLogoClick}
+            className="sb-logo-btn"
+            title="Click for a little surprise"
+            aria-label="Company logo"
+          >
+            <div key={logoBurstKey} className={cn(logoBurstKey > 0 && "sb-logo-pop")}>
+              <img src="/finalised-logo.png" alt="Company Logo" className="sb-logo-img" />
+            </div>
+
+            {logoBurstKey > 0 && (
+              <>
+                <span key={`ring-a-${logoBurstKey}`} className="sb-shockwave-ring" />
+                <span key={`ring-b-${logoBurstKey}`} className="sb-shockwave-ring sb-ring-delay" />
+              </>
+            )}
+
+            {particles.map((p) =>
+              p.isIcon ? (
+                <Sparkles
+                  key={p.id}
+                  className={cn("sb-sparkle-icon h-3.5 w-3.5", p.colorClass)}
+                  style={{ ["--tx" as string]: `${p.tx}px`, ["--ty" as string]: `${p.ty}px`, animationDelay: `${p.delay}s` } as CSSProperties}
+                />
+              ) : (
+                <span
+                  key={p.id}
+                  className={cn("sb-particle", p.colorClass)}
+                  style={{
+                    width: `${p.size}px`,
+                    height: `${p.size}px`,
+                    backgroundColor: "currentColor",
+                    ["--tx" as string]: `${p.tx}px`,
+                    ["--ty" as string]: `${p.ty}px`,
+                    animationDelay: `${p.delay}s`,
+                  } as CSSProperties}
+                />
+              )
+            )}
+
+            {magicMessage && <span className="sb-magic-message">{magicMessage}</span>}
+          </button>
 
           {/* Company website link */}
           <a

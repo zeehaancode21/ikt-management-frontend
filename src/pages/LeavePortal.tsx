@@ -39,6 +39,9 @@ interface Leave {
   toDate: string;
   dateType: string;
   halfSession?: string | null;
+  // Only relevant when dateType === "SHORT_LEAVE" — the number of hours
+  // requested for that single day (e.g. 1, 1.5, 2).
+  hours?: number | null;
   days: number;
   reason: string;
   status?: string;
@@ -49,9 +52,17 @@ interface Leave {
   pendingToDate?: string | null;
   pendingDateType?: string | null;
   pendingHalfSession?: string | null;
+  pendingHours?: number | null;
   pendingLeaveType?: string | null;
   pendingReason?: string | null;
   pendingDays?: number | null;
+}
+
+// Response shape returned by POST /leaves/request and POST /leaves/:id/reapproval
+interface LeaveSaveResponse {
+  leave: Leave;
+  convertedToHalfDay: boolean;
+  message?: string | null;
 }
 
 /* ─── Constants ─────────────────────────────────────────── */
@@ -59,18 +70,26 @@ interface Leave {
 const LEAVE_LIMIT = 24;
 const MIN_DATE_OFFSET = 1;
 
+// ── Short Leave quota constants (mirrors backend LeaveController) ───────
+const SHORT_LEAVE_MAX_HOURS_PER_DAY = 2;
+const SHORT_LEAVE_MAX_HOURS_PER_MONTH = 4;
+
 const DATE_TYPE_LABELS: Record<string, string> = {
   SINGLE: "Single day",
   RANGE: "Date range",
   HALF_DAY: "Half day",
+  SHORT_LEAVE: "Short leave",
 };
 
-const formatDateType = (dateType?: string, halfSession?: string | null) => {
+const formatDateType = (dateType?: string, halfSession?: string | null, hours?: number | null) => {
   if (!dateType) return "";
   const base = DATE_TYPE_LABELS[dateType] ?? dateType.toLowerCase().replace(/_/g, " ");
   if (dateType === "HALF_DAY" && halfSession) {
     const sessionLabel = halfSession === "SECOND_HALF" ? "2nd half" : "1st half";
     return `${base} · ${sessionLabel}`;
+  }
+  if (dateType === "SHORT_LEAVE" && hours) {
+    return `${base} · ${formatDays(hours)}h`;
   }
   return base;
 };
@@ -109,6 +128,12 @@ const fmt = (d: string) => {
   } catch {
     return d ?? "—";
   }
+};
+
+// Compact duration badge: "1.5h" for short leave, otherwise "Xd".
+const formatDurationBadge = (dateType?: string, days?: number | null, hours?: number | null) => {
+  if (dateType === "SHORT_LEAVE") return `${formatDays(hours || 0)}h`;
+  return `${formatDays(days || 0)}d`;
 };
 
 const getToday = () => format(new Date(), "yyyy-MM-dd");
@@ -491,7 +516,7 @@ const AppliedLeavesTable = ({
               <div className="flex items-center gap-2 flex-shrink-0">
                 <div className="flex items-center gap-1 text-sm font-bold text-foreground bg-muted rounded-lg px-2.5 py-1">
                   <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />
-                  {l.days}d
+                  {formatDurationBadge(l.dateType, l.days, l.hours)}
                 </div>
                 <StatusBadge status={l.status} />
               </div>
@@ -507,7 +532,7 @@ const AppliedLeavesTable = ({
                 }
               </div>
               {l.dateType && (
-                <p className="text-xs text-muted-foreground">{formatDateType(l.dateType, l.halfSession)}</p>
+                <p className="text-xs text-muted-foreground">{formatDateType(l.dateType, l.halfSession, l.hours)}</p>
               )}
               {l.reason && (
                 <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
@@ -578,8 +603,9 @@ const EmployeeView = () => {
   const { name } = useAuth();
 
   const [leaveType, setLeaveType] = useState("SICK");
-  const [dateMode, setDateMode] = useState<"single" | "range" | "half">("single");
+  const [dateMode, setDateMode] = useState<"single" | "range" | "half" | "short">("single");
   const [halfSession, setHalfSession] = useState<"FIRST_HALF" | "SECOND_HALF">("FIRST_HALF");
+  const [shortHours, setShortHours] = useState<string>("1");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [reason, setReason] = useState("");
@@ -591,8 +617,9 @@ const EmployeeView = () => {
 
   // ── Reapproval (change-request) modal state ──────────────────────────
   const [reapprovalTarget, setReapprovalTarget] = useState<Leave | null>(null);
-  const [reDateMode, setReDateMode] = useState<"single" | "range" | "half">("single");
+  const [reDateMode, setReDateMode] = useState<"single" | "range" | "half" | "short">("single");
   const [reHalfSession, setReHalfSession] = useState<"FIRST_HALF" | "SECOND_HALF">("FIRST_HALF");
+  const [reShortHours, setReShortHours] = useState<string>("1");
   const [reFromDate, setReFromDate] = useState("");
   const [reToDate, setReToDate] = useState("");
   const [reReason, setReReason] = useState("");
@@ -639,7 +666,23 @@ const EmployeeView = () => {
     setLeaveType("SICK");
     setDateMode("single");
     setHalfSession("FIRST_HALF");
+    setShortHours("1");
   };
+
+  // Short leave already used this month (any non-rejected request),
+  // computed from the employee's own loaded leave history — mirrors the
+  // cap enforced server-side.
+  const shortLeaveHoursThisMonth = (() => {
+    const now = new Date();
+    return leaves
+      .filter((l) => l.dateType === "SHORT_LEAVE" && l.status?.toUpperCase() !== "REJECTED")
+      .filter((l) => {
+        const d = new Date(l.fromDate);
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      })
+      .reduce((sum, l) => sum + (l.hours || 0), 0);
+  })();
+  const shortLeaveHoursRemainingThisMonth = Math.max(0, SHORT_LEAVE_MAX_HOURS_PER_MONTH - shortLeaveHoursThisMonth);
 
   const validateForm = (): string | null => {
     if (!name) return "User name is required. Please log in again.";
@@ -656,6 +699,13 @@ const EmployeeView = () => {
       const days = calcDays(fromDate, toDate);
       if (days > 30) return "Leave duration cannot exceed 30 days. Please contact your manager.";
     }
+    if (dateMode === "short") {
+      const h = parseFloat(shortHours);
+      if (!shortHours || isNaN(h) || h <= 0) return "Please enter the number of hours for your short leave.";
+      if (h > SHORT_LEAVE_MAX_HOURS_PER_DAY) {
+        return `Short leave is capped at ${SHORT_LEAVE_MAX_HOURS_PER_DAY} hours a day. Please select Half Day instead for longer time off.`;
+      }
+    }
     if (!reason.trim()) return "Please provide a reason for your leave.";
     if (reason.trim().length < 10) return "Reason must be at least 10 characters.";
     return null;
@@ -670,27 +720,37 @@ const EmployeeView = () => {
     }
     setSubmitting(true);
     const effectiveToDate = dateMode === "range" ? toDate : fromDate;
-    const dateType = dateMode === "half" ? "HALF_DAY" : dateMode.toUpperCase();
+    const dateType = dateMode === "half" ? "HALF_DAY" : dateMode === "short" ? "SHORT_LEAVE" : dateMode.toUpperCase();
     let days: number;
     if (dateMode === "range") days = calcDays(fromDate, toDate);
     else if (dateMode === "half") days = 0.5;
+    else if (dateMode === "short") days = 0;
     else days = 1;
     try {
-      await api.post("/leaves/request", {
+      const { data } = await api.post<LeaveSaveResponse>("/leaves/request", {
         employeeName: name,
         leaveType,
         fromDate,
         toDate: effectiveToDate,
         dateType,
         halfSession: dateMode === "half" ? halfSession : null,
+        hours: dateMode === "short" ? parseFloat(shortHours) : null,
         days,
         reason: reason.trim(),
       });
-      toast({
-        title: "Successfully Applied for Leave",
-        description: "Your leave request has been submitted successfully.",
-        className: "border-green-500 bg-green-500 text-white animate-success-bounce",
-      });
+      if (data?.convertedToHalfDay) {
+        toast({
+          title: "Recorded as Half Day",
+          description: data.message || "This exceeded the daily short-leave limit, so it was recorded as a Half Day leave instead.",
+          className: "border-amber-500 bg-amber-500 text-white",
+        });
+      } else {
+        toast({
+          title: "Successfully Applied for Leave",
+          description: "Your leave request has been submitted successfully.",
+          className: "border-green-500 bg-green-500 text-white animate-success-bounce",
+        });
+      }
       resetForm();
       await load();
     } catch (err) {
@@ -703,9 +763,13 @@ const EmployeeView = () => {
   // ── Reapproval (change-request) handlers ──────────────────────────────
   const openReapproval = (l: Leave) => {
     setReapprovalTarget(l);
-    const mode = l.dateType === "HALF_DAY" ? "half" : l.dateType === "RANGE" ? "range" : "single";
-    setReDateMode(mode as "single" | "range" | "half");
+    const mode =
+      l.dateType === "HALF_DAY" ? "half" :
+      l.dateType === "SHORT_LEAVE" ? "short" :
+      l.dateType === "RANGE" ? "range" : "single";
+    setReDateMode(mode as "single" | "range" | "half" | "short");
     setReHalfSession((l.halfSession as "FIRST_HALF" | "SECOND_HALF") || "FIRST_HALF");
+    setReShortHours(l.hours ? String(l.hours) : "1");
     setReFromDate(l.fromDate ? l.fromDate.slice(0, 10) : "");
     setReToDate(l.toDate ? l.toDate.slice(0, 10) : "");
     setReReason(l.reason || "");
@@ -724,6 +788,13 @@ const EmployeeView = () => {
       if (new Date(reToDate) < new Date(reFromDate)) return "End date cannot be before start date.";
       if (days > 30) return "Leave duration cannot exceed 30 days. Please contact your manager.";
     }
+    if (reDateMode === "short") {
+      const h = parseFloat(reShortHours);
+      if (!reShortHours || isNaN(h) || h <= 0) return "Please enter the number of hours for your short leave.";
+      if (h > SHORT_LEAVE_MAX_HOURS_PER_DAY) {
+        return `Short leave is capped at ${SHORT_LEAVE_MAX_HOURS_PER_DAY} hours a day. Please select Half Day instead for longer time off.`;
+      }
+    }
     if (!reReason.trim()) return "Please provide a reason for the change.";
     if (reReason.trim().length < 10) return "Reason must be at least 10 characters.";
     return null;
@@ -739,26 +810,36 @@ const EmployeeView = () => {
     }
     setReSubmitting(true);
     const effectiveToDate = reDateMode === "range" ? reToDate : reFromDate;
-    const newDateType = reDateMode === "half" ? "HALF_DAY" : reDateMode.toUpperCase();
+    const newDateType = reDateMode === "half" ? "HALF_DAY" : reDateMode === "short" ? "SHORT_LEAVE" : reDateMode.toUpperCase();
     let newDays: number;
     if (reDateMode === "range") newDays = calcDays(reFromDate, effectiveToDate);
     else if (reDateMode === "half") newDays = 0.5;
+    else if (reDateMode === "short") newDays = 0;
     else newDays = 1;
     try {
-      await api.post(`/leaves/${reapprovalTarget.id}/reapproval`, {
+      const { data } = await api.post<LeaveSaveResponse>(`/leaves/${reapprovalTarget.id}/reapproval`, {
         fromDate: reFromDate,
         toDate: effectiveToDate,
         dateType: newDateType,
         halfSession: reDateMode === "half" ? reHalfSession : null,
+        hours: reDateMode === "short" ? parseFloat(reShortHours) : null,
         leaveType: reapprovalTarget.leaveType,
         days: newDays,
         reason: reReason.trim(),
       });
-      toast({
-        title: "Change Requested",
-        description: "Your reapproval request has been sent for the owner's review.",
-        className: "border-green-500 bg-green-500 text-white animate-success-bounce",
-      });
+      if (data?.convertedToHalfDay) {
+        toast({
+          title: "Recorded as Half Day",
+          description: data.message || "This exceeded the daily short-leave limit, so it was recorded as a Half Day leave instead.",
+          className: "border-amber-500 bg-amber-500 text-white",
+        });
+      } else {
+        toast({
+          title: "Change Requested",
+          description: "Your reapproval request has been sent for the owner's review.",
+          className: "border-green-500 bg-green-500 text-white animate-success-bounce",
+        });
+      }
       setReapprovalTarget(null);
       await load();
     } catch (err) {
@@ -818,14 +899,20 @@ const EmployeeView = () => {
             </Select>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 overflow-visible">
             <Label>Date Type</Label>
-            <Select value={dateMode} onValueChange={(val) => setDateMode(val as "single" | "range" | "half")}>
+            <Select value={dateMode} onValueChange={(val) => setDateMode(val as "single" | "range" | "half" | "short")}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectContent className="overflow-visible z-50">
                 <SelectItem value="single">Single Date</SelectItem>
                 <SelectItem value="range">Date Range</SelectItem>
                 <SelectItem value="half">Half Day</SelectItem>
+                <SelectItem value="short">
+                  <LeaveOption
+                    title="Short Leave (Few Hours)"
+                    description={`For quick errands or appointments\nMax ${SHORT_LEAVE_MAX_HOURS_PER_DAY}h/day · ${SHORT_LEAVE_MAX_HOURS_PER_MONTH}h/month\nRequests over the daily cap are recorded as a Half Day`}
+                  />
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -878,6 +965,25 @@ const EmployeeView = () => {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">Duration: 0.5 day</p>
+            </div>
+          )}
+
+          {dateMode === "short" && (
+            <div className="space-y-2">
+              <Label htmlFor="short-hours">Number of Hours</Label>
+              <Input
+                id="short-hours"
+                type="number"
+                required
+                min={0.5}
+                max={SHORT_LEAVE_MAX_HOURS_PER_DAY}
+                step={0.5}
+                value={shortHours}
+                onChange={(e) => setShortHours(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Max {SHORT_LEAVE_MAX_HOURS_PER_DAY}h/day · {shortLeaveHoursRemainingThisMonth}h of {SHORT_LEAVE_MAX_HOURS_PER_MONTH}h remaining this month
+              </p>
             </div>
           )}
 
@@ -1042,12 +1148,13 @@ const EmployeeView = () => {
             <form onSubmit={submitReapproval} className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Date Type</Label>
-                <Select value={reDateMode} onValueChange={(val) => setReDateMode(val as "single" | "range" | "half")}>
+                <Select value={reDateMode} onValueChange={(val) => setReDateMode(val as "single" | "range" | "half" | "short")}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="single">Single Date</SelectItem>
                     <SelectItem value="range">Date Range</SelectItem>
                     <SelectItem value="half">Half Day</SelectItem>
+                    <SelectItem value="short">Short Leave (Few Hours)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1096,6 +1203,25 @@ const EmployeeView = () => {
                       <SelectItem value="SECOND_HALF">Second Half (Afternoon)</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              )}
+
+              {reDateMode === "short" && (
+                <div className="space-y-2">
+                  <Label htmlFor="re-short-hours">Number of Hours</Label>
+                  <Input
+                    id="re-short-hours"
+                    type="number"
+                    required
+                    min={0.5}
+                    max={SHORT_LEAVE_MAX_HOURS_PER_DAY}
+                    step={0.5}
+                    value={reShortHours}
+                    onChange={(e) => setReShortHours(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Max {SHORT_LEAVE_MAX_HOURS_PER_DAY}h/day · {SHORT_LEAVE_MAX_HOURS_PER_MONTH}h/month
+                  </p>
                 </div>
               )}
 
@@ -1336,7 +1462,7 @@ const OwnerView = () => {
                         </span>
                         <span className="inline-flex items-center gap-1 text-xs font-bold text-foreground bg-muted rounded-lg px-2 py-0.5">
                           <Clock3 className="h-3 w-3 text-muted-foreground" />
-                          {l.days ?? calcDays(l.fromDate, l.toDate)}d
+                          {formatDurationBadge(l.dateType, l.days ?? calcDays(l.fromDate, l.toDate), l.hours)}
                         </span>
                       </div>
 
@@ -1367,7 +1493,7 @@ const OwnerView = () => {
                               ? fmt(l.pendingFromDate || "")
                               : <>{fmt(l.pendingFromDate || "")} <span>→</span> {fmt(l.pendingToDate || "")}</>}
                             {l.pendingDateType && (
-                              <span className="font-normal text-amber-700">· {formatDateType(l.pendingDateType, l.pendingHalfSession)}</span>
+                              <span className="font-normal text-amber-700">· {formatDateType(l.pendingDateType, l.pendingHalfSession, l.pendingHours)}</span>
                             )}
                           </div>
                           {l.pendingReason && (
@@ -1520,7 +1646,7 @@ const OwnerView = () => {
                             </span>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <span className="inline-flex items-center gap-1 text-sm font-bold text-foreground bg-muted rounded-lg px-2.5 py-1">
-                                <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />{l.days}d
+                                <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />{formatDurationBadge(l.dateType, l.days, l.hours)}
                               </span>
                               <StatusBadge status={l.status} />
                             </div>
@@ -1533,7 +1659,7 @@ const OwnerView = () => {
                               {isSingleDay ? fmt(l.fromDate) : <>{fmt(l.fromDate)} <span className="text-muted-foreground font-normal">→</span> {fmt(l.toDate)}</>}
                             </div>
                             {l.dateType && (
-                              <span className="text-xs text-muted-foreground">{formatDateType(l.dateType, l.halfSession)}</span>
+                              <span className="text-xs text-muted-foreground">{formatDateType(l.dateType, l.halfSession, l.hours)}</span>
                             )}
                             {l.reason && (
                               <p className="text-xs text-muted-foreground line-clamp-2">{l.reason}</p>

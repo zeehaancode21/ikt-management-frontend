@@ -164,14 +164,34 @@ if (savedQueue) {
   }
 }
 
-export const getErrorMessage = (error: unknown) => {
-  if (
-    error &&
-    typeof error === "object" &&
-    "response" in error &&
-    (error as { response?: { data?: { message?: string } } }).response?.data?.message
-  ) {
-    return (error as { response: { data: { message: string } } }).response.data.message;
+// Robustly extracts a human-readable message from an Axios error.
+// The backend is inconsistent about error shape across controllers:
+//   • Most LeaveController (and similar) validation failures respond with
+//     a PLAIN STRING body, e.g. res.status(400).body("Only an approved
+//     leave can have a change requested.") → error.response.data is just
+//     that string.
+//   • GlobalExceptionHandler wraps uncaught exceptions as
+//     { success: false, error: "..." } (note: "error", not "message").
+//   • Some other endpoints may still use { message: "..." }.
+// This checks all of those, in order, before falling back to Axios's own
+// generic message.
+export const getErrorMessage = (error: unknown): string => {
+  if (error && typeof error === "object" && "response" in error) {
+    const response = (error as { response?: { data?: unknown } }).response;
+    const data = response?.data;
+
+    // 1. Plain string body — the most common case in this codebase.
+    if (typeof data === "string" && data.trim().length > 0) {
+      return data;
+    }
+
+    // 2. JSON body with a `message` field.
+    if (data && typeof data === "object") {
+      const obj = data as { message?: string; error?: string };
+      if (obj.message) return obj.message;
+      // 3. JSON body with an `error` field (GlobalExceptionHandler's ApiResponse.error()).
+      if (obj.error) return obj.error;
+    }
   }
   if (error instanceof Error) return error.message;
   return "Something went wrong";
