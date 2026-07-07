@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import * as XLSX from "xlsx";
 
 // ─── API CONFIG ───────────────────────────────────────────────────────────────
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
@@ -263,6 +264,18 @@ const styles = `
   .project-arrow { color: var(--text-dim); font-size: 1rem; transition: transform .2s, color .2s; }
   .project-card:hover .project-arrow { transform: translateX(4px); color: var(--copper); }
 
+  .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border-dark); background: var(--surface); color: var(--text-soft); font-size: 0.85rem; cursor: pointer; flex-shrink: 0; transition: background .15s, color .15s, border-color .15s, transform .15s; }
+  .icon-btn:hover:not(:disabled) { background: var(--indigo-dim); color: var(--indigo); border-color: var(--indigo); transform: translateY(-1px); }
+  .icon-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .view-table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow-sm); margin-bottom: 24px; }
+  .view-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; background: var(--surface); }
+  .view-table th { background: var(--surface-2); color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; padding: 11px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .view-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text); }
+  .view-table tr:last-child td { border-bottom: none; }
+  .view-table tr:hover td { background: var(--surface-2); }
+  .view-table td.view-field-label { color: var(--text-muted); font-weight: 600; width: 200px; white-space: nowrap; }
+
   .modal-overlay { position: fixed; inset: 0; z-index: 300; background: rgba(26,25,23,0.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 16px; }
   .modal-box { background: var(--surface); border: 1px solid var(--border-dark); border-radius: 20px; width: 100%; max-width: 960px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
   .modal-header { padding: 22px 26px 0; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface-2); }
@@ -487,6 +500,68 @@ function parseTeam(str) {
   return { modeler: m || "—", editor: e || "—", checker: c || "—" };
 }
 
+// ─── EXCEL EXPORT HELPERS ───────────────────────────────────────────────────
+function safeFileName(name = "project") {
+  return (name || "project").replace(/[\\/:*?"<>|]/g, "_").trim() || "project";
+}
+
+function buildProjectWorkbook(project, changeOrders = []) {
+  const team = parseTeam(project.team);
+
+  const mainRows = [
+    ["Field", "Value"],
+    ["Client", project.client || ""],
+    ["Project Name", project.projectName || ""],
+    ["Job Number", project.jobNumber || ""],
+    ["Year", project.year || ""],
+    ["Project Manager", project.projectManager || ""],
+    ["Approval Status", project.approvalStatus || ""],
+    ["FAB Status", project.fabStatus || ""],
+    ["Modeler", team.modeler === "—" ? "" : team.modeler],
+    ["Editor", team.editor === "—" ? "" : team.editor],
+    ["Checker", team.checker === "—" ? "" : team.checker],
+    ["Remarks", project.remarks || ""],
+    ["Created At", project.createdAt || ""],
+    ["Updated At", project.updatedAt || ""],
+  ];
+
+  const coHeader = [
+    "CO No.", "Description", "Status", "Amount",
+    "IFA Date", "IFA %", "IFF Date", "IFF %",
+    "Remarks", "Created At", "Updated At",
+  ];
+  const coRows = (changeOrders || []).map((c) => [
+    c.co || "",
+    c.description || "",
+    c.status || "",
+    c.amount ?? "",
+    c.ifaDate || "",
+    c.ifaPer || "",
+    c.iffDate || "",
+    c.iffPer || "",
+    c.remarks || "",
+    c.createdAt || "",
+    c.updatedAt || "",
+  ]);
+
+  const wb = XLSX.utils.book_new();
+
+  const wsMain = XLSX.utils.aoa_to_sheet(mainRows);
+  wsMain["!cols"] = [{ wch: 18 }, { wch: 42 }];
+  XLSX.utils.book_append_sheet(wb, wsMain, "Main Details");
+
+  const wsCo = XLSX.utils.aoa_to_sheet([coHeader, ...coRows]);
+  wsCo["!cols"] = coHeader.map((h) => ({ wch: Math.max(14, h.length + 2) }));
+  XLSX.utils.book_append_sheet(wb, wsCo, "Change Orders");
+
+  return wb;
+}
+
+function downloadProjectWorkbook(project, changeOrders = []) {
+  const wb = buildProjectWorkbook(project, changeOrders);
+  XLSX.writeFile(wb, `${safeFileName(project.projectName)}_details.xlsx`);
+}
+
 const fadeUp = {
   hidden: { opacity: 0, y: 22 },
   show: { opacity: 1, y: 0, transition: { staggerChildren: 0.06 } },
@@ -575,6 +650,13 @@ export default function Dashboard() {
   const [showAddYear, setShowAddYear] = useState(false);
   const [newYearInput, setNewYearInput] = useState("");
 
+  // ── View / Download export state ──────────────────────────────────────
+  const [viewProject, setViewProject] = useState(null);
+  const [viewData, setViewData] = useState(null);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewError, setViewError] = useState("");
+  const [downloadingKey, setDownloadingKey] = useState(null);
+
   const savingProjectRef = useRef(false);
   const deletingProjectRef = useRef(false);
   const savingCoRef = useRef(false);
@@ -620,6 +702,44 @@ export default function Dashboard() {
 
   const showConfirm = (title, message, onConfirm, itemName = "") => {
     setConfirmDialog({ isOpen: true, title, message, onConfirm, itemName });
+  };
+
+  // ── View project details (main + change orders) ────────────────────────
+  const handleViewProject = async (e, p) => {
+    e.stopPropagation();
+    setViewProject(p);
+    setViewData(null);
+    setViewError("");
+    setViewLoading(true);
+    try {
+      const cos = await api.getChangeOrders(p.projectName);
+      setViewData({ project: p, changeOrders: cos });
+    } catch (err) {
+      setViewError(err.message || "Failed to load project details");
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
+  const closeViewModal = () => {
+    setViewProject(null);
+    setViewData(null);
+    setViewError("");
+  };
+
+  // ── Download project details as Excel (.xlsx) ───────────────────────────
+  const handleDownloadProject = async (e, p) => {
+    e.stopPropagation();
+    const key = p.jobNumber || p.projectName;
+    setDownloadingKey(key);
+    try {
+      const cos = await api.getChangeOrders(p.projectName);
+      downloadProjectWorkbook(p, cos);
+    } catch (err) {
+      setError(err.message || "Failed to download project details");
+    } finally {
+      setDownloadingKey(null);
+    }
   };
 
   const handleSaveProject = async () => {
@@ -1047,6 +1167,27 @@ export default function Dashboard() {
                         </div>
                         <div className="project-meta">
                           {p.jobNumber && <span className="project-job">#{p.jobNumber}</span>}
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="View details"
+                            onClick={(e) => handleViewProject(e, p)}
+                          >
+                            👁
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="Download Excel"
+                            disabled={downloadingKey === (p.jobNumber || p.projectName)}
+                            onClick={(e) => handleDownloadProject(e, p)}
+                          >
+                            {downloadingKey === (p.jobNumber || p.projectName) ? (
+                              <span className="btn-spinner btn-spinner-dark" />
+                            ) : (
+                              "⬇"
+                            )}
+                          </button>
                           <span className="project-arrow">›</span>
                         </div>
                       </motion.div>
@@ -1199,6 +1340,110 @@ export default function Dashboard() {
                       </motion.div>
                     )}
                   </AnimatePresence>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ════ VIEW PROJECT DETAILS MODAL (Main + Change Orders) ════ */}
+        <AnimatePresence>
+          {viewProject && (
+            <motion.div className="modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={closeViewModal}>
+              <motion.div className="modal-box" variants={scaleIn} initial="hidden" animate="show" exit="exit"
+                onClick={e => e.stopPropagation()} style={{ position: "relative" }}>
+                <button className="modal-close" onClick={closeViewModal}>✕</button>
+
+                <div className="modal-header">
+                  <p className="modal-title">{viewProject.projectName}</p>
+                  <p className="modal-subtitle">
+                    {viewProject.client} &nbsp;·&nbsp; #{viewProject.jobNumber || "N/A"} &nbsp;·&nbsp; {viewProject.year}
+                  </p>
+                </div>
+
+                <div className="modal-body">
+                  {viewLoading ? (
+                    <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
+                      <div className="spinner" style={{ margin: "0 auto 12px" }} />
+                      Loading project details...
+                    </div>
+                  ) : viewError ? (
+                    <div className="error-banner">⚠ {viewError}</div>
+                  ) : viewData && (
+                    <>
+                      <div className="section-actions">
+                        <button
+                          className="btn btn-gold btn-sm"
+                          onClick={() => downloadProjectWorkbook(viewData.project, viewData.changeOrders)}
+                        >
+                          ⬇ Download as Excel
+                        </button>
+                      </div>
+
+                      <p className="detail-section-heading">Main Details</p>
+                      <div className="view-table-wrap">
+                        <table className="view-table">
+                          <tbody>
+                            {(() => {
+                              const team = parseTeam(viewData.project.team);
+                              const rows = [
+                                ["Client", viewData.project.client || "—"],
+                                ["Project Name", viewData.project.projectName || "—"],
+                                ["Job Number", viewData.project.jobNumber || "N/A"],
+                                ["Year", viewData.project.year || "—"],
+                                ["Project Manager", viewData.project.projectManager || "—"],
+                                ["Approval Status", viewData.project.approvalStatus || "—"],
+                                ["FAB Status", viewData.project.fabStatus || "—"],
+                                ["Modeler", team.modeler],
+                                ["Editor", team.editor],
+                                ["Checker", team.checker],
+                                ["Remarks", viewData.project.remarks || "—"],
+                              ];
+                              return rows.map(([label, value]) => (
+                                <tr key={label}>
+                                  <td className="view-field-label">{label}</td>
+                                  <td>{value}</td>
+                                </tr>
+                              ));
+                            })()}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <p className="detail-section-heading">Change Orders ({viewData.changeOrders.length})</p>
+                      {viewData.changeOrders.length === 0 ? (
+                        <p style={{ color: "var(--text-muted)", padding: "16px 0" }}>No change orders for this project.</p>
+                      ) : (
+                        <div className="view-table-wrap">
+                          <table className="view-table" style={{ minWidth: 900 }}>
+                            <thead>
+                              <tr>
+                                <th>#</th><th>CO</th><th>Description</th><th>Status</th><th>Amount</th>
+                                <th>IFA Date</th><th>IFA %</th><th>IFF Date</th><th>IFF %</th><th>Remarks</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {viewData.changeOrders.map((co, idx) => (
+                                <tr key={co.id}>
+                                  <td>{idx + 1}</td>
+                                  <td style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color: "var(--copper)" }}>{co.co || "—"}</td>
+                                  <td>{co.description || "—"}</td>
+                                  <td><span className={getBadgeClass(co.status)}>{co.status}</span></td>
+                                  <td style={{ fontFamily: "'JetBrains Mono',monospace" }}>${(co.amount || 0).toLocaleString()}</td>
+                                  <td>{co.ifaDate || "—"}</td>
+                                  <td>{co.ifaPer || "—"}</td>
+                                  <td>{co.iffDate || "—"}</td>
+                                  <td>{co.iffPer || "—"}</td>
+                                  <td>{co.remarks || "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </motion.div>
             </motion.div>
