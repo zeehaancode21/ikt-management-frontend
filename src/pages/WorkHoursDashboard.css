@@ -1,0 +1,403 @@
+/* WorkHoursDashboard.css
+   ────────────────────────────────────────────────────────────────────────
+   Visual language: this is a steel-detailing shop's hours dashboard, so the
+   signature motif is the blueprint — faint drafting-grid card faces,
+   corner registration marks that resolve on hover, a dimension-line
+   divider in the filter bar, a real drawing title block keyed to the
+   active filters, and tabular/mono numerals for the hour readouts (an
+   "instrument panel" contrast against the plain-sans labels and copy).
+
+   All colors are drawn from the app's existing HSL design tokens
+   (index.css) so this fully respects light/dark mode — the only fixed
+   hex values are the small set of category accents, which intentionally
+   reuse the exact hues already used for work-type badges on the Work
+   Report page, so the two screens read as one system.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.whd-page {
+  position: relative;
+  /* Body copy is plain sans (the app default). Mono is reserved for
+     data/instrumentation: figures, units, the title block, tick labels. */
+}
+
+.whd-mono {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+/* faint blueprint grid behind the whole page, barely-there */
+.whd-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(hsl(var(--foreground) / 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--foreground) / 0.015) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+}
+
+/* ── Filter bar : a small "control panel" with a dimension-line divider ── */
+
+.whd-filter-bar {
+  position: relative;
+  overflow: hidden;
+}
+
+.whd-filter-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(hsl(var(--foreground) / 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--foreground) / 0.03) 1px, transparent 1px);
+  background-size: 18px 18px;
+  pointer-events: none;
+}
+
+.whd-filter-bar label {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.whd-dim-divider {
+  position: relative;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+@media (min-width: 768px) {
+  .whd-dim-divider {
+    display: flex;
+  }
+}
+
+.whd-dim-divider::before {
+  content: "";
+  width: 0;
+  height: 60%;
+  border-left: 1.5px dashed hsl(var(--border));
+}
+
+.whd-dim-divider .whd-dim-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: hsl(var(--primary) / 0.5);
+  top: 20%;
+}
+
+.whd-refresh-btn svg {
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.whd-refresh-btn.whd-spinning svg {
+  transform: rotate(-360deg);
+}
+
+/* ── Title block ─────────────────────────────────────────────────────────
+   A real engineering-drawing title block, doubling as a live readout of
+   the current filter state. Sits directly under the filter bar. */
+
+.whd-title-block {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.6rem;
+  overflow: hidden;
+  background: hsl(var(--card));
+}
+
+.whd-title-cell {
+  padding: 8px 14px;
+  border-right: 1px solid hsl(var(--border));
+  min-width: 0;
+}
+
+.whd-title-cell:last-child {
+  border-right: none;
+}
+
+.whd-title-cell-key {
+  display: block;
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 2px;
+}
+
+.whd-title-cell-value {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 640px) {
+  .whd-title-block {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .whd-title-cell:nth-child(2) {
+    border-right: none;
+  }
+  .whd-title-cell:nth-child(3) {
+    border-top: 1px solid hsl(var(--border));
+  }
+  .whd-title-cell:nth-child(4) {
+    border-top: 1px solid hsl(var(--border));
+  }
+}
+
+/* ── Section label with a drafting "scale" tick rule ─────────────────── */
+
+.whd-section-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.whd-section-label h2 {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.whd-section-label .whd-section-tag {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: hsl(var(--muted-foreground));
+}
+
+.whd-scale-rule {
+  flex: 1;
+  height: 6px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    hsl(var(--border)) 0px,
+    hsl(var(--border)) 1px,
+    transparent 1px,
+    transparent 6px
+  );
+  background-position: left center;
+  background-repeat: repeat-x;
+  background-size: 100% 1px;
+  opacity: 0.9;
+}
+
+/* ── Stat cards ───────────────────────────────────────────────────────── */
+
+/* Outer wrapper stays overflow:visible so the tooltip can escape;
+   the inner .whd-card clips its own grid texture + corner marks. */
+.whd-card-outer {
+  position: relative;
+  opacity: 0;
+  transform: translateY(14px);
+  animation: whd-rise 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: var(--whd-delay, 0ms);
+}
+
+.whd-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.9rem;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.whd-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px -12px hsl(var(--foreground) / 0.18);
+  border-color: hsl(var(--whd-accent) / 0.45);
+}
+
+/* faint blueprint grid texture on the card face */
+.whd-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(hsl(var(--foreground) / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--foreground) / 0.035) 1px, transparent 1px);
+  background-size: 14px 14px;
+  pointer-events: none;
+}
+
+/* drafting-style corner registration marks, resolving in on hover */
+.whd-corner {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  border-color: hsl(var(--whd-accent));
+  pointer-events: none;
+}
+.whd-corner.tl { top: 7px; left: 7px; border-top: 2px solid; border-left: 2px solid; transform: translate(-4px, -4px); }
+.whd-corner.tr { top: 7px; right: 7px; border-top: 2px solid; border-right: 2px solid; transform: translate(4px, -4px); }
+.whd-corner.bl { bottom: 7px; left: 7px; border-bottom: 2px solid; border-left: 2px solid; transform: translate(-4px, 4px); }
+.whd-corner.br { bottom: 7px; right: 7px; border-bottom: 2px solid; border-right: 2px solid; transform: translate(4px, 4px); }
+.whd-card:hover .whd-corner {
+  opacity: 0.9;
+  transform: translate(0, 0);
+}
+
+.whd-card-body {
+  position: relative;
+  z-index: 1;
+}
+
+.whd-icon-chip {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.whd-card:hover .whd-icon-chip {
+  transform: scale(1.1) rotate(-4deg);
+}
+
+.whd-label {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.whd-figure {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.whd-bar-track {
+  height: 5px;
+  border-radius: 999px;
+  background: hsl(var(--muted));
+  overflow: hidden;
+}
+
+.whd-bar-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: hsl(var(--whd-accent));
+  transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.whd-share-label {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Emphasis card (grand total) gets a slightly stronger surface, not just a ring */
+.whd-card-emphasis {
+  background: linear-gradient(180deg, hsl(var(--primary) / 0.05), transparent 60%);
+}
+
+/* ── Custom Tooltip ─────────────────────────────────────────────────── */
+
+.whd-tooltip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  font-size: 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: whd-tooltip-in 0.2s ease-out;
+}
+
+.whd-tooltip-arrow {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid hsl(var(--foreground));
+}
+
+@keyframes whd-tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* ── Skeleton loading state (replaces the generic spinner) ─────────────── */
+
+.whd-skeleton {
+  border-radius: 0.9rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.whd-skel-bar {
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted) / 0.5) 37%,
+    hsl(var(--muted)) 63%
+  );
+  background-size: 400% 100%;
+  animation: whd-shimmer 1.6s ease infinite;
+}
+
+/* ── Error message styling ────────────────────────────────────────────── */
+
+.whd-page .text-destructive {
+  font-weight: 500;
+}
+
+@keyframes whd-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+@keyframes whd-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Motion-safety ───────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .whd-card-outer,
+  .whd-card,
+  .whd-corner,
+  .whd-icon-chip,
+  .whd-bar-fill,
+  .whd-skel-bar,
+  .whd-refresh-btn svg,
+  .whd-tooltip {
+    animation: none !important;
+    transition: none !important;
+  }
+  .whd-card-outer {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Prevent tooltip from going off-screen on mobile */
+@media (max-width: 640px) {
+  .whd-tooltip {
+    font-size: 11px;
+    padding: 6px 10px;
+    white-space: normal;
+    min-width: 150px;
+    text-align: center;
+  }
+}

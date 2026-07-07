@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import LeavePortal from "./pages/LeavePortal";
 import WorkProgress from "./pages/WorkProgress";
 import WorkReport from "./pages/WorkReport";
+import WorkHoursDashboard from "./pages/WorkHoursDashboard";
 import AdminConsole from "./pages/AdminConsole";
 import NotFound from "./pages/NotFound";
 import Messages from "./pages/Messages";
@@ -70,6 +71,7 @@ function App() {
                   <Route path="/my-profile" element={<MyProfile />} />
                   <Route path="/admin" element={<OwnerOnly><AdminConsole /></OwnerOnly>} />
                   <Route path="/dashboard" element={<OwnerOrLead><Dashboard /></OwnerOrLead>} />
+                  <Route path="/hours-dashboard" element={<OwnerOrLead><WorkHoursDashboard /></OwnerOrLead>} />
                   <Route path="/progress" element={<WorkProgress />} />
                   <Route path="/leave" element={<LeavePortal />} />
                   <Route path="/reports" element={<WorkReport />} />

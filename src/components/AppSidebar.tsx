@@ -14,6 +14,7 @@ import {
   Globe,
   ArrowUpRight,
   Sparkles,
+  BarChart3,
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
@@ -58,17 +59,18 @@ const sidebarStyles = `
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 14px;
-    padding: 26px 22px 20px;
+    gap: 10px;
+    padding: 16px 22px 12px;
     overflow: visible;
+    flex-shrink: 0;
   }
 
   .sb-logo-glow {
     position: absolute;
-    top: 34px;
+    top: 22px;
     left: 50%;
-    width: 140px;
-    height: 140px;
+    width: 110px;
+    height: 110px;
     background: radial-gradient(circle, hsl(var(--sidebar-primary) / 0.5) 0%, transparent 70%);
     filter: blur(18px);
     pointer-events: none;
@@ -77,7 +79,7 @@ const sidebarStyles = `
 
   .sb-logo-img {
     position: relative;
-    height: 6rem;
+    height: 4rem;
     width: auto;
     object-fit: contain;
     animation: sb-fade-in 0.5s ease-out;
@@ -337,6 +339,28 @@ const sidebarStyles = `
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
     border: 1px solid rgba(255, 255, 255, 0.2);
   }
+
+  /* ── Nav scroll region ─────────────────────────────────────────────────
+     The nav list is the ONLY part of the sidebar allowed to shrink/scroll.
+     Logo block, user chip, and footer are flex-shrink: 0 (see inline
+     classes) so they always render in full; if the viewport is short
+     (small screens, high browser zoom, etc.) the nav area scrolls instead
+     of any item silently disappearing. The scrollbar is kept slim but
+     visible at all times so it's clear there's more to scroll to. */
+  .sb-nav {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--sidebar-primary) / 0.6) transparent;
+  }
+  .sb-nav::-webkit-scrollbar {
+    width: 6px;
+  }
+  .sb-nav::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sb-nav::-webkit-scrollbar-thumb {
+    background: hsl(var(--sidebar-primary) / 0.6);
+    border-radius: 999px;
+  }
 `;
 
 // A little professional flourish — one is picked at random each time the
@@ -437,6 +461,7 @@ export const AppSidebar = () => {
     role === "OWNER"
       ? [
         { to: "/admin", label: "Admin Console", icon: ShieldCheck },
+        { to: "/hours-dashboard", label: "Dashboard", icon: BarChart3 },
         { to: "/dashboard", label: "Projects", icon: Briefcase },
         { to: "/documents", label: "Documents", icon: FolderOpen },
         { to: "/reports", label: "Work Report", icon: FileText },
@@ -538,17 +563,17 @@ export const AppSidebar = () => {
         {/* USER CHIP — shows profile picture if uploaded */}
         <button
           onClick={handleProfileClick}
-          className="w-full border-b border-sidebar-border px-6 py-4 transition-colors hover:bg-sidebar-accent/50 cursor-pointer text-left"
+          className="w-full shrink-0 border-b border-sidebar-border px-6 py-3 transition-colors hover:bg-sidebar-accent/50 cursor-pointer text-left"
         >
           <div className="flex items-center gap-3">
             {name ? (
               <UserAvatar
                 username={name}
-                size={40}
+                size={36}
                 style={{ border: "2px solid rgba(255,255,255,0.2)" }}
               />
             ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sidebar-accent text-sm font-semibold text-white">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-accent text-sm font-semibold text-white">
                 U
               </div>
             )}
@@ -561,14 +586,14 @@ export const AppSidebar = () => {
         </button>
 
         {/* NAV */}
-        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
+        <nav className="sb-nav min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-3">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                   isActive
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
                     : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-white"
@@ -585,15 +610,15 @@ export const AppSidebar = () => {
         <div className="shrink-0 border-t border-sidebar-border">
           {/* Camera Button - Owner Only */}
           {role === "OWNER" && (
-            <div className="p-3 border-b border-sidebar-border">
+            <div className="p-2 border-b border-sidebar-border">
               <button
                 onClick={() => {
                   const cameraUrl = "rtsp://admin:password@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0";
                   window.open(`/camera-viewer?url=${encodeURIComponent(cameraUrl)}`, "_blank");
                 }}
-                className="w-full flex justify-center py-3 hover:bg-sidebar-accent rounded-md transition-colors group"
+                className="w-full flex justify-center py-1.5 hover:bg-sidebar-accent rounded-md transition-colors group"
               >
-                <GiCctvCamera className="text-4xl text-blue-500 group-hover:text-blue-400 transition-colors" />
+                <GiCctvCamera className="text-3xl text-blue-500 group-hover:text-blue-400 transition-colors" />
               </button>
             </div>
           )}
