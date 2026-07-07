@@ -7,6 +7,7 @@ export interface ProfileForm {
   fullName: string;
   email: string;
   dateOfBirth: string;
+  dateOfJoining: string;
   mobileNo: string;
   currentAddress: string;
 }
@@ -14,6 +15,10 @@ export interface ProfileForm {
 export interface ProfileResponse extends ProfileForm {
   username: string;
   hasProfilePicture: boolean;
+  // Annual leave entitlement in days, computed server-side from
+  // dateOfJoining: 24 once the employee has completed 3 years of service,
+  // 18 before that.
+  leaveLimit: number;
 }
 
 // Get auth token from localStorage

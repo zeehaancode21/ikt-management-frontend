@@ -67,7 +67,12 @@ interface LeaveSaveResponse {
 
 /* ─── Constants ─────────────────────────────────────────── */
 
-const LEAVE_LIMIT = 24;
+// Default/fallback leave limit shown before the real, per-employee value
+// (derived from their date of joining) has loaded from
+// GET /leaves/leave-limit. See LeavePolicy on the backend:
+//   • 3+ years of service → 24 days/year
+//   • under 1 year       → 18 days/year
+const DEFAULT_LEAVE_LIMIT = 18;
 const MIN_DATE_OFFSET = 1;
 
 // ── Short Leave quota constants (mirrors backend LeaveController) ───────
@@ -321,7 +326,7 @@ const LeaveOption = ({
    LEAVE TAKEN SUMMARY
 ========================================================= */
 
-const LeaveTakenSummary = ({ leaves }: { leaves: Leave[] }) => {
+const LeaveTakenSummary = ({ leaves, leaveLimit }: { leaves: Leave[]; leaveLimit: number }) => {
   const currentYear = new Date().getFullYear();
 
   const takenDays = leaves
@@ -332,8 +337,8 @@ const LeaveTakenSummary = ({ leaves }: { leaves: Leave[] }) => {
     )
     .reduce((sum, l) => sum + (l.days || 0), 0);
 
-  const isOverLimit = takenDays > LEAVE_LIMIT;
-  const remainingDays = LEAVE_LIMIT - takenDays;
+  const isOverLimit = takenDays > leaveLimit;
+  const remainingDays = leaveLimit - takenDays;
 
   const ringColor   = isOverLimit ? "#ef4444" : "#22c55e";
   const pulseColor  = isOverLimit ? "#ef4444" : "#22c55e";
@@ -382,7 +387,7 @@ const LeaveTakenSummary = ({ leaves }: { leaves: Leave[] }) => {
     };
   }, [started, takenDays]);
 
-  const fillRatio = Math.min(takenDays / LEAVE_LIMIT, 1);
+  const fillRatio = Math.min(takenDays / leaveLimit, 1);
   const circumference = 2 * Math.PI * 44;
 
   return (
@@ -396,7 +401,7 @@ const LeaveTakenSummary = ({ leaves }: { leaves: Leave[] }) => {
             ⚠ Leave Limit Exceeded!
           </p>
           <p className="mt-0.5 text-xs text-red-500">
-            You have taken {takenDays} days — {Math.abs(remainingDays)} day{Math.abs(remainingDays) !== 1 ? "s" : ""} over the {LEAVE_LIMIT}-day limit.
+            You have taken {takenDays} days — {Math.abs(remainingDays)} day{Math.abs(remainingDays) !== 1 ? "s" : ""} over the {leaveLimit}-day limit.
           </p>
         </div>
       )}
@@ -444,11 +449,11 @@ const LeaveTakenSummary = ({ leaves }: { leaves: Leave[] }) => {
           <p className="text-sm text-muted-foreground">No approved leaves taken this year.</p>
         ) : isOverLimit ? (
           <p className="text-sm font-semibold text-red-500">
-            {takenDays} / {LEAVE_LIMIT} days — exceeded by {Math.abs(remainingDays)} day{Math.abs(remainingDays) !== 1 ? "s" : ""}
+            {takenDays} / {leaveLimit} days — exceeded by {Math.abs(remainingDays)} day{Math.abs(remainingDays) !== 1 ? "s" : ""}
           </p>
         ) : (
           <p className="text-sm font-medium text-green-600">
-            {takenDays} / {LEAVE_LIMIT} days taken &mdash;{" "}
+            {takenDays} / {leaveLimit} days taken &mdash;{" "}
             <span className="font-semibold">{remainingDays} day{remainingDays !== 1 ? "s" : ""} remaining</span>
           </p>
         )}
@@ -614,6 +619,9 @@ const EmployeeView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [historyTab, setHistoryTab] = useState<"applied" | "taken">("applied");
+  // Annual leave entitlement, derived from date of joining (24 days once
+  // past 3 years of service, 18 before that) — fetched from the backend.
+  const [leaveLimit, setLeaveLimit] = useState<number>(DEFAULT_LEAVE_LIMIT);
 
   // ── Reapproval (change-request) modal state ──────────────────────────
   const [reapprovalTarget, setReapprovalTarget] = useState<Leave | null>(null);
@@ -658,6 +666,42 @@ const EmployeeView = () => {
       load();
     }
   }, [load]);
+
+  // Fetch this employee's annual leave limit (24 vs 18 days, based on
+  // date of joining). Re-fetched on mount AND whenever the tab regains
+  // focus/visibility — otherwise, if the profile's Date of Joining is
+  // changed (e.g. in another tab, or on the Profile page and then
+  // navigated back to), this page would keep showing whatever value it
+  // fetched last until a hard reload.
+  const fetchLeaveLimit = useCallback(async () => {
+    if (!name) return;
+    try {
+      const { data } = await api.get<{ leaveLimit: number }>("/leaves/leave-limit", {
+        params: { employeeName: name },
+        headers: { "Cache-Control": "no-cache" },
+      });
+      setLeaveLimit(data.leaveLimit);
+    } catch {
+      // Non-fatal — keep showing whatever limit we already have.
+    }
+  }, [name]);
+
+  useEffect(() => {
+    fetchLeaveLimit();
+  }, [fetchLeaveLimit]);
+
+  useEffect(() => {
+    const onFocus = () => fetchLeaveLimit();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") fetchLeaveLimit();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [fetchLeaveLimit]);
 
   const resetForm = () => {
     setFromDate("");
@@ -1103,7 +1147,7 @@ const EmployeeView = () => {
               cancelingId={cancelingId}
             />
           ) : (
-            <LeaveTakenSummary leaves={leaves} />
+            <LeaveTakenSummary leaves={leaves} leaveLimit={leaveLimit} />
           )}
         </div>
       </section>
@@ -1271,6 +1315,9 @@ const OwnerView = () => {
   const [empLeaves, setEmpLeaves] = useState<Leave[]>([]);
   const [empLoading, setEmpLoading] = useState(false);
   const [empError, setEmpError] = useState<string | null>(null);
+  // Selected employee's annual leave limit (24 vs 18 days, based on date
+  // of joining), fetched alongside their leave history.
+  const [empLeaveLimit, setEmpLeaveLimit] = useState<number>(DEFAULT_LEAVE_LIMIT);
   
   // ✅ Add refs to prevent double loading
   const initialLoadDoneRef = useRef(false);
@@ -1341,8 +1388,14 @@ const OwnerView = () => {
     setEmpError(null);
     setEmpLeaves([]);
     try {
-      const { data } = await api.get<Leave[]>("/leaves/employee-details", { params: { employeeName: empName } });
+      const [{ data }, limitRes] = await Promise.all([
+        api.get<Leave[]>("/leaves/employee-details", { params: { employeeName: empName } }),
+        api
+          .get<{ leaveLimit: number }>("/leaves/leave-limit", { params: { employeeName: empName } })
+          .catch(() => null), // non-fatal — fall back to the default limit
+      ]);
       setEmpLeaves(data);
+      setEmpLeaveLimit(limitRes ? limitRes.data.leaveLimit : DEFAULT_LEAVE_LIMIT);
     } catch (err) {
       setEmpError(getErrorMessage(err));
     } finally {
@@ -1355,6 +1408,22 @@ const OwnerView = () => {
     setSelectedEmployee(name);
     loadEmpLeaves(name);
   };
+
+  // Keep the selected employee's leave limit/history fresh if their
+  // Date of Joining is edited while this tab is sitting in the background.
+  useEffect(() => {
+    if (!selectedEmployee) return;
+    const refetch = () => loadEmpLeaves(selectedEmployee);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refetch();
+    };
+    window.addEventListener("focus", refetch);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", refetch);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [selectedEmployee, loadEmpLeaves]);
 
   const act = async (id: string | number, action: "APPROVED" | "REJECTED") => {
     setActingId(id);
@@ -1580,8 +1649,8 @@ const OwnerView = () => {
               const empTakenDays = empLeaves
                 .filter((l) => l.status?.toUpperCase() === "APPROVED" && new Date(l.fromDate).getFullYear() === currentYear)
                 .reduce((sum, l) => sum + (l.days || 0), 0);
-              const empIsOver = empTakenDays > LEAVE_LIMIT;
-              const empRemaining = LEAVE_LIMIT - empTakenDays;
+              const empIsOver = empTakenDays > empLeaveLimit;
+              const empRemaining = empLeaveLimit - empTakenDays;
 
               const sortedEmpLeaves = [...empLeaves].sort((a, b) => {
                 try { return new Date(b.fromDate).getTime() - new Date(a.fromDate).getTime(); }
@@ -1607,8 +1676,8 @@ const OwnerView = () => {
                           </p>
                           <p className={`text-xs mt-0.5 ${empIsOver ? "text-red-500" : "text-green-600"}`}>
                             {empIsOver
-                              ? `${empTakenDays} / ${LEAVE_LIMIT} days — ${Math.abs(empRemaining)} day${Math.abs(empRemaining) !== 1 ? "s" : ""} over limit`
-                              : `${empTakenDays} / ${LEAVE_LIMIT} days — ${empRemaining} day${empRemaining !== 1 ? "s" : ""} remaining`}
+                              ? `${empTakenDays} / ${empLeaveLimit} days — ${Math.abs(empRemaining)} day${Math.abs(empRemaining) !== 1 ? "s" : ""} over limit`
+                              : `${empTakenDays} / ${empLeaveLimit} days — ${empRemaining} day${empRemaining !== 1 ? "s" : ""} remaining`}
                           </p>
                         </div>
                       </div>
@@ -1616,12 +1685,12 @@ const OwnerView = () => {
                       {/* Progress bar — always visible, full width on mobile */}
                       <div className="flex flex-col items-end gap-1 w-full sm:w-auto">
                         <span className={`text-xs font-semibold ${empIsOver ? "text-red-600" : "text-green-700"}`}>
-                          {empTakenDays} / {LEAVE_LIMIT} days
+                          {empTakenDays} / {empLeaveLimit} days
                         </span>
                         <div className="h-2 w-full sm:w-28 rounded-full bg-white/60 overflow-hidden border border-white/40">
                           <div
                             className={`h-full rounded-full transition-all duration-700 ${empIsOver ? "bg-red-500" : "bg-green-500"}`}
-                            style={{ width: `${Math.min((empTakenDays / LEAVE_LIMIT) * 100, 100)}%` }}
+                            style={{ width: `${Math.min((empTakenDays / empLeaveLimit) * 100, 100)}%` }}
                           />
                         </div>
                       </div>

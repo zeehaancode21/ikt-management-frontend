@@ -84,6 +84,7 @@ export default function MyProfile() {
     fullName: "",
     email: "",
     dateOfBirth: "",
+    dateOfJoining: "",
     mobileNo: "",
     currentAddress: "",
   });
@@ -200,6 +201,7 @@ export default function MyProfile() {
           fullName: profile.fullName ?? "",
           email: profile.email ?? "",
           dateOfBirth: profile.dateOfBirth ?? "",
+          dateOfJoining: profile.dateOfJoining ?? "",
           mobileNo: profile.mobileNo ?? "",
           currentAddress: profile.currentAddress ?? "",
         });
@@ -653,6 +655,19 @@ export default function MyProfile() {
                 className="mt-1.5"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="dateOfJoining">Date of Joining</Label>
+            <Input
+              id="dateOfJoining"
+              type="date"
+              value={form.dateOfJoining}
+              onChange={(e) =>
+                setForm({ ...form, dateOfJoining: e.target.value })
+              }
+              className="mt-1.5"
+            />
           </div>
 
           <div>
