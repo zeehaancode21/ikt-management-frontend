@@ -1,12 +1,14 @@
-import axios from "axios";
+import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 
 export type Role = "OWNER" | "USER" | "ADMIN" | "MANAGER";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
+// Render free-tier cold starts can take 30-60s, so the timeout needs enough
+// room for that on top of normal request time.
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 70000,
   headers: {
     "Content-Type": "application/json",
   },
@@ -24,10 +26,37 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// ─── Cold-start retry config ────────────────────────────────────────────────
+// Extends the request config so TypeScript knows about our custom flag.
+type RetryableConfig = InternalAxiosRequestConfig & { _retriedForColdStart?: boolean };
+
+// Optional hook the UI can set to show a "waking up server..." message.
+// Call api.setColdStartHandler(fn) once, e.g. in your App root, to wire it up.
+let onColdStartRetry: (() => void) | null = null;
+export const setColdStartHandler = (fn: (() => void) | null) => {
+  onColdStartRetry = fn;
+};
+
+const isLikelyColdStart = (error: AxiosError): boolean => {
+  // No response at all (timeout or connection refused/reset) is the
+  // signature of hitting a sleeping Render free-tier service.
+  return !error.response;
+};
+
 // ─── Response interceptor ───────────────────────────────────────────────────
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error: AxiosError) => {
+    const config = error.config as RetryableConfig | undefined;
+
+    // Retry once if this looks like a cold start and we haven't retried yet.
+    if (config && isLikelyColdStart(error) && !config._retriedForColdStart) {
+      config._retriedForColdStart = true;
+      if (onColdStartRetry) onColdStartRetry();
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      return api(config);
+    }
+
     // Handle 401 Unauthorized — clear session and redirect to login
     if (error.response?.status === 401) {
       localStorage.removeItem("token");
