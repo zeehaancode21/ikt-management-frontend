@@ -10,6 +10,8 @@
  *  - Ft·In·Fr mode for construction measurements
  *  - Full keyboard support
  *  - Persistent state (mode, position) across sessions
+ *  - Download buttons for Mac/Windows/Android installers with animated popup
+ *  - Automatic dark/light mode detection
  *
  * Bug fixes:
  *  FIX 1 — = shows result in main display (not only the history list)
@@ -30,7 +32,7 @@ import {
   type ErrorInfo,
   type ReactNode,
 } from 'react';
-import { Calculator, X, GripHorizontal, Delete } from 'lucide-react';
+import { Calculator, X, GripHorizontal, Delete, Download, Monitor, Laptop, Smartphone } from 'lucide-react';
 
 /* ── Error boundary ─────────────────────────────── */
 
@@ -164,6 +166,144 @@ const FI_NUM_LAYOUT = ['7','8','9','4','5','6','1','2','3','.','0','⌫'] as con
 const OP_SYM: Record<string, string> = { '+':'+', '-':'−', '*':'×', '/':'÷' };
 const PANEL_WIDTH = 312;
 
+/* ── Theme detection ──────────────────────────── */
+
+function useTheme() {
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return document.documentElement.classList.contains('dark') ||
+           window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => {
+      setIsDark(e.matches);
+    };
+    
+    // Also check for class changes on document
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    mediaQuery.addEventListener('change', handler);
+    return () => {
+      mediaQuery.removeEventListener('change', handler);
+      observer.disconnect();
+    };
+  }, []);
+
+  return isDark;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Download Popup Component - Auto Dark/Light Theme
+═══════════════════════════════════════════════════════ */
+
+function DownloadPopup({ onClose, onDownload }: { 
+  onClose: () => void; 
+  onDownload: (os: 'mac' | 'windows' | 'android') => void;
+}) {
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const isDark = useTheme();
+
+  const handleDownloadClick = (os: 'mac' | 'windows' | 'android') => {
+    setSelected(os);
+    setTimeout(() => {
+      onDownload(os);
+      setSelected(null);
+    }, 300);
+  };
+
+  return (
+    <div className={`fc-download-overlay ${isDark ? 'dark' : 'light'}`} onClick={onClose}>
+      <div className={`fc-download-popup ${isDark ? 'dark' : 'light'}`} onClick={(e) => e.stopPropagation()}>
+        <button className={`fc-download-close ${isDark ? 'dark' : 'light'}`} onClick={onClose}>
+          <X size={20} />
+        </button>
+        
+        <div className="fc-download-header">
+          <div className={`fc-download-icon-wrap ${isDark ? 'dark' : 'light'}`}>
+            <Download size={28} className="fc-download-icon" />
+          </div>
+          <h3 className={isDark ? 'dark' : 'light'}>Download Calculator</h3>
+          <p className={isDark ? 'dark' : 'light'}>Choose your operating system to get started</p>
+        </div>
+
+        <div className="fc-download-options">
+          <button 
+            className={`fc-download-option mac ${isDark ? 'dark' : 'light'} ${hovered === 'mac' ? 'hovered' : ''} ${selected === 'mac' ? 'selected' : ''}`}
+            onClick={() => handleDownloadClick('mac')}
+            onMouseEnter={() => setHovered('mac')}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <div className={`fc-download-icon-container mac-icon ${isDark ? 'dark' : 'light'}`}>
+              <Monitor size={28} />
+            </div>
+            <div className="fc-download-info">
+              <span className={`fc-download-os ${isDark ? 'dark' : 'light'}`}>macOS</span>
+              <span className={`fc-download-version ${isDark ? 'dark' : 'light'}`}>Version 1.0.0</span>
+            </div>
+            <span className="fc-download-badge mac-badge">
+              <Download size={12} />
+              Download
+            </span>
+          </button>
+
+          <button 
+            className={`fc-download-option windows ${isDark ? 'dark' : 'light'} ${hovered === 'windows' ? 'hovered' : ''} ${selected === 'windows' ? 'selected' : ''}`}
+            onClick={() => handleDownloadClick('windows')}
+            onMouseEnter={() => setHovered('windows')}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <div className={`fc-download-icon-container windows-icon ${isDark ? 'dark' : 'light'}`}>
+              <Laptop size={28} />
+            </div>
+            <div className="fc-download-info">
+              <span className={`fc-download-os ${isDark ? 'dark' : 'light'}`}>Windows</span>
+              <span className={`fc-download-version ${isDark ? 'dark' : 'light'}`}>Version 1.0.0</span>
+            </div>
+            <span className="fc-download-badge windows-badge">
+              <Download size={12} />
+              Download
+            </span>
+          </button>
+
+          <button 
+            className={`fc-download-option android ${isDark ? 'dark' : 'light'} ${hovered === 'android' ? 'hovered' : ''} ${selected === 'android' ? 'selected' : ''}`}
+            onClick={() => handleDownloadClick('android')}
+            onMouseEnter={() => setHovered('android')}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <div className={`fc-download-icon-container android-icon ${isDark ? 'dark' : 'light'}`}>
+              <Smartphone size={28} />
+            </div>
+            <div className="fc-download-info">
+              <span className={`fc-download-os ${isDark ? 'dark' : 'light'}`}>Android</span>
+              <span className={`fc-download-version ${isDark ? 'dark' : 'light'}`}>Version 1.0.0</span>
+            </div>
+            <span className="fc-download-badge android-badge">
+              <Download size={12} />
+              Download
+            </span>
+          </button>
+        </div>
+
+        <div className="fc-download-footer">
+          <div className={`fc-download-features ${isDark ? 'dark' : 'light'}`}>
+            <span>✨ Free forever</span>
+            <span>🔒 Secure download</span>
+            <span>⚡ Instant setup</span>
+          </div>
+          <span className={`fc-download-size ${isDark ? 'dark' : 'light'}`}>~25 MB • Compatible with all devices</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════
    Component
 ═══════════════════════════════════════════════════════ */
@@ -180,6 +320,7 @@ export function FloatingCalculator() {
       y: 80,
     };
   });
+  const [showDownloadPopup, setShowDownloadPopup] = useState(false);
 
   const panelRef  = useRef<HTMLDivElement>(null);
   const dragState = useRef({ dragging: false, dx: 0, dy: 0 });
@@ -231,6 +372,20 @@ export function FloatingCalculator() {
     dragState.current.dragging = false;
     try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
   };
+
+  /* ── Download handlers ───────────────────────── */
+  const handleDownload = useCallback((os: 'mac' | 'windows' | 'android') => {
+    const fileName = os === 'mac' ? 'mac.zip' 
+                   : os === 'windows' ? 'windows.exe' 
+                   : 'android.apk';
+    const link = document.createElement('a');
+    link.href = `/${fileName}`;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setShowDownloadPopup(false);
+  }, []);
 
   /* ══════════════════════════════════════════════
      STANDARD MODE STATE
@@ -578,10 +733,17 @@ export function FloatingCalculator() {
                 <button type="button" className={`fc-toggle-btn ${mode === 'fi' ? 'active' : ''}`}
                   onClick={() => setMode('fi')}>Ft·In·Fr</button>
               </div>
-              <button type="button" className="fc-close" onClick={() => setIsOpen(false)}
-                aria-label="Close calculator">
-                <X size={14} />
-              </button>
+              <div className="fc-header-actions">
+                <button type="button" className="fc-download-btn" 
+                  onClick={() => setShowDownloadPopup(true)}
+                  title="Download Calculator" aria-label="Download calculator">
+                  <Download size={14} />
+                </button>
+                <button type="button" className="fc-close" onClick={() => setIsOpen(false)}
+                  aria-label="Close calculator">
+                  <X size={14} />
+                </button>
+              </div>
             </div>
 
             {/* ── Standard mode ── */}
@@ -716,7 +878,16 @@ export function FloatingCalculator() {
           </div>
         )}
 
+        {/* Download Popup */}
+        {showDownloadPopup && (
+          <DownloadPopup 
+            onClose={() => setShowDownloadPopup(false)}
+            onDownload={handleDownload}
+          />
+        )}
+
         <style>{FAB_CSS}</style>
+        <style>{DOWNLOAD_POPUP_CSS}</style>
       </>
     </CalculatorErrorBoundary>
   );
@@ -759,8 +930,19 @@ const PANEL_CSS = `
 .fc-toggle-btn  { background: transparent; border: none; padding: 3px 10px; border-radius: 20px; font-size: 9px; font-weight: 600; color: #8e8e93; cursor: pointer; transition: .2s; }
 .fc-toggle-btn.active { background: linear-gradient(135deg,#0a84ff,#5ac8fa); color: #fff; }
 .fc-toggle-btn:hover:not(.active) { color: #fff; }
-.fc-close    { background: rgba(255,255,255,.04); border: none; color: #8e8e93; width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
-.fc-close:hover { background: rgba(255,69,58,.15); color: #ff453a; }
+.fc-header-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.fc-download-btn { 
+  background: rgba(255,255,255,.04); border: none; 
+  color: #8e8e93; width: 22px; height: 22px; border-radius: 6px; 
+  display: flex; align-items: center; justify-content: center; cursor: pointer; 
+  transition: all .2s;
+}
+.fc-download-btn:hover { 
+  background: rgba(10,132,255,.15); color: #0a84ff; 
+  transform: scale(1.05);
+}
+.fc-close    { background: rgba(255,255,255,.04); border: none; color: #8e8e93; width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all .2s; }
+.fc-close:hover { background: rgba(255,69,58,.15); color: #ff453a; transform: scale(1.05); }
 .fc-display { background: #1c1c1e; padding: 20px 20px 16px; min-height: 88px; display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; border-bottom: 1px solid rgba(255,255,255,0.03); flex-shrink: 0; }
 .fc-op-pending { font-size: 13px; color: #ff9f0a; font-weight: 600; min-height: 16px; margin-bottom: 2px; }
 .fc-result { font-size: 44px; font-weight: 300; color: #fff; max-width: 100%; overflow-x: auto; white-space: nowrap; line-height: 1.1; letter-spacing: -.5px; }
@@ -815,4 +997,419 @@ const PANEL_CSS = `
 .fc-fi-hist-empty  { font-size: 10.5px; color: rgba(142,142,147,.35); text-align: center; padding: 14px 0; }
 .fc-panel ::-webkit-scrollbar { width: 3px; }
 .fc-panel ::-webkit-scrollbar-thumb { background: rgba(10,132,255,.2); border-radius: 4px; }
+`;
+
+const DOWNLOAD_POPUP_CSS = `
+/* ── Overlay ── */
+.fc-download-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fc-overlay-fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.fc-download-overlay.light {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+}
+.fc-download-overlay.dark {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+}
+
+/* ── Popup Container ── */
+.fc-download-popup {
+  border-radius: 32px;
+  padding: 40px 44px 32px;
+  max-width: 480px;
+  width: 92%;
+  animation: fc-popup-slide-up 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  transform-origin: center;
+}
+.fc-download-popup.light {
+  background: #ffffff;
+  box-shadow: 
+    0 30px 80px rgba(0, 0, 0, 0.15),
+    0 10px 30px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+.fc-download-popup.dark {
+  background: #1c1c1e;
+  box-shadow: 
+    0 30px 80px rgba(0, 0, 0, 0.5),
+    0 10px 30px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* ── Close Button ── */
+.fc-download-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.fc-download-close.light {
+  background: #f5f5f7;
+  color: #8e8e93;
+}
+.fc-download-close.dark {
+  background: rgba(255, 255, 255, 0.08);
+  color: #8e8e93;
+}
+.fc-download-close:hover {
+  background: #ff3b30;
+  color: #fff;
+  transform: rotate(90deg) scale(1.05);
+}
+.fc-download-close:active {
+  transform: scale(0.92);
+}
+
+/* ── Header ── */
+.fc-download-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.fc-download-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  margin-bottom: 16px;
+  animation: fc-icon-bounce 2s ease-in-out infinite;
+}
+.fc-download-icon-wrap.light {
+  background: linear-gradient(135deg, #007aff, #5ac8fa);
+}
+.fc-download-icon-wrap.dark {
+  background: linear-gradient(135deg, #0a84ff, #5ac8fa);
+}
+.fc-download-icon {
+  color: #fff;
+  stroke-width: 2;
+}
+.fc-download-header h3 {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  letter-spacing: -0.5px;
+}
+.fc-download-header h3.light {
+  color: #1c1c1e;
+}
+.fc-download-header h3.dark {
+  color: #ffffff;
+}
+.fc-download-header p {
+  font-size: 14px;
+  margin: 0;
+  font-weight: 400;
+}
+.fc-download-header p.light {
+  color: #8e8e93;
+}
+.fc-download-header p.dark {
+  color: #8e8e93;
+}
+
+/* ── Download Options ── */
+.fc-download-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.fc-download-option {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1.5px solid;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  width: 100%;
+  text-align: left;
+}
+.fc-download-option.light {
+  background: #f8f8fa;
+  border-color: #e5e5ea;
+}
+.fc-download-option.dark {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.fc-download-option:hover {
+  transform: translateY(-3px) scale(1.01);
+}
+.fc-download-option.light:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+}
+.fc-download-option.dark:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+}
+.fc-download-option:active {
+  transform: scale(0.97);
+}
+.fc-download-option.hovered.light {
+  border-color: #007aff;
+  background: #f0f7ff;
+}
+.fc-download-option.hovered.dark {
+  border-color: #0a84ff;
+  background: rgba(10, 132, 255, 0.1);
+}
+.fc-download-option.mac.hovered.light {
+  border-color: #5ac8fa;
+  background: #f0f9ff;
+}
+.fc-download-option.mac.hovered.dark {
+  border-color: #5ac8fa;
+  background: rgba(90, 200, 250, 0.1);
+}
+.fc-download-option.windows.hovered.light {
+  border-color: #007aff;
+  background: #f0f7ff;
+}
+.fc-download-option.windows.hovered.dark {
+  border-color: #0a84ff;
+  background: rgba(10, 132, 255, 0.1);
+}
+.fc-download-option.android.hovered.light {
+  border-color: #34c759;
+  background: #f0fff4;
+}
+.fc-download-option.android.hovered.dark {
+  border-color: #34c759;
+  background: rgba(52, 199, 89, 0.1);
+}
+.fc-download-option.selected {
+  animation: fc-option-select 0.3s ease;
+}
+
+/* ── Icon Container ── */
+.fc-download-icon-container {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+.fc-download-icon-container.light.mac-icon {
+  background: linear-gradient(135deg, #e8f4fd, #d4ecfb);
+  color: #5ac8fa;
+}
+.fc-download-icon-container.dark.mac-icon {
+  background: rgba(90, 200, 250, 0.15);
+  color: #5ac8fa;
+}
+.fc-download-icon-container.light.windows-icon {
+  background: linear-gradient(135deg, #e8f0fe, #d4e2fb);
+  color: #007aff;
+}
+.fc-download-icon-container.dark.windows-icon {
+  background: rgba(10, 132, 255, 0.15);
+  color: #0a84ff;
+}
+.fc-download-icon-container.light.android-icon {
+  background: linear-gradient(135deg, #e8f9ed, #d4f0db);
+  color: #34c759;
+}
+.fc-download-icon-container.dark.android-icon {
+  background: rgba(52, 199, 89, 0.15);
+  color: #34c759;
+}
+.fc-download-option.hovered .fc-download-icon-container {
+  transform: scale(1.05) rotate(-3deg);
+}
+
+/* ── Info ── */
+.fc-download-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fc-download-os.light {
+  color: #1c1c1e;
+}
+.fc-download-os.dark {
+  color: #ffffff;
+}
+.fc-download-version.light {
+  color: #8e8e93;
+}
+.fc-download-version.dark {
+  color: #8e8e93;
+}
+
+/* ── Badge ── */
+.fc-download-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.mac-badge {
+  background: linear-gradient(135deg, #5ac8fa, #007aff);
+}
+.windows-badge {
+  background: linear-gradient(135deg, #007aff, #0055b3);
+}
+.android-badge {
+  background: linear-gradient(135deg, #34c759, #28a745);
+}
+.fc-download-option:hover .fc-download-badge {
+  transform: scale(1.05);
+}
+.fc-download-option.light:hover .mac-badge {
+  box-shadow: 0 4px 16px rgba(90, 200, 250, 0.3);
+}
+.fc-download-option.dark:hover .mac-badge {
+  box-shadow: 0 4px 16px rgba(90, 200, 250, 0.4);
+}
+.fc-download-option.light:hover .windows-badge {
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3);
+}
+.fc-download-option.dark:hover .windows-badge {
+  box-shadow: 0 4px 16px rgba(10, 132, 255, 0.4);
+}
+.fc-download-option.light:hover .android-badge {
+  box-shadow: 0 4px 16px rgba(52, 199, 89, 0.3);
+}
+.fc-download-option.dark:hover .android-badge {
+  box-shadow: 0 4px 16px rgba(52, 199, 89, 0.4);
+}
+
+/* ── Footer ── */
+.fc-download-footer {
+  text-align: center;
+  padding-top: 8px;
+}
+.fc-download-features {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+.fc-download-features.light {
+  color: #8e8e93;
+}
+.fc-download-features.dark {
+  color: #8e8e93;
+}
+.fc-download-features span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.8;
+}
+.fc-download-size.light {
+  color: #aeaeb2;
+}
+.fc-download-size.dark {
+  color: #636366;
+}
+
+/* ── Animations ── */
+@keyframes fc-overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fc-popup-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes fc-icon-bounce {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+@keyframes fc-option-select {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  .fc-download-popup {
+    padding: 28px 20px 24px;
+    border-radius: 24px;
+  }
+  .fc-download-option {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+  .fc-download-os {
+    font-size: 14px;
+  }
+  .fc-download-badge {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+  .fc-download-features {
+    gap: 10px;
+    font-size: 11px;
+    flex-wrap: wrap;
+  }
+  .fc-download-icon-container {
+    width: 40px;
+    height: 40px;
+  }
+  .fc-download-icon-container svg {
+    width: 22px;
+    height: 22px;
+  }
+}
 `;
