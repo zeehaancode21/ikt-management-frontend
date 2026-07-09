@@ -219,6 +219,37 @@ const styles = `
     --shadow-lg:   0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
   }
 
+  :root.dark {
+    --bg:          #14161a;
+    --bg-alt:      #1a1d22;
+    --surface:     #1e2126;
+    --surface-2:   #24272d;
+    --border:      #33373f;
+    --border-dark: #40444d;
+    --indigo:      #7c8fc9;
+    --indigo-dark: #97a7d6;
+    --indigo-dim:  rgba(124,143,201,0.12);
+    --indigo-glow: rgba(124,143,201,0.22);
+    --copper:      #d4924e;
+    --copper-dim:  rgba(212,146,78,0.14);
+    --copper-light:#e0ab72;
+    --green:       #4ade80;
+    --green-dim:   rgba(74,222,128,0.14);
+    --amber:       #fbbf24;
+    --amber-dim:   rgba(251,191,36,0.14);
+    --rose:        #f87171;
+    --rose-dim:    rgba(248,113,113,0.14);
+    --teal:        #2dd4bf;
+    --teal-dim:    rgba(45,212,191,0.14);
+    --text:        #e8e6e1;
+    --text-soft:   #b8b5ae;
+    --text-muted:  #82807a;
+    --text-dim:    #55534e;
+    --shadow-sm:   0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+    --shadow:      0 4px 16px rgba(0,0,0,0.35), 0 1px 4px rgba(0,0,0,0.2);
+    --shadow-lg:   0 12px 40px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.25);
+  }
+
   body { background: var(--bg); font-family: 'Outfit', sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; }
 
   .dash-root {

@@ -62,7 +62,8 @@ type WorkType =
   | "MODELING"
   | "TRAINING"
   | "PRACTICING"
-  | "MISCELLANEOUS";
+  | "MISCELLANEOUS"
+  | "ESTIMATION";
 
 const WORK_TYPE_LABELS: Record<WorkType, string> = {
   E_PLAN: "E Plan",
@@ -75,19 +76,21 @@ const WORK_TYPE_LABELS: Record<WorkType, string> = {
   TRAINING: "Training",
   PRACTICING: "Practicing",
   MISCELLANEOUS: "Miscellaneous",
+  ESTIMATION: "Estimation",
 };
 
 const WORK_TYPE_COLORS: Record<WorkType, string> = {
   E_PLAN: "bg-blue-100 text-blue-700",
   SHOP_DRAWING: "bg-violet-100 text-violet-700",
   LINKING: "bg-emerald-100 text-emerald-700",
-  PART_DRAWING: "bg-amber-100 text-amber-700",
+  PART_DRAWING: "bg-amber-100 text-amber-700 dark:text-amber-400",
   DISCUSSION_STUDY: "bg-rose-100 text-rose-700",
   CHECKING: "bg-cyan-100 text-cyan-700",
   MODELING: "bg-purple-100 text-purple-700",
   TRAINING: "bg-orange-100 text-orange-700",
   PRACTICING: "bg-teal-100 text-teal-700",
-  MISCELLANEOUS: "bg-slate-100 text-slate-700",
+  MISCELLANEOUS: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300",
+  ESTIMATION: "bg-pink-100 text-pink-700",
 };
 
 interface WorkEntry {
@@ -100,7 +103,7 @@ interface WorkEntry {
 }
 
 // Work types that don't require a client/project to be selected (e.g. training days)
-const OPTIONAL_WORK_TYPES = new Set<WorkType>(["TRAINING", "PRACTICING", "MISCELLANEOUS"]);
+const OPTIONAL_WORK_TYPES = new Set<WorkType>(["TRAINING", "PRACTICING", "MISCELLANEOUS", "ESTIMATION"]);
 
 interface Report {
   id: string | number;
@@ -369,7 +372,7 @@ const DateDetailModal = ({
         role="presentation"
       />
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full mx-auto animate-modal-enter overflow-hidden"
+        className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full mx-auto animate-modal-enter overflow-hidden"
         style={{ maxWidth: 560, maxHeight: "85vh", display: "flex", flexDirection: "column" }}
         role="dialog"
         aria-modal="true"
@@ -422,7 +425,7 @@ const DateDetailModal = ({
           {entries.map((r, idx) => (
             <div
               key={r.id}
-              className="border border-slate-100 rounded-xl p-4 bg-slate-50/50 hover:bg-slate-50 transition-all duration-200 hover:shadow-sm hover:border-slate-200"
+              className="border border-slate-100 dark:border-slate-800 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all duration-200 hover:shadow-sm hover:border-slate-200 dark:hover:border-slate-700"
               style={{
                 animation: `staggerFadeUp 0.28s ease ${idx * 0.06}s forwards`,
                 opacity: 0,
@@ -430,46 +433,46 @@ const DateDetailModal = ({
             >
               <div className="flex items-center justify-between mb-3">
                 <span
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${WORK_TYPE_COLORS[r.workType] ?? "bg-slate-100 text-slate-600"
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${WORK_TYPE_COLORS[r.workType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
                     }`}
                 >
                   <Tag className="h-2.5 w-2.5" />
                   {WORK_TYPE_LABELS[r.workType] ?? r.workType}
                 </span>
-                <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">
+                <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-1 rounded-full border border-indigo-100 dark:border-indigo-900">
                   {r.time}h
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3 mb-3">
                 <div className="flex items-start gap-2">
-                  <User className="h-3 w-3 text-slate-300 mt-0.5 flex-shrink-0" />
+                  <User className="h-3 w-3 text-slate-300 dark:text-slate-600 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-[9px] text-slate-400 uppercase tracking-widest font-medium">Client</p>
-                    <p className="text-xs font-semibold text-slate-700 mt-0.5">{r.client || "—"}</p>
+                    <p className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-medium">Client</p>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5">{r.client || "—"}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
-                  <Briefcase className="h-3 w-3 text-slate-300 mt-0.5 flex-shrink-0" />
+                  <Briefcase className="h-3 w-3 text-slate-300 dark:text-slate-600 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-[9px] text-slate-400 uppercase tracking-widest font-medium">Project</p>
-                    <p className="text-xs font-semibold text-slate-700 mt-0.5">{r.project || "—"}</p>
+                    <p className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-medium">Project</p>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5">{r.project || "—"}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-start gap-2 bg-white rounded-lg p-2.5 border border-slate-100">
-                <FileText className="h-3 w-3 text-slate-300 mt-0.5 flex-shrink-0" />
+              <div className="flex items-start gap-2 bg-white dark:bg-slate-900 rounded-lg p-2.5 border border-slate-100 dark:border-slate-800">
+                <FileText className="h-3 w-3 text-slate-300 dark:text-slate-600 mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-[9px] text-slate-400 uppercase tracking-widest font-medium mb-1">Description</p>
-                  <p className="text-xs text-slate-600 leading-relaxed">{r.description || "—"}</p>
+                  <p className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-medium mb-1">Description</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{r.description || "—"}</p>
                 </div>
               </div>
             </div>
           ))}
         </div>
 
-        <div className="px-4 py-3 flex justify-end bg-slate-50/60 flex-shrink-0 border-t border-slate-100">
+        <div className="px-4 py-3 flex justify-end bg-slate-50/60 dark:bg-slate-800/40 flex-shrink-0 border-t border-slate-100 dark:border-slate-800">
           <button
             onClick={onClose}
             className="px-4 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all duration-150 btn-hover-scale"
@@ -702,7 +705,7 @@ const EmployeeView = () => {
 
   // Toggle a work type on/off for a given row (multi-select).
  // Toggle a work type on/off for a given row (multi-select),
-  // with TRAINING / PRACTICING / MISCELLANEOUS treated as exclusive:
+  // with TRAINING / PRACTICING / MISCELLANEOUS /ESTIMATION treated as exclusive:
   // picking one of them clears every other selection (and vice versa).
   const toggleWorkType = (localId: string, workType: WorkType) => {
     if (!hasInteracted) setHasInteracted(true);
@@ -716,7 +719,7 @@ const EmployeeView = () => {
           // Just deselecting — simple removal.
           updatedTypes = e.workTypes.filter((t) => t !== workType);
         } else if (OPTIONAL_WORK_TYPES.has(workType)) {
-          // Selecting an exclusive type (Training/Practicing/Miscellaneous):
+          // Selecting an exclusive type (Training/Practicing/Miscellaneous/Estimation) — clear all other types so:
           // it becomes the ONLY selected type.
           updatedTypes = [workType];
         } else {
@@ -841,22 +844,22 @@ const EmployeeView = () => {
 
           {/* ══ Submit / Edit Form ══ */}
           <section
-            className={`rounded-2xl border bg-white/90 backdrop-blur-sm p-5 shadow-sm card-hover transition-colors duration-300 ${
+            className={`rounded-2xl border bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-5 shadow-sm card-hover transition-colors duration-300 ${
               isEditMode
-                ? "border-amber-300/80 ring-1 ring-amber-200/60"
-                : "border-slate-200/80"
+                ? "border-amber-300 dark:border-amber-700/80 ring-1 ring-amber-200/60"
+                : "border-slate-200/80 dark:border-slate-700/60"
             }`}
           >
             {/* ── Edit mode banner ── */}
             {isEditMode && (
-              <div className="edit-mode-banner mb-4 flex items-center justify-between gap-3 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2.5">
+              <div className="edit-mode-banner mb-4 flex items-center justify-between gap-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3.5 py-2.5">
                 <div className="flex items-center gap-2">
                   <div className="p-1 bg-amber-100 rounded-lg">
-                    <Pencil className="h-3 w-3 text-amber-600" />
+                    <Pencil className="h-3 w-3 text-amber-600 dark:text-amber-400" />
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-amber-800">Edit Mode</p>
-                    <p className="text-[10px] text-amber-600">
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400">
                       Editing report for{" "}
                       <span className="font-bold">{date ? fmt(date) : "selected date"}</span>.
                       Changes will replace the existing entries.
@@ -865,7 +868,7 @@ const EmployeeView = () => {
                 </div>
                 <button
                   onClick={handleCancelEdit}
-                  className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold text-amber-700 hover:text-rose-600 bg-white border border-amber-200 hover:border-rose-200 rounded-lg transition-all duration-150 btn-hover-scale flex-shrink-0"
+                  className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 hover:text-rose-600 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 hover:border-rose-200 dark:hover:border-rose-800 rounded-lg transition-all duration-150 btn-hover-scale flex-shrink-0"
                 >
                   <XCircle className="h-3 w-3" />
                   Cancel
@@ -894,7 +897,7 @@ const EmployeeView = () => {
               </div>
 
               <div className="space-y-0.5 animate-fade-in-up" style={{ animationDelay: "0.08s" }}>
-                <Label htmlFor="date" className="text-[11px] font-medium text-slate-400 flex items-center gap-1">
+                <Label htmlFor="date" className="text-[11px] font-medium text-slate-400 dark:text-slate-500 flex items-center gap-1">
                   <Calendar className="h-2.5 w-2.5" /> Date
                 </Label>
                 <Input
@@ -903,15 +906,15 @@ const EmployeeView = () => {
                   disabled={isEditMode}
                   className={`w-36 h-8 text-sm focus:ring-indigo-100 ${
                     isEditMode
-                      ? "border-amber-300 bg-amber-50/60 text-slate-500 cursor-not-allowed"
-                      : "border-slate-200 focus:border-indigo-400"
+                      ? "border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-950/30 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                      : "border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500"
                   }`}
                   value={date}
                   onChange={(e) => handleDateChange(e.target.value)}
                   max={today}
                 />
                 {isEditMode && (
-                  <p className="text-[9px] text-amber-600">
+                  <p className="text-[9px] text-amber-600 dark:text-amber-400">
                     Locked while editing — Cancel to pick a different date.
                   </p>
                 )}
@@ -920,19 +923,19 @@ const EmployeeView = () => {
 
             {/* Progress bar */}
             {showProgress && (
-              <div className="mb-4 rounded-xl bg-slate-50 p-3 border border-slate-100/80 animate-fade-in-up">
+              <div className="mb-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 border border-slate-100/80 dark:border-slate-800/60 animate-fade-in-up">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5 text-indigo-500" />
-                    <span className="text-xs font-medium text-slate-500">Total Hours</span>
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Hours</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-bold text-indigo-600">
+                    <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
                       {totalHours.toFixed(1)}h
                     </span>
                   </div>
                 </div>
-                <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden mb-2">
+                <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-2">
                   <div
                     className={`progress-bar-fill h-full rounded-full ${
                       isEditMode
@@ -948,17 +951,17 @@ const EmployeeView = () => {
             {/* Entries table */}
             <div
               data-work-report-table=""
-              className="overflow-x-auto rounded-xl border border-slate-200/80 bg-white shadow-sm animate-fade-in-up"
+              className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm animate-fade-in-up"
               style={{ animationDelay: "0.15s" }}
             >
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-50/80">
-                    <TableHead className="min-w-[130px] text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Client</TableHead>
-                    <TableHead className="min-w-[150px] text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Project</TableHead>
-                    <TableHead className="min-w-[140px] text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Type</TableHead>
-                    <TableHead className="min-w-[90px]  text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Time (h)</TableHead>
-                    <TableHead className="min-w-[200px] text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Description</TableHead>
+                  <TableRow className="bg-slate-50/80 dark:bg-slate-800/60">
+                    <TableHead className="min-w-[130px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Client</TableHead>
+                    <TableHead className="min-w-[150px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Project</TableHead>
+                    <TableHead className="min-w-[140px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Type</TableHead>
+                    <TableHead className="min-w-[90px]  text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Time (h)</TableHead>
+                    <TableHead className="min-w-[200px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Description</TableHead>
                     <TableHead className="w-8" />
                   </TableRow>
                 </TableHeader>
@@ -978,7 +981,7 @@ const EmployeeView = () => {
                             onValueChange={(v) => updateEntry(entry.localId, "client", v)}
                             disabled={isOptional}
                           >
-                            <SelectTrigger className={`h-7 text-xs border-slate-200 focus:border-indigo-400 ${isOptional ? "bg-slate-50" : ""}`}>
+                            <SelectTrigger className={`h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 ${isOptional ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}>
                               <SelectValue placeholder={isOptional ? "Not required" : (clientsError ? "Error" : "Select client")} />
                             </SelectTrigger>
                             <SelectContent
@@ -1005,7 +1008,7 @@ const EmployeeView = () => {
                             disabled={isOptional || !entry.client || loadingProjects[entry.client]}
                             onValueChange={(v) => updateEntry(entry.localId, "project", v)}
                           >
-                            <SelectTrigger className={`h-7 text-xs border-slate-200 focus:border-indigo-400 ${isOptional ? "bg-slate-50" : ""}`}>
+                            <SelectTrigger className={`h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 ${isOptional ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}>
                               <SelectValue placeholder={
                                 isOptional ? "Not required" :
                                   !entry.client
@@ -1027,20 +1030,20 @@ const EmployeeView = () => {
                             <DropdownMenuTrigger asChild>
                               <button
                                 type="button"
-                                className="flex h-7 w-full items-center justify-between gap-1 rounded-md border border-slate-200 bg-white px-2 text-xs hover:border-indigo-300 focus:border-indigo-400 focus:outline-none"
+                                className="flex h-7 w-full items-center justify-between gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-xs hover:border-indigo-300 dark:hover:border-indigo-600 focus:border-indigo-400 dark:focus:border-indigo-500 focus:outline-none"
                               >
-                                <span className={`truncate ${entry.workTypes.length === 0 ? "text-slate-400" : "text-slate-700"}`}>
+                                <span className={`truncate ${entry.workTypes.length === 0 ? "text-slate-400 dark:text-slate-500" : "text-slate-700 dark:text-slate-300"}`}>
                                   {entry.workTypes.length === 0
                                     ? "Select type(s)"
                                     : entry.workTypes.length === 1
                                     ? WORK_TYPE_LABELS[entry.workTypes[0]]
                                     : `${entry.workTypes.length} types selected`}
                                 </span>
-                                <ChevronDown className="h-3 w-3 shrink-0 text-slate-400" />
+                                <ChevronDown className="h-3 w-3 shrink-0 text-slate-400 dark:text-slate-500" />
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" className="max-h-[320px] overflow-y-auto">
-                              <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-slate-400">
+                              <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
                                 Select one or more
                               </DropdownMenuLabel>
                               <DropdownMenuSeparator />
@@ -1063,7 +1066,7 @@ const EmployeeView = () => {
                                     className={`text-xs ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
                                   >
                                     <div className="flex items-center gap-1.5">
-                                      {(k === "TRAINING" || k === "PRACTICING" || k === "MISCELLANEOUS") && <GraduationCap className="h-2.5 w-2.5" />}
+                                      {(k === "TRAINING" || k === "PRACTICING" || k === "MISCELLANEOUS" || k === "ESTIMATION") && <GraduationCap className="h-2.5 w-2.5" />}
                                       {WORK_TYPE_LABELS[k]}
                                     </div>
                                   </DropdownMenuCheckboxItem>
@@ -1076,7 +1079,7 @@ const EmployeeView = () => {
                               {entry.workTypes.map((wt) => (
                                 <span
                                   key={wt}
-                                  className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium ${WORK_TYPE_COLORS[wt] ?? "bg-slate-100 text-slate-600"}`}
+                                  className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium ${WORK_TYPE_COLORS[wt] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"}`}
                                 >
                                   {WORK_TYPE_LABELS[wt]}
                                 </span>
@@ -1091,7 +1094,7 @@ const EmployeeView = () => {
                             max="24"
                             step="0.5"
                             placeholder="0"
-                            className="h-7 text-xs border-slate-200 focus:border-indigo-400"
+                            className="h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500"
                             value={entry.time}
                             onChange={(e) => {
                               const value = e.target.value;
@@ -1106,7 +1109,7 @@ const EmployeeView = () => {
                         <TableCell className="py-1.5">
                           <Input
                             placeholder="Description..."
-                            className="h-7 text-xs border-slate-200 focus:border-indigo-400"
+                            className="h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500"
                             value={entry.description}
                             onChange={(e) => updateEntry(entry.localId, "description", e.target.value)}
                             maxLength={500}
@@ -1117,7 +1120,7 @@ const EmployeeView = () => {
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all duration-150 rounded-lg"
+                            className="h-6 w-6 text-slate-300 dark:text-slate-600 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all duration-150 rounded-lg"
                             disabled={entries.length <= 1}
                             onClick={() => removeEntry(entry.localId)}
                             aria-label="Remove entry"
@@ -1138,7 +1141,7 @@ const EmployeeView = () => {
                 variant="outline"
                 size="sm"
                 onClick={addEntry}
-                className="gap-1.5 h-7 text-xs border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 btn-hover-scale transition-all duration-150"
+                className="gap-1.5 h-7 text-xs border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 btn-hover-scale transition-all duration-150"
               >
                 <Plus className="h-3 w-3" /> Add Row
               </Button>
@@ -1172,11 +1175,11 @@ const EmployeeView = () => {
 
           {/* ══ My Reports ══ */}
           <section className="animate-slide-right">
-            <h2 className="mb-3 text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
               <Calendar className="h-4 w-4 text-indigo-400" />
               My Reports
               {!loadingReports && reports.length > 0 && (
-                <span className="text-xs font-normal text-slate-400">
+                <span className="text-xs font-normal text-slate-400 dark:text-slate-500">
                   ({reports.length} total)
                 </span>
               )}
@@ -1198,24 +1201,24 @@ const EmployeeView = () => {
               </div>
             ) : groupedDates.length === 0 ? (
               <div className="text-center py-10 animate-fade-in-up">
-                <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
-                  <FileText className="h-5 w-5 text-slate-300" />
+                <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
+                  <FileText className="h-5 w-5 text-slate-300 dark:text-slate-600" />
                 </div>
-                <p className="text-xs text-slate-400">No reports submitted yet.</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">No reports submitted yet.</p>
               </div>
             ) : (
               <div
                 data-work-report-table=""
-                className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white shadow-sm animate-fade-in-up"
+                className="overflow-x-auto rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm animate-fade-in-up"
               >
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-slate-50/80">
-                      <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Date</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Entries</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total Time</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Work Types</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Actions</TableHead>
+                    <TableRow className="bg-slate-50/80 dark:bg-slate-800/60">
+                      <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date</TableHead>
+                      <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Entries</TableHead>
+                      <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total Time</TableHead>
+                      <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Work Types</TableHead>
+                      <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1227,10 +1230,10 @@ const EmployeeView = () => {
                       return (
                         <TableRow
                           key={dk}
-                          className={`entry-row table-row-animate ${isCurrentlyEditing ? "bg-amber-50/60" : ""}`}
+                          className={`entry-row table-row-animate ${isCurrentlyEditing ? "bg-amber-50/60 dark:bg-amber-950/30" : ""}`}
                           style={{ animationDelay: `${index * 0.04}s` }}
                         >
-                          <TableCell className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+                          <TableCell className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                             {fmt(dk)}
                           </TableCell>
                           <TableCell>
@@ -1239,7 +1242,7 @@ const EmployeeView = () => {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full">
                               {totalTime.toFixed(1)}h
                             </span>
                           </TableCell>
@@ -1248,7 +1251,7 @@ const EmployeeView = () => {
                               {uniqueTypes.map((wt) => (
                                 <span
                                   key={wt}
-                                  className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${WORK_TYPE_COLORS[wt as WorkType] ?? "bg-slate-100 text-slate-600"
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${WORK_TYPE_COLORS[wt as WorkType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
                                     }`}
                                 >
                                   {WORK_TYPE_LABELS[wt as WorkType] ?? wt}
@@ -1263,7 +1266,7 @@ const EmployeeView = () => {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="h-6 px-2 text-[10px] gap-1 text-indigo-600 border-indigo-100 hover:bg-indigo-50 hover:border-indigo-300 transition-all btn-hover-scale"
+                                className="h-6 px-2 text-[10px] gap-1 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all btn-hover-scale"
                                 onClick={() => { setDetailDate(dk); setDetailOpen(true); }}
                               >
                                 <Eye className="h-3 w-3" />
@@ -1276,8 +1279,8 @@ const EmployeeView = () => {
                                 size="sm"
                                 className={`h-6 px-2 text-[10px] gap-1 transition-all btn-hover-scale ${
                                   isCurrentlyEditing
-                                    ? "text-amber-700 border-amber-300 bg-amber-50"
-                                    : "text-amber-600 border-amber-100 hover:bg-amber-50 hover:border-amber-300"
+                                    ? "text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30"
+                                    : "text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900 hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:border-amber-300 dark:hover:border-amber-700"
                                 }`}
                                 onClick={() => handleDateChange(dk)}
                               >
@@ -1379,13 +1382,13 @@ const OwnerView = () => {
         marginBottom: "-30%",
       }}
     >
-      <section className="rounded-2xl border border-slate-200/80 bg-white/90 p-5 shadow-sm card-hover">
+      <section className="rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/90 dark:bg-slate-900/90 p-5 shadow-sm card-hover">
         {/* Warning for missing dates */}
         {missingDatesCount > 0 && (
-          <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 p-3 animate-fade-in-up">
+          <div className="mb-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 animate-fade-in-up">
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-amber-600" />
-              <p className="text-xs text-amber-700">
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <p className="text-xs text-amber-700 dark:text-amber-400">
                 Warning: {missingDatesCount} report(s) are missing dates and have been assigned today's date.
                 Please update these reports with correct dates.
               </p>
@@ -1401,11 +1404,11 @@ const OwnerView = () => {
           <h3 className="text-sm font-semibold text-slate-800">Team Reports</h3>
           {!loading && !error && (
             <div className="ml-auto flex items-center gap-2">
-              <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
                 {filtered.length} of {reports.length} record{reports.length !== 1 ? "s" : ""}
               </span>
               {reports.length > 0 && (
-                <span className="text-[10px] font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full">
                   {totalFilteredHours.toFixed(1)}h total
                 </span>
               )}
@@ -1416,19 +1419,19 @@ const OwnerView = () => {
         {/* Filter bar */}
         {!loading && !error && reports.length > 0 && (
           <div
-            className="mb-4 flex flex-wrap items-end gap-3 p-3 bg-slate-50/80 rounded-xl border border-slate-100 animate-fade-in-up"
+            className="mb-4 flex flex-wrap items-end gap-3 p-3 bg-slate-50/80 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800 animate-fade-in-up"
             style={{ animationDelay: "0.08s" }}
           >
-            <div className="flex items-center gap-1.5 self-center text-xs font-medium text-slate-500">
+            <div className="flex items-center gap-1.5 self-center text-xs font-medium text-slate-500 dark:text-slate-400">
               <Filter className="h-3.5 w-3.5" /> Filter by
             </div>
 
             <div className="flex flex-col gap-0.5">
-              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-1">
+              <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
                 <Calendar className="h-2.5 w-2.5" /> Date
               </label>
               <Select value={filterDate} onValueChange={setFilterDate}>
-                <SelectTrigger className="h-8 text-xs w-[160px] bg-white border-slate-200 hover:border-indigo-300 transition-colors">
+                <SelectTrigger className="h-8 text-xs w-[160px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
                   <SelectValue placeholder="All dates" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1441,11 +1444,11 @@ const OwnerView = () => {
             </div>
 
             <div className="flex flex-col gap-0.5">
-              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-1">
+              <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
                 <User className="h-2.5 w-2.5" /> Employee
               </label>
               <Select value={filterEmployee} onValueChange={setFilterEmployee}>
-                <SelectTrigger className="h-8 text-xs w-[180px] bg-white border-slate-200 hover:border-indigo-300 transition-colors">
+                <SelectTrigger className="h-8 text-xs w-[180px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
                   <SelectValue placeholder="All employees" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1460,7 +1463,7 @@ const OwnerView = () => {
             {hasFilter && (
               <button
                 onClick={clearFilters}
-                className="self-end flex items-center gap-1 h-8 px-2.5 text-xs font-medium text-slate-500 hover:text-rose-600 bg-white border border-slate-200 hover:border-rose-200 rounded-lg transition-all duration-150 btn-hover-scale animate-fade-in-up"
+                className="self-end flex items-center gap-1 h-8 px-2.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-rose-600 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-rose-200 dark:hover:border-rose-800 rounded-lg transition-all duration-150 btn-hover-scale animate-fade-in-up"
               >
                 <XCircle className="h-3.5 w-3.5" /> Clear
               </button>
@@ -1484,7 +1487,7 @@ const OwnerView = () => {
             )}
 
             {hasFilter && (
-              <div className="ml-auto self-center text-[10px] text-slate-400 animate-fade-in-up">
+              <div className="ml-auto self-center text-[10px] text-slate-400 dark:text-slate-500 animate-fade-in-up">
                 {uniqueFilteredEmployees} employee{uniqueFilteredEmployees !== 1 ? "s" : ""} • {totalFilteredHours.toFixed(1)}h
               </div>
             )}
@@ -1503,10 +1506,10 @@ const OwnerView = () => {
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-10 animate-fade-in-up">
-            <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
-              <Filter className="h-5 w-5 text-slate-300" />
+            <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
+              <Filter className="h-5 w-5 text-slate-300 dark:text-slate-600" />
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-400 dark:text-slate-500">
               {hasFilter ? "No records match the selected filters." : "No reports submitted yet."}
             </p>
             {hasFilter && (
@@ -1519,14 +1522,14 @@ const OwnerView = () => {
           <div data-work-report-table="" className="overflow-x-auto animate-fade-in-up">
             <Table>
               <TableHeader>
-                <TableRow className="bg-slate-50/80">
-                  <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Date</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Employee</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Client</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Project</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Type</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Time</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Description</TableHead>
+                <TableRow className="bg-slate-50/80 dark:bg-slate-800/60">
+                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date</TableHead>
+                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Employee</TableHead>
+                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Client</TableHead>
+                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Project</TableHead>
+                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Type</TableHead>
+                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Time</TableHead>
+                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Description</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1536,28 +1539,28 @@ const OwnerView = () => {
                     className="entry-row table-row-animate"
                     style={{ animationDelay: `${index * 0.025}s` }}
                   >
-                    <TableCell className="text-xs whitespace-nowrap font-medium text-slate-700">
+                    <TableCell className="text-xs whitespace-nowrap font-medium text-slate-700 dark:text-slate-300">
                       {fmt(r.date)}
                       {!r.date && <span className="ml-1 text-[8px] text-amber-500">(auto-assigned)</span>}
                     </TableCell>
-                    <TableCell className="text-xs font-semibold text-indigo-600">
+                    <TableCell className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
                       {r.employeeName || "—"}
                     </TableCell>
-                    <TableCell className="text-xs text-slate-600">{r.client || "—"}</TableCell>
-                    <TableCell className="text-xs text-slate-600">{r.project || "—"}</TableCell>
+                    <TableCell className="text-xs text-slate-600 dark:text-slate-400">{r.client || "—"}</TableCell>
+                    <TableCell className="text-xs text-slate-600 dark:text-slate-400">{r.project || "—"}</TableCell>
                     <TableCell>
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${WORK_TYPE_COLORS[r.workType as WorkType] ?? "bg-slate-100 text-slate-600"
+                        className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${WORK_TYPE_COLORS[r.workType as WorkType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
                           }`}
                       >
                         {WORK_TYPE_LABELS[r.workType as WorkType] ?? r.workType}
                       </span>
                     </TableCell>
-                    <TableCell className="text-xs font-bold text-slate-700">
+                    <TableCell className="text-xs font-bold text-slate-700 dark:text-slate-300">
                       {r.time}h
                     </TableCell>
                     <TableCell
-                      className="text-xs max-w-[200px] truncate text-slate-500"
+                      className="text-xs max-w-[200px] truncate text-slate-500 dark:text-slate-400"
                       title={r.description}
                     >
                       {r.description}

@@ -79,6 +79,32 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
         .delete-btn-cancel { transition:background 0.15s,transform 0.1s; }
         .delete-btn-cancel:hover { transform:translateY(-1px); }
         .delete-btn-cancel:active { transform:translateY(0); }
+
+        .delete-modal-panel { background:#ffffff; border:1px solid rgba(220,38,38,0.12); }
+        .dark .delete-modal-panel { background:#0f172a; border:1px solid rgba(248,113,113,0.18); }
+
+        .delete-modal-icon { background:linear-gradient(135deg,#fff1f2,#ffe4e6); border:1px solid #fecaca; }
+        .dark .delete-modal-icon { background:linear-gradient(135deg,rgba(127,29,29,0.35),rgba(153,27,27,0.25)); border:1px solid rgba(248,113,113,0.25); }
+        .delete-modal-icon-glyph { color:#dc2626; }
+        .dark .delete-modal-icon-glyph { color:#f87171; }
+
+        .delete-modal-title { color:#111827; }
+        .dark .delete-modal-title { color:#f1f5f9; }
+        .delete-modal-desc { color:#6b7280; }
+        .dark .delete-modal-desc { color:#94a3b8; }
+
+        .delete-modal-item { background:#fafafa; border:1px solid #f0f0f0; }
+        .dark .delete-modal-item { background:rgba(30,41,59,0.6); border:1px solid rgba(51,65,85,0.8); }
+        .delete-modal-item-name { color:#1f2937; }
+        .dark .delete-modal-item-name { color:#e2e8f0; }
+
+        .delete-modal-warning { background:#fff7ed; border:1px solid #fed7aa; }
+        .dark .delete-modal-warning { background:rgba(120,53,15,0.25); border:1px solid rgba(217,119,6,0.35); }
+        .delete-modal-warning-text { color:#c2410c; }
+        .dark .delete-modal-warning-text { color:#fdba74; }
+
+        .delete-btn-cancel { background:#f4f4f5; border:1px solid #e4e4e7; color:#4b5563; }
+        .dark .delete-btn-cancel { background:rgba(51,65,85,0.6); border:1px solid rgba(71,85,105,0.8); color:#cbd5e1; }
       `}</style>
       <div
         className="delete-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -86,39 +112,29 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
         onClick={onCancel}
       >
         <div
-          className="delete-modal bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
-          style={{ border: '1px solid rgba(220,38,38,0.12)' }}
+          className="delete-modal delete-modal-panel rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
           onClick={e => e.stopPropagation()}
         >
           <div style={{ height: 4, background: 'linear-gradient(90deg,#dc2626,#f87171,#fca5a5)' }} />
           <div className="p-6">
             <div className="flex items-start gap-4 mb-5">
-              <div
-                className="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-xl"
-                style={{ background: 'linear-gradient(135deg,#fff1f2,#ffe4e6)', border: '1px solid #fecaca' }}
-              >
-                <AlertTriangle className="w-6 h-6" style={{ color: '#dc2626' }} />
+              <div className="delete-modal-icon flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-xl">
+                <AlertTriangle className="delete-modal-icon-glyph w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-gray-900 leading-tight">{title}</h3>
-                <p className="text-sm text-gray-500 mt-0.5">{description}</p>
+                <h3 className="delete-modal-title text-lg font-bold leading-tight">{title}</h3>
+                <p className="delete-modal-desc text-sm mt-0.5">{description}</p>
               </div>
             </div>
-            <div
-              className="flex items-center gap-2.5 px-4 py-3 rounded-xl mb-5"
-              style={{ background: '#fafafa', border: '1px solid #f0f0f0' }}
-            >
+            <div className="delete-modal-item flex items-center gap-2.5 px-4 py-3 rounded-xl mb-5">
               {type === 'folder'
-                ? <Folder className="w-4 h-4 text-yellow-500 flex-shrink-0" />
-                : <File className="w-4 h-4 text-blue-400 flex-shrink-0" />}
-              <span className="text-sm font-semibold text-gray-800 truncate">{itemName}</span>
+                ? <Folder className="w-4 h-4 text-yellow-500 dark:text-yellow-400 flex-shrink-0" />
+                : <File className="w-4 h-4 text-blue-400 dark:text-blue-500 flex-shrink-0" />}
+              <span className="delete-modal-item-name text-sm font-semibold truncate">{itemName}</span>
             </div>
-            <div
-              className="flex items-start gap-2 px-3 py-2.5 rounded-lg mb-6"
-              style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}
-            >
+            <div className="delete-modal-warning flex items-start gap-2 px-3 py-2.5 rounded-lg mb-6">
               <span className="text-orange-400 text-sm mt-0.5 flex-shrink-0">⚠</span>
-              <p className="text-xs text-orange-700 leading-relaxed">
+              <p className="delete-modal-warning-text text-xs leading-relaxed">
                 {type === 'folder'
                   ? 'All sub-folders and documents inside will be permanently removed. This action cannot be undone.'
                   : 'This document will be permanently removed. This action cannot be undone.'}
@@ -127,8 +143,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
             <div className="flex gap-3">
               <button
                 onClick={onCancel}
-                className="delete-btn-cancel flex-1 py-2.5 px-4 rounded-xl text-sm font-semibold text-gray-600"
-                style={{ background: '#f4f4f5', border: '1px solid #e4e4e7' }}
+                className="delete-btn-cancel flex-1 py-2.5 px-4 rounded-xl text-sm font-semibold"
               >
                 Keep it
               </button>
@@ -511,8 +526,8 @@ const DocumentManager: React.FC = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500" />
-          <p className="text-gray-500">Loading…</p>
+          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500 dark:text-blue-400" />
+          <p className="text-gray-500 dark:text-slate-400">Loading…</p>
         </div>
       </div>
     );
@@ -541,9 +556,9 @@ const DocumentManager: React.FC = () => {
 
       {/* Error banner */}
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
-          <p className="text-red-600 text-sm">{error}</p>
-          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 ml-4">
+        <div className="mb-4 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg flex items-center justify-between">
+          <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+          <button onClick={() => setError(null)} className="text-red-400 dark:text-red-500 hover:text-red-600 dark:hover:text-red-400 ml-4">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -555,22 +570,22 @@ const DocumentManager: React.FC = () => {
           {currentFolder && (
             <button
               onClick={goBack}
-              className="p-2 hover:bg-gray-100 rounded-lg text-gray-600"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-gray-600 dark:text-slate-400"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
           )}
-          <h1 className="text-2xl font-bold text-gray-800">
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-slate-100">
             {currentFolder ? currentFolder.name : 'Document Manager'}
           </h1>
           {/* Folder type badge */}
           {currentFolder && isLeaf(currentFolder) && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 font-medium">
               Files folder
             </span>
           )}
           {currentFolder && isBranch(currentFolder) && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 font-medium">
               Sub-folders inside
             </span>
           )}
@@ -579,7 +594,7 @@ const DocumentManager: React.FC = () => {
         <div className="flex gap-2">
           <button
             onClick={loadFolders}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+            className="p-2 text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg"
             title="Refresh"
           >
             <RefreshCw className="w-5 h-5" />
@@ -608,7 +623,7 @@ const DocumentManager: React.FC = () => {
           {/* Locked: branch folder cannot upload */}
           {currentFolder && !canUpload && (
             <div
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-400 rounded-lg text-sm font-medium cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 rounded-lg text-sm font-medium cursor-not-allowed"
               title="This folder contains sub-folders. Upload into a leaf folder."
             >
               <Lock className="w-4 h-4" />
@@ -619,23 +634,23 @@ const DocumentManager: React.FC = () => {
       </div>
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-1 mb-6 text-sm text-gray-500 flex-wrap">
+      <div className="flex items-center gap-1 mb-6 text-sm text-gray-500 dark:text-slate-400 flex-wrap">
         <button
           onClick={() => goToCrumb(-1)}
-          className="flex items-center gap-1 hover:text-gray-800 transition-colors"
+          className="flex items-center gap-1 hover:text-gray-800 dark:hover:text-slate-100 transition-colors"
         >
           <Home className="w-4 h-4" />
           All Folders
         </button>
         {folderStack.map((f, i) => (
           <React.Fragment key={f.id}>
-            <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
+            <ChevronRight className="w-4 h-4 text-gray-300 dark:text-slate-600 flex-shrink-0" />
             {i === folderStack.length - 1 ? (
-              <span className="text-gray-800 font-medium">{f.name}</span>
+              <span className="text-gray-800 dark:text-slate-100 font-medium">{f.name}</span>
             ) : (
               <button
                 onClick={() => goToCrumb(i)}
-                className="hover:text-gray-800 transition-colors"
+                className="hover:text-gray-800 dark:hover:text-slate-100 transition-colors"
               >
                 {f.name}
               </button>
@@ -646,13 +661,13 @@ const DocumentManager: React.FC = () => {
 
       {/* Info banner for leaf / branch state */}
       {currentFolder && isBranch(currentFolder) && (
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2 text-sm text-blue-700">
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg flex items-center gap-2 text-sm text-blue-700 dark:text-blue-400">
           <FolderOpen className="w-4 h-4 flex-shrink-0" />
           This folder contains sub-folders. To upload files, open a sub-folder that doesn't have any sub-folders yet.
         </div>
       )}
       {currentFolder && isLeaf(currentFolder) && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-sm text-green-700">
+        <div className="mb-4 p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
           <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
           This folder contains files. You can upload more files here but cannot add sub-folders.
         </div>
@@ -662,7 +677,7 @@ const DocumentManager: React.FC = () => {
       {viewingFolders.length > 0 && (
         <div className="mb-6">
           {currentFolder && (
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+            <h2 className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-3">
               Sub-folders
             </h2>
           )}
@@ -670,27 +685,27 @@ const DocumentManager: React.FC = () => {
             {viewingFolders.map(folder => (
               <div
                 key={folder.id}
-                className="group relative bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
+                className="group relative bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-4 hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer"
                 onClick={() => openFolder(folder)}
               >
                 <div className="flex items-start justify-between mb-3">
                   {isLeaf(folder)
-                    ? <FolderOpen className="w-10 h-10 text-green-400" />
-                    : <Folder className="w-10 h-10 text-yellow-400" />}
+                    ? <FolderOpen className="w-10 h-10 text-green-400 dark:text-green-500" />
+                    : <Folder className="w-10 h-10 text-yellow-400 dark:text-yellow-500" />}
                   <div
                     className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={e => e.stopPropagation()}
                   >
                     <button
                       onClick={() => { setRenamingId(folder.id); setRenameValue(folder.name); }}
-                      className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded"
+                      className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
                       title="Rename"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => handleDeleteFolder(folder.id, folder.name, currentFolder?.id)}
-                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                      className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded"
                       title="Delete"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -708,32 +723,32 @@ const DocumentManager: React.FC = () => {
                       if (e.key === 'Enter') handleRenameFolder(folder.id, renameValue);
                       if (e.key === 'Escape') setRenamingId(null);
                     }}
-                    className="w-full px-2 py-1 text-sm border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    className="w-full px-2 py-1 text-sm border border-blue-400 dark:border-blue-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
                     autoFocus
                     onClick={e => e.stopPropagation()}
                   />
                 ) : (
-                  <p className="font-semibold text-gray-800 truncate">{folder.name}</p>
+                  <p className="font-semibold text-gray-800 dark:text-slate-100 truncate">{folder.name}</p>
                 )}
 
                 {folder.description && (
-                  <p className="text-xs text-gray-400 mt-1 truncate">{folder.description}</p>
+                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 truncate">{folder.description}</p>
                 )}
                 <div className="flex items-center gap-2 mt-2">
                   {isLeaf(folder) && (
-                    <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
+                    <span className="text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30 px-1.5 py-0.5 rounded">
                       {folder.documents.length} file{folder.documents.length !== 1 ? 's' : ''}
                     </span>
                   )}
                   {isBranch(folder) && (
-                    <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                    <span className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 px-1.5 py-0.5 rounded">
                       {folder.subFolders.length} sub-folder{folder.subFolders.length !== 1 ? 's' : ''}
                     </span>
                   )}
                   {!isLeaf(folder) && !isBranch(folder) && (
-                    <span className="text-xs text-gray-400">Empty</span>
+                    <span className="text-xs text-gray-400 dark:text-slate-500">Empty</span>
                   )}
-                  <span className="text-xs text-gray-400 ml-auto">{formatDate(folder.createdAt)}</span>
+                  <span className="text-xs text-gray-400 dark:text-slate-500 ml-auto">{formatDate(folder.createdAt)}</span>
                 </div>
               </div>
             ))}
@@ -743,12 +758,12 @@ const DocumentManager: React.FC = () => {
 
       {/* ── Empty state (no folders, no docs) ────────────────────────────── */}
       {viewingFolders.length === 0 && viewingDocs.length === 0 && !loading && (
-        <div className="text-center py-20 border-2 border-dashed border-gray-200 rounded-xl">
-          <Folder className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+        <div className="text-center py-20 border-2 border-dashed border-gray-200 dark:border-slate-700 rounded-xl">
+          <Folder className="w-16 h-16 text-gray-300 dark:text-slate-600 mx-auto mb-4" />
           {!currentFolder ? (
             <>
-              <p className="text-gray-500 font-medium">No folders yet</p>
-              <p className="text-gray-400 text-sm mt-1">Create a folder to start organising your documents</p>
+              <p className="text-gray-500 dark:text-slate-400 font-medium">No folders yet</p>
+              <p className="text-gray-400 dark:text-slate-500 text-sm mt-1">Create a folder to start organising your documents</p>
               <button
                 onClick={() => setShowCreateFolder(true)}
                 className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
@@ -758,8 +773,8 @@ const DocumentManager: React.FC = () => {
             </>
           ) : (
             <>
-              <p className="text-gray-500 font-medium">This folder is empty</p>
-              <p className="text-gray-400 text-sm mt-1">Add a sub-folder or upload files directly</p>
+              <p className="text-gray-500 dark:text-slate-400 font-medium">This folder is empty</p>
+              <p className="text-gray-400 dark:text-slate-500 text-sm mt-1">Add a sub-folder or upload files directly</p>
               <div className="flex justify-center gap-3 mt-4">
                 <button
                   onClick={() => setShowCreateFolder(true)}
@@ -781,20 +796,20 @@ const DocumentManager: React.FC = () => {
       {viewingDocs.length > 0 && (
         <div>
           {(viewingFolders.length > 0) && (
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 mt-6">
+            <h2 className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-3 mt-6">
               Files
             </h2>
           )}
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">Name</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden sm:table-cell">Type</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden md:table-cell">Size</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">Uploaded</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">By</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3 hidden sm:table-cell">Status</th>
+                <tr className="border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/60">
+                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3">Name</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3 hidden sm:table-cell">Type</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3 hidden md:table-cell">Size</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">Uploaded</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">By</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3 hidden sm:table-cell">Status</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -802,39 +817,39 @@ const DocumentManager: React.FC = () => {
                 {viewingDocs.map((doc, idx) => (
                   <tr
                     key={doc.id}
-                    className={`border-b border-gray-50 transition-colors group hover:bg-gray-50 ${
+                    className={`border-b border-gray-50 dark:border-slate-800/60 transition-colors group hover:bg-gray-50 dark:hover:bg-slate-800/60 ${
                       idx === viewingDocs.length - 1 ? 'border-0' : ''
                     }`}
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <File className="w-5 h-5 flex-shrink-0 text-blue-400" />
+                        <File className="w-5 h-5 flex-shrink-0 text-blue-400 dark:text-blue-500" />
                         <div>
-                          <p className="text-sm font-medium text-gray-800 truncate max-w-[200px]">
+                          <p className="text-sm font-medium text-gray-800 dark:text-slate-100 truncate max-w-[200px]">
                             {doc.originalFileName || doc.fileName}
                           </p>
                           {doc.description && (
-                            <p className="text-xs text-gray-400 truncate max-w-[200px]">{doc.description}</p>
+                            <p className="text-xs text-gray-400 dark:text-slate-500 truncate max-w-[200px]">{doc.description}</p>
                           )}
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">
+                      <span className="text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 px-2 py-0.5 rounded font-mono">
                         {doc.fileType?.split('/')[1]?.toUpperCase() || doc.fileType || '—'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
+                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-slate-400 hidden md:table-cell">
                       {formatSize(doc.fileSize)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
+                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-slate-400 hidden lg:table-cell">
                       {formatDate(doc.uploadedAt)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
+                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-slate-400 hidden lg:table-cell">
                       {doc.uploadedBy || '—'}
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
-                      <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                      <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         Ready
                       </span>
@@ -843,14 +858,14 @@ const DocumentManager: React.FC = () => {
                       <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => currentFolder && handleDownload(currentFolder.id, doc)}
-                          className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
+                          className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/30 rounded"
                           title="Download"
                         >
                           <Download className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => currentFolder && handleDeleteDocument(currentFolder.id, doc.id, doc.originalFileName || doc.fileName)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                          className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded"
                           title="Delete"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -868,14 +883,14 @@ const DocumentManager: React.FC = () => {
       {/* ── Create Folder Modal ───────────────────────────────────────────── */}
       {showCreateFolder && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-semibold text-gray-800">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100">
                 {currentFolder ? `New Sub-folder in "${currentFolder.name}"` : 'New Folder'}
               </h3>
               <button
                 onClick={() => { setShowCreateFolder(false); setNewFolderName(''); setNewFolderDesc(''); }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-400"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -883,27 +898,27 @@ const DocumentManager: React.FC = () => {
 
             <div className="space-y-3 mb-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Folder Name *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Folder Name *</label>
                 <input
                   type="text"
                   value={newFolderName}
                   onChange={e => setNewFolderName(e.target.value)}
                   placeholder="e.g. Q4 Reports"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100"
                   autoFocus
                   onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description <span className="text-gray-400 font-normal">(optional)</span>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Description <span className="text-gray-400 dark:text-slate-500 font-normal">(optional)</span>
                 </label>
                 <input
                   type="text"
                   value={newFolderDesc}
                   onChange={e => setNewFolderDesc(e.target.value)}
                   placeholder="Short description"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100"
                   onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
                 />
               </div>
@@ -912,7 +927,7 @@ const DocumentManager: React.FC = () => {
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => { setShowCreateFolder(false); setNewFolderName(''); setNewFolderDesc(''); }}
-                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg"
               >
                 Cancel
               </button>
