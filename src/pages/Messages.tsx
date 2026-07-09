@@ -6,7 +6,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import {
   Send, Search, Users, Megaphone, Hash, ArrowLeft,
   Plus, Settings, Trash2, UserPlus, BarChart2, X, Check,
-  Paperclip, Image, File, Video, FileArchive, XCircle
+  Paperclip, Image, File, Video, FileArchive, XCircle, Smile
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -18,6 +18,8 @@ interface Message {
   readByReceiver: boolean;
   sentAt: string;
   attachments?: Attachment[];
+  // JSON-encoded map of emoji -> usernames who reacted with it, e.g. {"👍":["alice"]}
+  reactions?: string;
 }
 
 interface GroupMessage {
@@ -29,6 +31,7 @@ interface GroupMessage {
   pollData?: string;
   attachments?: Attachment[];
   sentAt: string;
+  reactions?: string;
 }
 
 interface Broadcast {
@@ -246,6 +249,209 @@ function FileAttachment({ attachment, isMine }: { attachment: Attachment; isMine
 }
 
 // ─── Poll component ───────────────────────────────────────────────────────────
+// ─── Emoji reactions & picker ───────────────────────────────────────────────
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
+const EMOJI_CATEGORIES: { label: string; emojis: string[] }[] = [
+  {
+    label: "Smileys",
+    emojis: ["😀", "😃", "😄", "😁", "😆", "😅", "🤣", "😂", "🙂", "🙃", "😉", "😊",
+      "😇", "🥰", "😍", "🤩", "😘", "😋", "😛", "😜", "🤪", "🤑", "🤗", "🤭",
+      "🤔", "🤨", "😐", "😑", "🙄", "😏", "😴", "😷", "🤒", "🥵", "🥶", "😵",
+      "🤯", "🥳", "😎", "🤠", "😢", "😭", "😡", "🤬", "😱", "😨", "😰", "😅"],
+  },
+  {
+    label: "Gestures",
+    emojis: ["👍", "👎", "👏", "🙌", "🙏", "🤝", "👋", "✌️", "🤞", "🤟", "🤘",
+      "👌", "🤙", "💪", "🖐️", "✋", "👊", "✊", "🫡", "🫶"],
+  },
+  {
+    label: "Hearts",
+    emojis: ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❣️",
+      "💕", "💞", "💓", "💗", "💖", "💘", "💝"],
+  },
+  {
+    label: "Symbols",
+    emojis: ["🔥", "✨", "🎉", "🎊", "💯", "⭐", "🌟", "💫", "✅", "❌", "❓",
+      "❗", "💤", "🎈", "📌", "🚀"],
+  },
+];
+
+function parseReactionsJson(json?: string): Record<string, string[]> {
+  if (!json) return {};
+  try {
+    const parsed = JSON.parse(json);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function EmojiPicker({
+  onSelect, onClose, align = "left",
+}: {
+  onSelect: (emoji: string) => void;
+  onClose: () => void;
+  align?: "left" | "right";
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: "absolute", bottom: "calc(100% + 8px)", [align]: 0, zIndex: 60,
+        width: 264, maxHeight: 300, overflowY: "auto",
+        background: "var(--card, #fff)", border: "1px solid rgba(0,0,0,0.12)",
+        borderRadius: 12, boxShadow: "0 10px 28px rgba(0,0,0,0.2)", padding: 10,
+      }}
+    >
+      {EMOJI_CATEGORIES.map((cat) => (
+        <div key={cat.label} style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, opacity: 0.5, letterSpacing: 0.4, textTransform: "uppercase", margin: "4px 2px" }}>
+            {cat.label}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1 }}>
+            {cat.emojis.map((e) => (
+              <button
+                key={e}
+                type="button"
+                onMouseDown={(ev) => ev.preventDefault()}
+                onClick={() => onSelect(e)}
+                style={{ fontSize: 19, background: "none", border: "none", cursor: "pointer", borderRadius: 6, padding: 4, lineHeight: 1 }}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Small hover-to-react control rendered inline in a message's meta row.
+function ReactionControl({
+  align = "right", onReact,
+}: {
+  align?: "left" | "right";
+  onReact: (emoji: string) => void;
+}) {
+  const [mode, setMode] = useState<"closed" | "quick" | "full">("closed");
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (mode === "closed") return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setMode("closed");
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [mode]);
+
+  const handleSelect = (emoji: string) => {
+    onReact(emoji);
+    setMode("closed");
+  };
+
+  return (
+    <div ref={wrapRef} className="msg-react-control" style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        type="button"
+        className="msg-react-trigger"
+        title="React"
+        onClick={() => setMode((m) => (m === "closed" ? "quick" : "closed"))}
+        style={{
+          background: "none", border: "none", cursor: "pointer",
+          padding: 2, borderRadius: "50%", opacity: mode === "closed" ? 0 : 1,
+          transition: "opacity .15s", display: "flex", alignItems: "center", justifyContent: "center",
+          color: "inherit",
+        }}
+      >
+        <Smile size={13} />
+      </button>
+
+      {mode === "quick" && (
+        <div
+          style={{
+            position: "absolute", bottom: "calc(100% + 4px)", [align]: 0, zIndex: 50,
+            display: "flex", alignItems: "center", gap: 2,
+            background: "var(--card, #fff)", border: "1px solid rgba(0,0,0,0.12)",
+            borderRadius: 999, boxShadow: "0 4px 14px rgba(0,0,0,0.2)", padding: "3px 5px",
+          }}
+        >
+          {QUICK_REACTIONS.map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => handleSelect(e)}
+              style={{ fontSize: 17, background: "none", border: "none", cursor: "pointer", padding: 2, lineHeight: 1 }}
+            >
+              {e}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setMode("full")}
+            style={{ fontSize: 13, background: "none", border: "none", cursor: "pointer", padding: "2px 5px", opacity: 0.6 }}
+          >
+            +
+          </button>
+        </div>
+      )}
+
+      {mode === "full" && (
+        <EmojiPicker align={align} onSelect={handleSelect} onClose={() => setMode("closed")} />
+      )}
+    </div>
+  );
+}
+
+// Pills showing existing reactions under a bubble; tapping one toggles it.
+function ReactionPills({
+  reactions, currentUser, onToggle,
+}: {
+  reactions?: string;
+  currentUser: string;
+  onToggle: (emoji: string) => void;
+}) {
+  const parsed = parseReactionsJson(reactions);
+  const entries = Object.entries(parsed).filter(([, users]) => Array.isArray(users) && users.length > 0);
+  if (entries.length === 0) return null;
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: "4px 2px 0" }}>
+      {entries.map(([emoji, usersList]) => {
+        const mine = usersList.includes(currentUser);
+        return (
+          <button
+            key={emoji}
+            type="button"
+            onClick={() => onToggle(emoji)}
+            title={usersList.join(", ")}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 3,
+              fontSize: 12, padding: "1px 6px", borderRadius: 999, cursor: "pointer",
+              border: mine ? "1px solid #6366f1" : "1px solid rgba(0,0,0,0.14)",
+              background: mine ? "rgba(99,102,241,0.14)" : "rgba(0,0,0,0.045)",
+            }}
+          >
+            <span>{emoji}</span>
+            <span style={{ opacity: 0.7 }}>{usersList.length}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function PollBubble({
   msg, currentUser, groupId, onVoted
 }: {
@@ -322,6 +528,7 @@ export default function Messages() {
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [inboxError, setInboxError] = useState<string | null>(null);
+  const [showComposeEmoji, setShowComposeEmoji] = useState(false);
 
   // Pagination states - Inbox
   const [inboxPage, setInboxPage] = useState(0);
@@ -465,7 +672,9 @@ export default function Messages() {
           newMsg.receiverUsername === target.username)
       ) {
         setConversation((prev) =>
-          prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]
+          prev.some((m) => m.id === newMsg.id)
+            ? prev.map((m) => (m.id === newMsg.id ? newMsg : m))
+            : [...prev, newMsg]
         );
       }
       const other = newMsg.senderUsername === name ? newMsg.receiverUsername : newMsg.senderUsername;
@@ -695,6 +904,24 @@ export default function Messages() {
     }
   };
 
+  // ── Emoji reactions ─────────────────────────────────────────────────────────
+  const toggleDmReaction = async (msg: Message, emoji: string) => {
+    try {
+      const r = await api.post<Message>(`/messages/${msg.id}/react`, { emoji });
+      setConversation((prev) => prev.map((m) => (m.id === r.data.id ? r.data : m)));
+      const other = r.data.senderUsername === name ? r.data.receiverUsername : r.data.senderUsername;
+      setInboxMap((prev) => (prev[other]?.id === r.data.id ? { ...prev, [other]: r.data } : prev));
+    } catch { /* ignore */ }
+  };
+
+  const toggleGroupReaction = async (msg: GroupMessage, emoji: string) => {
+    if (!chatTarget || chatTarget.type !== "group") return;
+    try {
+      const r = await api.post<GroupMessage>(`/groups/${chatTarget.group.id}/messages/${msg.id}/react`, { emoji });
+      setGroupMessages((prev) => prev.map((m) => (m.id === r.data.id ? r.data : m)));
+    } catch { /* ignore */ }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey && !uploading) {
       e.preventDefault();
@@ -705,6 +932,7 @@ export default function Messages() {
   const openChat = (target: ChatTarget) => {
     setChatTarget(target);
     setMobileChatOpen(true);
+    setShowComposeEmoji(false);
     if (target.type === "user") {
       setConversation([]);
       setConvPage(0);
@@ -961,6 +1189,9 @@ export default function Messages() {
         .msg-bubble-meta { display:flex; align-items:center; gap:4px; margin-top:3px; padding:0 4px; }
         .msg-bubble-meta span { font-size:10.5px; color:hsl(var(--muted-foreground)); }
         .msg-bubble-meta.mine span { color:rgba(255,255,255,.65); }
+        .msg-bubble-wrap:hover .msg-react-trigger { opacity:1 !important; }
+        .msg-react-trigger { color:hsl(var(--muted-foreground)); }
+        .msg-react-trigger:hover { color:hsl(var(--foreground)); }
         .msg-loading-more {
           text-align:center; padding:10px; font-size:12px; 
           color:hsl(var(--muted-foreground)); 
@@ -1313,6 +1544,18 @@ export default function Messages() {
               <div className="msg-input-area">
                 <div className="msg-input-row">
                   <input ref={inputRef} placeholder="Send a message to everyone…" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={handleKeyDown} disabled={sending || uploading} />
+                  <div style={{ position: "relative" }}>
+                    <button className="msg-toolbar-btn" onClick={() => setShowComposeEmoji((v) => !v)} disabled={uploading} title="Emoji">
+                      <Smile size={13} />
+                    </button>
+                    {showComposeEmoji && (
+                      <EmojiPicker
+                        align="right"
+                        onSelect={(e) => setNewMessage((prev) => prev + e)}
+                        onClose={() => setShowComposeEmoji(false)}
+                      />
+                    )}
+                  </div>
                   <button className="msg-toolbar-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
                     <Paperclip size={13} />
                   </button>
@@ -1367,7 +1610,7 @@ export default function Messages() {
                     return (
                       <div key={msg.id}>
                         {showDivider && <div className="msg-day-divider"><span>{longDateLabel(msg.sentAt)}</span></div>}
-                        <div className={`msg-bubble-group ${isMine ? "mine" : "theirs"}`}>
+                        <div className={`msg-bubble-group msg-bubble-wrap ${isMine ? "mine" : "theirs"}`}>
                           {showSender && !isMine && (
                             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, paddingLeft: 6 }}>
                               <UserAvatar username={msg.senderUsername} size={20} />
@@ -1389,10 +1632,18 @@ export default function Messages() {
                               {msg.attachments?.map(attachment => (
                                 <FileAttachment key={attachment.id} attachment={attachment} isMine={isMine} />
                               ))}
+                              <ReactionPills
+                                reactions={msg.reactions}
+                                currentUser={name!}
+                                onToggle={(emoji) => toggleGroupReaction(msg, emoji)}
+                              />
                             </>
                           )}
                           <div className={`msg-bubble-meta ${isMine ? "mine" : ""}`}>
                             <span>{fmtTime(msg.sentAt)}</span>
+                            {msg.messageType !== "POLL" && (
+                              <ReactionControl align={isMine ? "right" : "left"} onReact={(emoji) => toggleGroupReaction(msg, emoji)} />
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1435,6 +1686,18 @@ export default function Messages() {
                     onKeyDown={handleKeyDown}
                     disabled={sending || uploading}
                   />
+                  <div style={{ position: "relative" }}>
+                    <button className="msg-toolbar-btn" onClick={() => setShowComposeEmoji((v) => !v)} disabled={uploading} title="Emoji">
+                      <Smile size={13} />
+                    </button>
+                    {showComposeEmoji && (
+                      <EmojiPicker
+                        align="right"
+                        onSelect={(e) => setNewMessage((prev) => prev + e)}
+                        onClose={() => setShowComposeEmoji(false)}
+                      />
+                    )}
+                  </div>
                   <button className="msg-toolbar-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
                     <Paperclip size={13} />
                   </button>
@@ -1478,24 +1741,28 @@ export default function Messages() {
                   </div>
                 ) : (
                   conversation.map((msg, i) => {
-                  const isMine = msg.senderUsername === name;
-  console.log('DEBUG', { senderUsername: msg.senderUsername, name, isMine });
-
+                    const isMine = msg.senderUsername === name;
                     const prev = conversation[i - 1];
                     const showSender = !prev || prev.senderUsername !== msg.senderUsername;
                     const showDivider = !prev || dateKey(msg.sentAt) !== dateKey(prev.sentAt);
                     return (
                       <div key={msg.id}>
                         {showDivider && <div className="msg-day-divider"><span>{longDateLabel(msg.sentAt)}</span></div>}
-                        <div className={`msg-bubble-group ${isMine ? "mine" : "theirs"}`}>
+                        <div className={`msg-bubble-group msg-bubble-wrap ${isMine ? "mine" : "theirs"}`}>
                           {showSender && !isMine && <div className="msg-sender-label">{msg.senderUsername}</div>}
                           {msg.content && <div className={`msg-bubble ${isMine ? "mine" : "theirs"}`}>{msg.content}</div>}
                           {msg.attachments?.map(attachment => (
                             <FileAttachment key={attachment.id} attachment={attachment} isMine={isMine} />
                           ))}
+                          <ReactionPills
+                            reactions={msg.reactions}
+                            currentUser={name!}
+                            onToggle={(emoji) => toggleDmReaction(msg, emoji)}
+                          />
                           <div className={`msg-bubble-meta ${isMine ? "mine" : ""}`}>
                             <span>{fmtTime(msg.sentAt)}</span>
                             {isMine && <span style={{ fontSize: 12 }}>{msg.readByReceiver ? "✓✓" : "✓"}</span>}
+                            <ReactionControl align={isMine ? "right" : "left"} onReact={(emoji) => toggleDmReaction(msg, emoji)} />
                           </div>
                         </div>
                       </div>
@@ -1533,6 +1800,18 @@ export default function Messages() {
                     onKeyDown={handleKeyDown}
                     disabled={sending || uploading}
                   />
+                  <div style={{ position: "relative" }}>
+                    <button className="msg-toolbar-btn" onClick={() => setShowComposeEmoji((v) => !v)} disabled={uploading} title="Emoji">
+                      <Smile size={13} />
+                    </button>
+                    {showComposeEmoji && (
+                      <EmojiPicker
+                        align="right"
+                        onSelect={(e) => setNewMessage((prev) => prev + e)}
+                        onClose={() => setShowComposeEmoji(false)}
+                      />
+                    )}
+                  </div>
                   <button className="msg-toolbar-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
                     <Paperclip size={13} />
                   </button>
