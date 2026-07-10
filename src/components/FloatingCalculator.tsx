@@ -202,24 +202,21 @@ function useTheme() {
    (Windows only)
 ═══════════════════════════════════════════════════════ */
 
-function DownloadPopup({ onClose, onDownload }: { 
-  onClose: () => void; 
+function DownloadPopup({ onClose, onDownload }: {
+  onClose: () => void;
   onDownload: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const [selected, setSelected] = useState(false);
-  const [showDownloadPopup, setShowDownloadPopup] = useState(false);
   const isDark = useTheme();
 
-  const handleDownload = useCallback(() => {
-  const link = document.createElement('a');
-  link.href = 'https://github.com/yourorg/yourrepo/releases/download/v1.0.0/windows.exe';
-  link.download = 'windows.exe';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  setShowDownloadPopup(false);
-}, []);
+  const handleDownloadClick = () => {
+    setSelected(true);
+    setTimeout(() => {
+      onDownload();   
+      setSelected(false);
+    }, 300);
+  };
 
   return (
     <div className={`fc-download-overlay ${isDark ? 'dark' : 'light'}`} onClick={onClose}>
@@ -340,16 +337,18 @@ export function FloatingCalculator() {
   };
 
   /* ── Download handler (Windows only) ─────────── */
-  const handleDownload = useCallback(() => {
-    const fileName = 'windows.exe';
-    const link = document.createElement('a');
-    link.href = `/${fileName}`;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setShowDownloadPopup(false);
-  }, []);
+  const WINDOWS_EXE_URL =
+  'https://github.com/zeehaancode21/ikt-management-frontend/releases/download/v1.0.0/windows.exe';
+
+const handleDownload = useCallback(() => {
+  const link = document.createElement('a');
+  link.href = WINDOWS_EXE_URL;
+  link.download = 'windows.exe';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setShowDownloadPopup(false);
+}, []);
 
   /* ══════════════════════════════════════════════
      STANDARD MODE STATE
@@ -844,11 +843,11 @@ export function FloatingCalculator() {
 
         {/* Download Popup */}
         {showDownloadPopup && (
-          <DownloadPopup 
-            onClose={() => setShowDownloadPopup(false)}
-            onDownload={handleDownload}
-          />
-        )}
+  <DownloadPopup
+    onClose={() => setShowDownloadPopup(false)}
+    onDownload={handleDownload}
+  />
+)}
 
         <style>{FAB_CSS}</style>
         <style>{DOWNLOAD_POPUP_CSS}</style>
