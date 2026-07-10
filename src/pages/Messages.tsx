@@ -6,7 +6,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import {
   Send, Search, Users, Megaphone, Hash, ArrowLeft,
   Plus, Settings, Trash2, UserPlus, BarChart2, X, Check,
-  Paperclip, Image, File, Video, FileArchive, XCircle, Smile
+  Paperclip, Image, File, Video, FileArchive, XCircle, Smile, Reply
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -20,6 +20,11 @@ interface Message {
   attachments?: Attachment[];
   // JSON-encoded map of emoji -> usernames who reacted with it, e.g. {"👍":["alice"]}
   reactions?: string;
+  // Present when this message is a reply to an earlier message in the conversation.
+  replyToId?: number;
+  replyToSender?: string;
+  replyToContent?: string;
+  replyToHasAttachment?: boolean;
 }
 
 interface GroupMessage {
@@ -32,6 +37,20 @@ interface GroupMessage {
   attachments?: Attachment[];
   sentAt: string;
   reactions?: string;
+  // Present when this message is a reply to an earlier message in the group.
+  replyToId?: number;
+  replyToSender?: string;
+  replyToContent?: string;
+  replyToHasAttachment?: boolean;
+}
+
+// Shared shape used to drive the "replying to…" preview bar above the
+// composer, for both DM and group chats.
+interface ReplyTarget {
+  id: number;
+  sender: string;
+  content: string;
+  hasAttachment: boolean;
 }
 
 interface Broadcast {
@@ -452,6 +471,54 @@ function ReactionPills({
   );
 }
 
+// Bar shown above the composer while replying to a message — mirrors
+// WhatsApp/Telegram's "replying to…" strip, with a cancel (X) button.
+function ReplyPreviewBar({ target, onCancel }: { target: ReplyTarget; onCancel: () => void }) {
+  const preview = target.content?.trim()
+    ? target.content
+    : target.hasAttachment
+      ? "📎 Attachment"
+      : "";
+  return (
+    <div className="msg-reply-preview-bar">
+      <Reply size={14} className="msg-reply-preview-icon" />
+      <div className="msg-reply-preview-text">
+        <span className="msg-reply-preview-sender">{target.sender}</span>
+        <span className="msg-reply-preview-content">{preview}</span>
+      </div>
+      <button type="button" className="msg-reply-preview-cancel" onClick={onCancel} title="Cancel reply">
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
+// Quoted block rendered inside a bubble when that message is a reply.
+// Tapping it scrolls back to (and briefly highlights) the original message.
+function ReplyQuoteBlock({
+  replyToId, sender, content, hasAttachment, isMine, onJump,
+}: {
+  replyToId: number;
+  sender?: string;
+  content?: string;
+  hasAttachment?: boolean;
+  isMine: boolean;
+  onJump: (id: number) => void;
+}) {
+  const preview = content?.trim() ? content : hasAttachment ? "📎 Attachment" : "";
+  return (
+    <button
+      type="button"
+      className={`msg-reply-quote ${isMine ? "mine" : "theirs"}`}
+      onClick={() => onJump(replyToId)}
+      title="Jump to original message"
+    >
+      <span className="msg-reply-quote-sender">{sender}</span>
+      <span className="msg-reply-quote-content">{preview}</span>
+    </button>
+  );
+}
+
 function PollBubble({
   msg, currentUser, groupId, onVoted
 }: {
@@ -569,6 +636,15 @@ export default function Messages() {
   const [deleteConversationTarget, setDeleteConversationTarget] = useState<string | null>(null);
   const [deletingConversation, setDeletingConversation] = useState(false);
   const [removingMessageIds, setRemovingMessageIds] = useState<Set<number>>(new Set());
+
+  // ── Reply-to-message state ────────────────────────────────────────────────
+  // The message currently being replied to (works for both DM and group chats
+  // since ReplyTarget only stores the small preview fields each needs).
+  const [replyingTo, setReplyingTo] = useState<ReplyTarget | null>(null);
+  // Refs to each rendered bubble, keyed by message id, so tapping a quoted
+  // reply preview can scroll back to the original message.
+  const messageBubbleRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
 
   // Poll creation modal
   const [showPollModal, setShowPollModal] = useState(false);
@@ -833,9 +909,12 @@ export default function Messages() {
     setSending(true);
     const content = newMessage.trim();
     const filesToUpload = [...selectedFiles];
+    const replyBeingSent = replyingTo;
+    const replyToIdToSend = replyBeingSent?.id;
 
     setNewMessage("");
     setSelectedFiles([]);
+    setReplyingTo(null);
 
     // Broadcast
     if (chatTarget?.type === "broadcast") {
@@ -873,7 +952,8 @@ export default function Messages() {
         const r = await api.post<GroupMessage>(`/groups/${chatTarget.group.id}/messages`, {
           content,
           attachments: attachments.map(a => a.id),
-          messageType: attachments.length > 0 ? "FILE" : "MESSAGE"
+          messageType: attachments.length > 0 ? "FILE" : "MESSAGE",
+          replyToId: replyToIdToSend
         });
         setGroupMessages((prev) =>
           prev.some((m) => m.id === r.data.id) ? prev : [...prev, r.data]
@@ -882,6 +962,7 @@ export default function Messages() {
         console.error('Group message failed:', error);
         setNewMessage(content);
         setSelectedFiles(filesToUpload);
+        if (replyBeingSent) setReplyingTo(replyBeingSent);
       } finally {
         setSending(false);
         setUploading(false);
@@ -907,14 +988,19 @@ export default function Messages() {
       const optimistic: Message = {
         id: tempId, senderUsername: name!, receiverUsername: chatTarget.username,
         content, readByReceiver: false, sentAt: new Date().toISOString(),
-        attachments
+        attachments,
+        replyToId: replyBeingSent?.id,
+        replyToSender: replyBeingSent?.sender,
+        replyToContent: replyBeingSent?.content,
+        replyToHasAttachment: replyBeingSent?.hasAttachment
       };
       setConversation((prev) => [...prev, optimistic]);
 
       const r = await api.post<Message>("/messages/send", {
         receiverUsername: chatTarget.username,
         content,
-        attachments: attachments.map(a => a.id)
+        attachments: attachments.map(a => a.id),
+        replyToId: replyToIdToSend
       });
       setConversation((prev) => prev.map((m) => m.id === tempId ? r.data : m));
       if (!loadingLockRef.current) {
@@ -925,6 +1011,7 @@ export default function Messages() {
       setConversation((prev) => prev.filter((m) => m.id !== tempId));
       setNewMessage(content);
       setSelectedFiles(filesToUpload);
+      if (replyBeingSent) setReplyingTo(replyBeingSent);
     } finally {
       setSending(false);
       setUploading(false);
@@ -949,6 +1036,34 @@ export default function Messages() {
     } catch { /* ignore */ }
   };
 
+  // Scrolls to (and briefly highlights) the original message when a user
+  // taps the quoted preview inside a reply bubble.
+  const scrollToMessage = (id: number) => {
+    const el = messageBubbleRefs.current[id];
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedMessageId(id);
+    window.setTimeout(() => {
+      setHighlightedMessageId((cur) => (cur === id ? null : cur));
+    }, 1500);
+  };
+
+  // ── Reply-to-message ─────────────────────────────────────────────────────
+  // Builds a ReplyTarget preview from whichever message the user tapped
+  // "reply" on (works the same for DM and group bubbles) and focuses the
+  // composer so they can start typing immediately.
+  const startReply = (msg: Message | GroupMessage) => {
+    setReplyingTo({
+      id: msg.id,
+      sender: msg.senderUsername,
+      content: msg.content,
+      hasAttachment: !!(msg.attachments && msg.attachments.length > 0),
+    });
+    inputRef.current?.focus();
+  };
+
+  const cancelReply = () => setReplyingTo(null);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey && !uploading) {
       e.preventDefault();
@@ -960,6 +1075,7 @@ export default function Messages() {
     setChatTarget(target);
     setMobileChatOpen(true);
     setShowComposeEmoji(false);
+    setReplyingTo(null);
     if (target.type === "user") {
       setConversation([]);
       setConvPage(0);
@@ -1461,6 +1577,56 @@ export default function Messages() {
           .msg-send-btn { width:32px; height:32px; min-width:32px; }
           .msg-toolbar-btn { padding:4px 8px; }
         }
+
+        /* ── Reply-to-message ──────────────────────────────────────────── */
+        .msg-reply-trigger {
+          background:none; border:none; cursor:pointer; padding:2px; border-radius:50%;
+          display:flex; align-items:center; justify-content:center;
+          color:hsl(var(--muted-foreground)); opacity:0; transition:opacity .15s;
+        }
+        .msg-bubble-wrap:hover .msg-reply-trigger { opacity:1; }
+        .msg-reply-trigger:hover { color:hsl(var(--foreground)); }
+
+        .msg-reply-preview-bar {
+          display:flex; align-items:center; gap:8px;
+          background:hsl(var(--muted)); border-left:3px solid #6366f1;
+          border-radius:8px; padding:6px 10px; margin-bottom:8px;
+        }
+        .msg-reply-preview-icon { color:#6366f1; flex-shrink:0; }
+        .msg-reply-preview-text { display:flex; flex-direction:column; gap:1px; min-width:0; flex:1; }
+        .msg-reply-preview-sender { font-size:12px; font-weight:600; color:#6366f1; }
+        .msg-reply-preview-content {
+          font-size:12.5px; color:hsl(var(--muted-foreground));
+          overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+        }
+        .msg-reply-preview-cancel {
+          background:none; border:none; cursor:pointer; flex-shrink:0;
+          color:hsl(var(--muted-foreground)); display:flex; align-items:center; justify-content:center;
+          padding:3px; border-radius:50%;
+        }
+        .msg-reply-preview-cancel:hover { color:#ef4444; }
+
+        .msg-reply-quote {
+          display:flex; flex-direction:column; gap:1px; text-align:left;
+          width:100%; max-width:100%; box-sizing:border-box;
+          background:rgba(99,102,241,0.1); border-left:3px solid #6366f1;
+          border-radius:6px; padding:4px 8px; margin-bottom:4px;
+          cursor:pointer; font:inherit;
+        }
+        .msg-reply-quote.mine { background:rgba(255,255,255,0.18); border-left-color:rgba(255,255,255,0.8); }
+        .msg-reply-quote-sender { font-size:11.5px; font-weight:600; color:#6366f1; }
+        .msg-reply-quote.mine .msg-reply-quote-sender { color:rgba(255,255,255,0.95); }
+        .msg-reply-quote-content {
+          font-size:12px; color:hsl(var(--muted-foreground));
+          overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block;
+        }
+        .msg-reply-quote.mine .msg-reply-quote-content { color:rgba(255,255,255,0.85); }
+
+        .msg-item-highlighted .msg-bubble-group { animation:msgHighlightPulse 1.5s ease-out; }
+        @keyframes msgHighlightPulse {
+          0% { background-color:rgba(99,102,241,0.25); border-radius:12px; }
+          100% { background-color:transparent; }
+        }
       `}</style>
 
       {!connected && <div className="msg-ws-banner">Connecting to server…</div>}
@@ -1724,7 +1890,11 @@ export default function Messages() {
                     const showSender = !prev || prev.senderUsername !== msg.senderUsername;
                     const showDivider = !prev || dateKey(msg.sentAt) !== dateKey(prev.sentAt);
                     return (
-                      <div key={msg.id}>
+                      <div
+                        key={msg.id}
+                        ref={(el) => { messageBubbleRefs.current[msg.id] = el; }}
+                        className={highlightedMessageId === msg.id ? "msg-item-highlighted" : ""}
+                      >
                         {showDivider && <div className="msg-day-divider"><span>{longDateLabel(msg.sentAt)}</span></div>}
                         <div className={`msg-bubble-group msg-bubble-wrap ${isMine ? "mine" : "theirs"}`}>
                           {showSender && !isMine && (
@@ -1744,7 +1914,21 @@ export default function Messages() {
                             />
                           ) : (
                             <>
-                              {msg.content && <div className={`msg-bubble ${isMine ? "mine" : "theirs"}`}>{msg.content}</div>}
+                              {(msg.content || msg.replyToId) && (
+                                <div className={`msg-bubble ${isMine ? "mine" : "theirs"}`}>
+                                  {msg.replyToId && (
+                                    <ReplyQuoteBlock
+                                      replyToId={msg.replyToId}
+                                      sender={msg.replyToSender}
+                                      content={msg.replyToContent}
+                                      hasAttachment={msg.replyToHasAttachment}
+                                      isMine={isMine}
+                                      onJump={scrollToMessage}
+                                    />
+                                  )}
+                                  {msg.content}
+                                </div>
+                              )}
                               {msg.attachments?.map(attachment => (
                                 <FileAttachment key={attachment.id} attachment={attachment} isMine={isMine} />
                               ))}
@@ -1758,7 +1942,17 @@ export default function Messages() {
                           <div className={`msg-bubble-meta ${isMine ? "mine" : ""}`}>
                             <span>{fmtTime(msg.sentAt)}</span>
                             {msg.messageType !== "POLL" && (
-                              <ReactionControl align={isMine ? "right" : "left"} onReact={(emoji) => toggleGroupReaction(msg, emoji)} />
+                              <>
+                                <button
+                                  type="button"
+                                  className="msg-reply-trigger"
+                                  title="Reply"
+                                  onClick={() => startReply(msg)}
+                                >
+                                  <Reply size={12} />
+                                </button>
+                                <ReactionControl align={isMine ? "right" : "left"} onReact={(emoji) => toggleGroupReaction(msg, emoji)} />
+                              </>
                             )}
                           </div>
                         </div>
@@ -1775,6 +1969,7 @@ export default function Messages() {
                     <BarChart2 size={13} /> Poll
                   </button>
                 </div>
+                {replyingTo && <ReplyPreviewBar target={replyingTo} onCancel={cancelReply} />}
                 {selectedFiles.length > 0 && (
                   <div className="selected-files">
                     {selectedFiles.map((file, idx) => (
@@ -1870,11 +2065,29 @@ export default function Messages() {
                     const showSender = !prev || prev.senderUsername !== msg.senderUsername;
                     const showDivider = !prev || dateKey(msg.sentAt) !== dateKey(prev.sentAt);
                     return (
-                      <div key={msg.id} className={removingMessageIds.has(msg.id) ? "msg-item-removing" : ""}>
+                      <div
+                        key={msg.id}
+                        ref={(el) => { messageBubbleRefs.current[msg.id] = el; }}
+                        className={`${removingMessageIds.has(msg.id) ? "msg-item-removing" : ""} ${highlightedMessageId === msg.id ? "msg-item-highlighted" : ""}`}
+                      >
                         {showDivider && <div className="msg-day-divider"><span>{longDateLabel(msg.sentAt)}</span></div>}
                         <div className={`msg-bubble-group msg-bubble-wrap ${isMine ? "mine" : "theirs"}`}>
                           {showSender && !isMine && <div className="msg-sender-label">{msg.senderUsername}</div>}
-                          {msg.content && <div className={`msg-bubble ${isMine ? "mine" : "theirs"}`}>{msg.content}</div>}
+                          {(msg.content || msg.replyToId) && (
+                            <div className={`msg-bubble ${isMine ? "mine" : "theirs"}`}>
+                              {msg.replyToId && (
+                                <ReplyQuoteBlock
+                                  replyToId={msg.replyToId}
+                                  sender={msg.replyToSender}
+                                  content={msg.replyToContent}
+                                  hasAttachment={msg.replyToHasAttachment}
+                                  isMine={isMine}
+                                  onJump={scrollToMessage}
+                                />
+                              )}
+                              {msg.content}
+                            </div>
+                          )}
                           {msg.attachments?.map(attachment => (
                             <FileAttachment key={attachment.id} attachment={attachment} isMine={isMine} />
                           ))}
@@ -1886,6 +2099,14 @@ export default function Messages() {
                           <div className={`msg-bubble-meta ${isMine ? "mine" : ""}`}>
                             <span>{fmtTime(msg.sentAt)}</span>
                             {isMine && <span style={{ fontSize: 12 }}>{msg.readByReceiver ? "✓✓" : "✓"}</span>}
+                            <button
+                              type="button"
+                              className="msg-reply-trigger"
+                              title="Reply"
+                              onClick={() => startReply(msg)}
+                            >
+                              <Reply size={12} />
+                            </button>
                             <ReactionControl align={isMine ? "right" : "left"} onReact={(emoji) => toggleDmReaction(msg, emoji)} />
                             {isMine && (
                               <button
@@ -1907,6 +2128,7 @@ export default function Messages() {
               </div>
 
               <div className="msg-input-area">
+                {replyingTo && <ReplyPreviewBar target={replyingTo} onCancel={cancelReply} />}
                 {selectedFiles.length > 0 && (
                   <div className="selected-files">
                     {selectedFiles.map((file, idx) => (
