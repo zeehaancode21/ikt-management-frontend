@@ -15,6 +15,8 @@ import {
   ArrowUpRight,
   Sparkles,
   BarChart3,
+  Stars,
+  Zap,
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
@@ -25,7 +27,6 @@ import ChangePasswordModal from "@/components/ChangePasswordModal";
 import { UserAvatar } from "@/components/UserAvatar";
 
 // ── Company website ───────────────────────────────────────────────────────
-// Change these two values to update the link shown under the logo.
 const COMPANY_WEBSITE_URL = "https://www.iktangience.com";
 const COMPANY_WEBSITE_LABEL = "IK Tangience";
 
@@ -90,7 +91,6 @@ const sidebarStyles = `
     transform: translateY(-2px) scale(1.03);
   }
 
-  /* Outer wrapper carries the animated rotating gradient "border" */
   .sb-site-link {
     position: relative;
     display: block;
@@ -270,83 +270,212 @@ const sidebarStyles = `
     animation: sb-sparkle-spin 0.85s ease-out forwards;
   }
 
-  @keyframes sb-magic-msg {
-    0%   { opacity: 0; transform: translate(-50%, 6px) scale(0.85); filter: blur(4px); }
-    12%  { opacity: 1; transform: translate(-50%, 0) scale(1.04); filter: blur(0); }
-    18%  { transform: translate(-50%, 0) scale(1); }
-    88%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
-    100% { opacity: 0; transform: translate(-50%, -10px) scale(0.92); filter: blur(3px); }
+  /* ============================================================
+     ✨ MAGICAL MESSAGE - ENHANCED WITH BEAUTIFUL EFFECTS
+     ============================================================ */
+  
+  /* Floating stars background */
+  @keyframes sb-float-stars {
+    0% { transform: translateY(0) rotate(0deg); opacity: 0; }
+    20% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { transform: translateY(-60px) rotate(360deg); opacity: 0; }
   }
 
-  @keyframes sb-magic-shimmer {
-    0%   { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+  /* Main message container - floating effect */
+  @keyframes sb-message-float {
+    0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+    50% { transform: translateX(-50%) translateY(-4px) scale(1.02); }
   }
 
-  @keyframes sb-magic-glow-pulse {
-    0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
-    50%      { opacity: 0.9; transform: translate(-50%, -50%) scale(1.12); }
+  /* Entrance animation - magical swirl */
+  @keyframes sb-message-entrance {
+    0% { 
+      opacity: 0; 
+      transform: translateX(-50%) translateY(20px) scale(0.6) rotate(-8deg);
+      filter: blur(10px);
+    }
+    30% {
+      opacity: 1;
+      transform: translateX(-50%) translateY(-4px) scale(1.08) rotate(2deg);
+      filter: blur(0);
+    }
+    50% {
+      transform: translateX(-50%) translateY(2px) scale(0.98) rotate(-1deg);
+    }
+    70% {
+      transform: translateX(-50%) translateY(-2px) scale(1.02) rotate(0.5deg);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0) scale(1) rotate(0deg);
+      filter: blur(0);
+    }
+  }
+
+  /* Exit animation */
+  @keyframes sb-message-exit {
+    0% {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0) scale(1) rotate(0deg);
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(-50%) translateY(-30px) scale(0.7) rotate(10deg);
+      filter: blur(8px);
+    }
+  }
+
+  /* Rainbow shimmer effect */
+  @keyframes sb-rainbow-shimmer {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Sparkle burst */
+  @keyframes sb-sparkle-burst {
+    0% { transform: scale(0) rotate(0deg); opacity: 1; }
+    100% { transform: scale(1.5) rotate(180deg); opacity: 0; }
   }
 
   .sb-magic-message-wrap {
     position: absolute;
-    top: calc(100% + 10px);
+    top: calc(100% + 16px);
     left: 50%;
     transform: translateX(-50%);
-    z-index: 30;
+    z-index: 40;
     width: max-content;
-    max-width: 200px;
+    max-width: 280px;
     pointer-events: none;
-    animation: sb-magic-msg 2.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    opacity: 0;
   }
 
-  .sb-magic-glow {
+  .sb-magic-message-wrap.sb-message-visible {
+    animation: sb-message-entrance 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  .sb-magic-message-wrap.sb-message-hiding {
+    animation: sb-message-exit 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  /* Outer glow container */
+  .sb-magic-message-outer {
+    position: relative;
+    padding: 3px;
+    border-radius: 20px;
+    background: conic-gradient(
+      from 0deg,
+      #ff6b6b,
+      #ffd93d,
+      #6bcb77,
+      #4d96ff,
+      #9b59b6,
+      #ff6b6b
+    );
+    background-size: 300% 300%;
+    animation: sb-rainbow-shimmer 4s ease infinite;
+    box-shadow: 
+      0 20px 60px rgba(0, 0, 0, 0.6),
+      0 0 40px rgba(77, 150, 255, 0.3),
+      inset 0 0 20px rgba(255, 255, 255, 0.1);
+  }
+
+  /* Inner message with glass effect */
+  .sb-magic-message-inner {
+    position: relative;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 18px;
+    padding: 14px 24px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  /* Animated background gradient */
+  .sb-magic-message-inner::before {
+    content: '';
     position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 90%;
-    height: 140%;
-    background: radial-gradient(circle, hsl(var(--sidebar-primary) / 0.55) 0%, transparent 70%);
-    filter: blur(12px);
-    transform: translate(-50%, -50%);
-    animation: sb-magic-glow-pulse 1.4s ease-in-out infinite;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 30% 40%, 
+      rgba(77, 150, 255, 0.15) 0%,
+      rgba(155, 89, 182, 0.1) 30%,
+      rgba(255, 107, 107, 0.05) 60%,
+      transparent 80%
+    );
+    animation: sb-float-stars 6s ease-in-out infinite;
     pointer-events: none;
-    z-index: -1;
   }
 
-  .sb-magic-message {
+  /* Floating particles inside the message */
+  .sb-magic-message-inner::after {
+    content: '✦ ✧ ✦ ✧ ✦';
+    position: absolute;
+    top: -20%;
+    left: -10%;
+    font-size: 8px;
+    letter-spacing: 20px;
+    color: rgba(255, 255, 255, 0.1);
+    animation: sb-float-stars 8s linear infinite;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  /* Message text with gradient */
+  .sb-magic-message-text {
     position: relative;
     display: block;
     text-align: center;
-    white-space: normal;
-    word-wrap: break-word;
-    font-size: 12.5px;
-    line-height: 1.35;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: white;
+    font-size: 14px;
+    line-height: 1.5;
+    font-weight: 700;
+    letter-spacing: 0.03em;
     background: linear-gradient(
       135deg,
-      hsl(var(--sidebar-primary)),
-      hsl(var(--sidebar-primary) / 0.75) 45%,
-      hsl(var(--sidebar-primary))
+      #fff 0%,
+      #ffd93d 25%,
+      #6bcb77 50%,
+      #4d96ff 75%,
+      #9b59b6 100%
     );
-    background-size: 250% 250%;
-    animation: sb-magic-shimmer 3s linear infinite;
-    padding: 8px 16px;
-    border-radius: 14px;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: sb-rainbow-shimmer 3s ease infinite;
+    text-shadow: none;
+    z-index: 1;
   }
 
-  /* ── Nav scroll region ─────────────────────────────────────────────────
-     The nav list is the ONLY part of the sidebar allowed to shrink/scroll.
-     Logo block, user chip, and footer are flex-shrink: 0 (see inline
-     classes) so they always render in full; if the viewport is short
-     (small screens, high browser zoom, etc.) the nav area scrolls instead
-     of any item silently disappearing. The scrollbar is kept slim but
-     visible at all times so it's clear there's more to scroll to. */
+  /* Emoji glow */
+  .sb-magic-message-emoji {
+    display: inline-block;
+    filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.4));
+    animation: sb-message-float 2s ease-in-out infinite;
+  }
+
+  /* Sparkle decorations */
+  .sb-magic-sparkle {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 0 10px 2px rgba(255, 215, 0, 0.6);
+    animation: sb-sparkle-burst 1.5s ease-out forwards;
+    pointer-events: none;
+  }
+
+  .sb-magic-sparkle:nth-child(1) { top: -8px; left: 10%; animation-delay: 0.1s; }
+  .sb-magic-sparkle:nth-child(2) { top: -12px; right: 15%; animation-delay: 0.3s; }
+  .sb-magic-sparkle:nth-child(3) { bottom: -8px; left: 20%; animation-delay: 0.5s; }
+  .sb-magic-sparkle:nth-child(4) { bottom: -10px; right: 25%; animation-delay: 0.7s; }
+
+  /* ── Nav scroll region ───────────────────────────────────────────────── */
   .sb-nav {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--sidebar-primary) / 0.6) transparent;
@@ -363,8 +492,7 @@ const sidebarStyles = `
   }
 `;
 
-// A little professional flourish — one is picked at random each time the
-// logo is clicked and shown briefly beneath it.
+// Magic messages with steel detailing theme
 const LOGO_MAGIC_MESSAGES = [
   "✨ From model to metal.",
   "🚀 Detailed to perfection.",
@@ -385,7 +513,47 @@ const LOGO_MAGIC_MESSAGES = [
   "🕰️ Timeless quality, modern precision.",
   "💪 Strength in every structure.",
   "🌿 Sustainable steel solutions.",
-  "📊 Data-driven detailing for superior results."
+  "📊 Data-driven detailing for superior results.",
+  "📏 Precision measured in every detail.",
+  "🔧 Building dreams, one beam at a time.",
+  "⚙️ Engineering the future with steel.",
+  "📋 Every detail documented with care.",
+  "🎯 Zero tolerance, total precision.",
+  "🔩 Bolted down to perfection.",
+  "🏭 From steel to structure.",
+  "📐 Accuracy is our blueprint.",
+  "🛡️ Strength, precision, and integrity.",
+  "⚡ Powering structures with accuracy.",
+  "📊 Data-driven decisions for superior builds.",
+  "🔍 Every detail inspected, every joint perfected.",
+  "🏛️ Building the future, one frame at a time.",
+  "🎨 Where engineering meets artistry.",
+  "💡 Illuminating the path to perfection.",
+  "📈 Raising the bar in steel detailing.",
+  "🔗 Connecting precision with performance.",
+  "🛠️ Craftsmanship you can count on.",
+  "📏 Detail is not just a word, it's our promise.",
+  "⚖️ Balancing precision with perfection.",
+  "🏗️ Steel structures, built to last.",
+  "🔩 Every connection counts.",
+  "📐 From sketch to steel, perfectly executed.",
+  "💎 Turning raw steel into refined structures.",
+  "🚀 Accelerating excellence in detailing.",
+  "🎯 Precision targeting for flawless execution.",
+  "📋 Meticulous detailing, exceptional results.",
+  "⚙️ Engineering precision, delivered every time.",
+  "🏗️ Shaping skylines with accuracy.",
+  "📊 Data-driven detailing for superior structures.",
+  "🔧 Tooled for perfection, built for excellence.",
+  "🛡️ Where precision meets protection.",
+  "📏 Measuring success in every detail.",
+  "⚡ Fast, accurate, and always reliable.",
+  "🎨 Detailing that defines distinction.",
+  "📈 Elevating standards in steel engineering.",
+  "💪 Strong foundations, stronger structures.",
+  "🔩 Precision is our signature.",
+  "🏛️ Crafting landmarks with care.",
+  "📐 Designing tomorrow's infrastructure today."
 ];
 
 type LogoParticle = {
@@ -407,15 +575,18 @@ export const AppSidebar = () => {
   const [logoBurstKey, setLogoBurstKey] = useState(0);
   const [particles, setParticles] = useState<LogoParticle[]>([]);
   const [magicMessage, setMagicMessage] = useState<string | null>(null);
-  const magicTimeoutRef = useRef<number | null>(null);
+  const [messageState, setMessageState] = useState<'hidden' | 'visible' | 'hiding'>('hidden');
+  const [messageKey, setMessageKey] = useState(0);
+  const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
-      if (magicTimeoutRef.current) window.clearTimeout(magicTimeoutRef.current);
+      if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
     };
   }, []);
 
-  const handleLogoClick = () => {
+  const showNewMessage = () => {
+    // Generate new particles
     const PARTICLE_COUNT = 14;
     const colors = ["text-yellow-300", "text-cyan-300", "text-white", "text-indigo-300", "text-emerald-300"];
     const next: LogoParticle[] = Array.from({ length: PARTICLE_COUNT }).map((_, i) => {
@@ -435,16 +606,52 @@ export const AppSidebar = () => {
 
     setParticles(next);
     setLogoBurstKey((k) => k + 1);
+    setMessageKey((k) => k + 1);
 
-    // Select and display a random magic message
+    // Select a random magic message
     const message = LOGO_MAGIC_MESSAGES[Math.floor(Math.random() * LOGO_MAGIC_MESSAGES.length)];
     setMagicMessage(message);
+    setMessageState('visible');
 
-    if (magicTimeoutRef.current) window.clearTimeout(magicTimeoutRef.current);
-    magicTimeoutRef.current = window.setTimeout(() => {
-      setParticles([]);
-      setMagicMessage(null);
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    // Keep visible for 2.5 seconds, then hide
+    timeoutRef.current = window.setTimeout(() => {
+      setMessageState('hiding');
+      // After hide animation, clear the message
+      setTimeout(() => {
+        setMagicMessage(null);
+        setMessageState('hidden');
+        setParticles([]);
+      }, 500);
+      timeoutRef.current = null;
     }, 2500);
+  };
+
+  const handleLogoClick = () => {
+    // If a message is currently showing, clear it and show a new one
+    if (timeoutRef.current) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    if (messageState === 'visible' || messageState === 'hiding') {
+      // Force hide current message
+      setMessageState('hiding');
+      setTimeout(() => {
+        setMagicMessage(null);
+        setMessageState('hidden');
+        setParticles([]);
+        // Then show new message
+        setTimeout(showNewMessage, 50);
+      }, 500);
+    } else {
+      showNewMessage();
+    }
   };
 
   const handleLogout = () => {
@@ -452,7 +659,6 @@ export const AppSidebar = () => {
     navigate("/login");
   };
 
-  // All roles can visit their own profile page
   const handleProfileClick = () => {
     navigate("/my-profile");
   };
@@ -534,12 +740,30 @@ export const AppSidebar = () => {
               )
             )}
 
-            {/* Magic Message - now displayed with better visibility */}
-            {/* Magic Message - now displayed with better visibility */}
+            {/* ✨ MAGICAL MESSAGE - Enhanced with beautiful effects */}
             {magicMessage && (
-              <div className="sb-magic-message-wrap">
-                <span className="sb-magic-glow" />
-                <span className="sb-magic-message">{magicMessage}</span>
+              <div 
+                key={messageKey}
+                className={cn(
+                  "sb-magic-message-wrap",
+                  messageState === 'visible' && "sb-message-visible",
+                  messageState === 'hiding' && "sb-message-hiding"
+                )}
+              >
+                <div className="sb-magic-message-outer">
+                  <div className="sb-magic-message-inner">
+                    {/* Sparkle decorations */}
+                    <span className="sb-magic-sparkle" />
+                    <span className="sb-magic-sparkle" />
+                    <span className="sb-magic-sparkle" />
+                    <span className="sb-magic-sparkle" />
+                    
+                    {/* Message text with gradient */}
+                    <span className="sb-magic-message-text">
+                      {magicMessage}
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
           </button>
@@ -560,7 +784,7 @@ export const AppSidebar = () => {
           </a>
         </div>
 
-        {/* USER CHIP — shows profile picture if uploaded */}
+        {/* USER CHIP */}
         <button
           onClick={handleProfileClick}
           className="w-full shrink-0 border-b border-sidebar-border px-6 py-3 transition-colors hover:bg-sidebar-accent/50 cursor-pointer text-left"
@@ -608,7 +832,6 @@ export const AppSidebar = () => {
 
         {/* FOOTER */}
         <div className="shrink-0 border-t border-sidebar-border">
-          {/* Camera Button - Owner Only */}
           {role === "OWNER" && (
             <div className="p-2 border-b border-sidebar-border">
               <button
@@ -623,7 +846,6 @@ export const AppSidebar = () => {
             </div>
           )}
 
-          {/* Change Password - all roles */}
           <div className="p-3">
             <Button
               variant="ghost"
