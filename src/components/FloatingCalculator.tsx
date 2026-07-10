@@ -512,22 +512,23 @@ const handleDownload = useCallback(() => {
   }, [isScalarEntry, fiScalarValue, curFt, curIn, curFr]);
 
   const applyFiInput = useCallback((value: string, target: 'ft' | 'in') => {
-    if (!value) return;
-    const n = parseFloat(value);
-    if (isNaN(n)) return;
-    if (target === 'ft') { setCurFt(Math.min(Math.max(0, n), 1e9)); }
-    else                 { setCurIn(Math.max(0, Math.min(11, Math.round(n)))); }
-    setFiNewEntry(true);
-  }, []);
+  if (!value) return;
+  const n = parseFloat(value);
+  if (isNaN(n)) return;
+  if (target === 'ft') { setCurFt(Math.min(Math.max(0, n), 1e9)); }
+  else                 { setCurIn(Math.max(0, Math.min(11, Math.round(n)))); }
+}, []);
 
   const selectFiField = useCallback((target: 'ft' | 'in') => {
     setFiLastResult(null);
+    setFiNewEntry(false);
     setFiInputTarget(target);
     setFiInputValue(target === 'ft' ? String(curFt) : String(curIn));
   }, [curFt, curIn]);
 
   const handleFiNumberInput = useCallback((d: string) => {
     setFiLastResult(null);
+    setFiNewEntry(false); 
 
     if (isScalarEntry) {
       // FIX 3: plain number for × and ÷
@@ -780,7 +781,7 @@ const handleDownload = useCallback(() => {
                           <div className="fc-fi-segment fc-fi-frac-seg">
                             <span className="fc-fi-seg-label">Fraction</span>
                             <select className="fc-fi-frac" value={curFr}
-                              onChange={e => { setFiLastResult(null); setCurFr(e.target.value); setFiNewEntry(true); }}>
+  onChange={e => { setFiLastResult(null); setCurFr(e.target.value); setFiNewEntry(false); }}>
                               {FRACS.map(f => <option key={f} value={f}>{f === '0' ? '\u2014' : f}</option>)}
                             </select>
                           </div>
