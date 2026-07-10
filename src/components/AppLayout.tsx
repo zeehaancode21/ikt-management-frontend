@@ -56,12 +56,11 @@ export const AppLayout = () => {
   return (
     <div className="app-layout-container">
       {/*
-       * ── OWNER FIX ──────────────────────────────────────────────────────────
-       * Only register FCM push-notification tokens for LEAD / EMPLOYEE roles.
-       * The owner does NOT need push notifications and should NOT hit
-       * POST /api/notifications/fcm-token.
+       * Push notifications are registered for everyone, including the
+       * owner — the owner needs to receive popups too (e.g. new leave
+       * requests), not just employees.
        * ────────────────────────────────────────────────────────────────────── */}
-      {!isOwner && <PushNotificationsRegistrar />}
+      <PushNotificationsRegistrar />
 
       {/* Mobile menu button */}
       <button
