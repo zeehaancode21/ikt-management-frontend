@@ -260,7 +260,7 @@ function DownloadPopup({ onClose, onDownload }: {
             <span>🔒 Secure download</span>
             <span>⚡ Instant setup</span>
           </div>
-          <span className={`fc-download-size ${isDark ? 'dark' : 'light'}`}>~25 MB • Compatible with Windows</span>
+          <span className={`fc-download-size ${isDark ? 'dark' : 'light'}`}>~75 MB • Compatible with Windows</span>
         </div>
       </div>
     </div>

@@ -563,6 +563,13 @@ export default function Messages() {
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
   const [deletingGroup, setDeletingGroup] = useState(false);
 
+  // Single message / whole conversation deletion (DMs)
+  const [deleteMessageTarget, setDeleteMessageTarget] = useState<Message | null>(null);
+  const [deletingMessage, setDeletingMessage] = useState(false);
+  const [deleteConversationTarget, setDeleteConversationTarget] = useState<string | null>(null);
+  const [deletingConversation, setDeletingConversation] = useState(false);
+  const [removingMessageIds, setRemovingMessageIds] = useState<Set<number>>(new Set());
+
   // Poll creation modal
   const [showPollModal, setShowPollModal] = useState(false);
   const [pollQuestion, setPollQuestion] = useState("");
@@ -694,7 +701,27 @@ export default function Messages() {
       }
     });
 
-    return () => { unsubDM(); unsubGroup(); };
+    // Real-time sync when a single DM is deleted (by me on another device,
+    // or by the other participant deleting a message they sent).
+    const unsubMsgDeleted = subscribe(`/user/queue/messages-deleted`, (payload: { id: number; otherUser: string }) => {
+      setConversation((prev) => prev.filter((m) => m.id !== payload.id));
+    });
+
+    // Real-time sync when an entire DM thread is deleted.
+    const unsubConvDeleted = subscribe(`/user/queue/conversation-deleted`, (payload: { otherUser: string }) => {
+      setInboxMap((prev) => {
+        if (!(payload.otherUser in prev)) return prev;
+        const next = { ...prev };
+        delete next[payload.otherUser];
+        return next;
+      });
+      const target = chatTargetRef.current;
+      if (target?.type === "user" && target.username === payload.otherUser) {
+        setConversation([]);
+      }
+    });
+
+    return () => { unsubDM(); unsubGroup(); unsubMsgDeleted(); unsubConvDeleted(); };
   }, [connected, name, subscribe]);
 
   // ── Fetch DM conversation with pagination - FIXED ──────────────────────────
@@ -994,6 +1021,61 @@ export default function Messages() {
     }
   };
 
+  // ── Single message delete (DM) ──────────────────────────────────────────────
+  const requestDeleteMessage = (msg: Message, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeleteMessageTarget(msg);
+  };
+
+  const confirmDeleteMessage = async () => {
+    if (!deleteMessageTarget || deletingMessage) return;
+    const msg = deleteMessageTarget;
+    setDeletingMessage(true);
+    try {
+      await api.delete(`/messages/${msg.id}`);
+      // Play a brief fade/scale-out animation before removing the bubble.
+      setRemovingMessageIds((prev) => new Set(prev).add(msg.id));
+      setTimeout(() => {
+        setConversation((prev) => prev.filter((m) => m.id !== msg.id));
+        setRemovingMessageIds((prev) => {
+          const next = new Set(prev);
+          next.delete(msg.id);
+          return next;
+        });
+      }, 220);
+      setDeleteMessageTarget(null);
+    } catch { /* ignore */ } finally {
+      setDeletingMessage(false);
+    }
+  };
+
+  // ── Whole conversation delete (DM) ──────────────────────────────────────────
+  const requestDeleteConversation = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (chatTarget?.type === "user") setDeleteConversationTarget(chatTarget.username);
+  };
+
+  const confirmDeleteConversation = async () => {
+    if (!deleteConversationTarget || deletingConversation) return;
+    const other = deleteConversationTarget;
+    setDeletingConversation(true);
+    try {
+      await api.delete(`/messages/conversation/${other}`);
+      setConversation([]);
+      setInboxMap((prev) => {
+        if (!(other in prev)) return prev;
+        const next = { ...prev };
+        delete next[other];
+        return next;
+      });
+      setDeleteConversationTarget(null);
+      setChatTarget(null);
+      setMobileChatOpen(false);
+    } catch { /* ignore */ } finally {
+      setDeletingConversation(false);
+    }
+  };
+
   // ── Poll ─────────────────────────────────────────────────────────────────────
   const openPollModal = () => {
     setPollQuestion("");
@@ -1258,7 +1340,7 @@ export default function Messages() {
           display:flex; align-items:flex-end; gap:8px;
           background:hsl(var(--background)); border:1.5px solid hsl(var(--border));
           border-radius:12px; padding:6px 6px 6px 16px; transition:border-color .15s;
-          width:100%; max-width:100%; box-sizing:border-box; overflow:hidden;
+          width:100%; max-width:100%; box-sizing:border-box; 
         }
         .msg-input-row:focus-within { border-color:hsl(var(--primary)); }
         .msg-input-row input { flex:1 1 auto; min-width:0; border:none; background:transparent; color:hsl(var(--foreground)); font-size:14px; outline:none; padding:6px 0; }
@@ -1300,12 +1382,46 @@ export default function Messages() {
         .modal-overlay {
           position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.45);
           display:flex; align-items:center; justify-content:center; padding:16px;
+          animation: modalFadeIn .18s ease;
         }
         .modal-box {
           background:hsl(var(--background)); border:1px solid hsl(var(--border));
           border-radius:16px; padding:24px; width:100%; max-width:460px;
           max-height:80vh; overflow-y:auto; box-shadow:0 25px 50px -12px rgba(0,0,0,.25);
+          animation: modalScaleIn .22s cubic-bezier(.16,1,.3,1);
         }
+        @keyframes modalFadeIn { from{ opacity:0; } to{ opacity:1; } }
+        @keyframes modalScaleIn { from{ opacity:0; transform:scale(.93) translateY(10px); } to{ opacity:1; transform:scale(1) translateY(0); } }
+        .modal-box-danger { border-color:rgba(239,68,68,.25); }
+        .modal-danger-icon {
+          display:inline-flex; align-items:center; justify-content:center;
+          color:#ef4444; font-size:18px; width:26px; height:26px; border-radius:50%;
+          background:rgba(239,68,68,.12); animation: dangerPulse 1.6s ease-in-out infinite;
+        }
+        @keyframes dangerPulse { 0%,100%{ transform:scale(1); box-shadow:0 0 0 0 rgba(239,68,68,.28); } 50%{ transform:scale(1.08); box-shadow:0 0 0 5px rgba(239,68,68,0); } }
+        .modal-message-preview {
+          background:hsl(var(--muted)); border-left:3px solid #ef4444; padding:9px 12px;
+          border-radius:6px; font-size:13px; color:hsl(var(--foreground)); font-style:italic;
+          word-break:break-word; max-height:90px; overflow-y:auto;
+        }
+        .modal-btn:disabled { opacity:.6; cursor:not-allowed; }
+        .modal-btn.danger { background:#ef4444; color:#fff; }
+        .modal-btn.danger:hover:not(:disabled) { background:#dc2626; }
+        /* Per-message delete trigger — mirrors .msg-react-trigger's hover reveal */
+        .msg-delete-trigger {
+          background:none; border:none; cursor:pointer; padding:2px; opacity:0;
+          border-radius:50%; display:flex; align-items:center; justify-content:center;
+          color:inherit; transition:opacity .15s ease, color .15s ease, transform .15s ease;
+        }
+        .msg-bubble-wrap:hover .msg-delete-trigger { opacity:.75; }
+        .msg-delete-trigger:hover { opacity:1 !important; color:#ef4444; transform:scale(1.18); }
+        .msg-delete-trigger:active { transform:scale(.92); }
+        /* Fade + scale-out animation played just before a deleted message unmounts */
+        .msg-item-removing { animation: msgRemove .22s ease forwards; pointer-events:none; }
+        @keyframes msgRemove { to { opacity:0; transform:scale(.9) translateY(-6px); } }
+        /* Header delete-conversation button */
+        .msg-header-delete-btn { width:32px; height:32px; border-radius:8px; }
+        .msg-header-delete-btn:hover { transform:scale(1.06); }
         .modal-title { font-size:16px; font-weight:700; color:hsl(var(--foreground)); margin:0 0 18px; display:flex; align-items:center; justify-content:space-between; }
         .modal-label { font-size:12px; font-weight:600; color:hsl(var(--muted-foreground)); margin-bottom:4px; display:block; }
         .modal-input {
@@ -1721,6 +1837,14 @@ export default function Messages() {
                   <h3>{chatTarget.username}</h3>
                   <p>{convTotalElements} messages</p>
                 </div>
+                <button
+                  className="msg-icon-btn danger msg-header-delete-btn"
+                  title="Delete conversation"
+                  style={{ marginLeft: "auto" }}
+                  onClick={requestDeleteConversation}
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
 
               <div className="msg-messages" onScroll={handleConvScroll} ref={convScrollRef}>
@@ -1746,7 +1870,7 @@ export default function Messages() {
                     const showSender = !prev || prev.senderUsername !== msg.senderUsername;
                     const showDivider = !prev || dateKey(msg.sentAt) !== dateKey(prev.sentAt);
                     return (
-                      <div key={msg.id}>
+                      <div key={msg.id} className={removingMessageIds.has(msg.id) ? "msg-item-removing" : ""}>
                         {showDivider && <div className="msg-day-divider"><span>{longDateLabel(msg.sentAt)}</span></div>}
                         <div className={`msg-bubble-group msg-bubble-wrap ${isMine ? "mine" : "theirs"}`}>
                           {showSender && !isMine && <div className="msg-sender-label">{msg.senderUsername}</div>}
@@ -1763,6 +1887,16 @@ export default function Messages() {
                             <span>{fmtTime(msg.sentAt)}</span>
                             {isMine && <span style={{ fontSize: 12 }}>{msg.readByReceiver ? "✓✓" : "✓"}</span>}
                             <ReactionControl align={isMine ? "right" : "left"} onReact={(emoji) => toggleDmReaction(msg, emoji)} />
+                            {isMine && (
+                              <button
+                                type="button"
+                                className="msg-delete-trigger"
+                                title="Delete message"
+                                onClick={(e) => requestDeleteMessage(msg, e)}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1905,6 +2039,66 @@ export default function Messages() {
                 onMouseLeave={e => { if (!deletingGroup) e.currentTarget.style.background = "#ef4444"; }}
               >
                 {deletingGroup ? "Deleting…" : "Delete Group"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Message Confirm Modal ────────────────────────────────────── */}
+      {deleteMessageTarget && (
+        <div className="modal-overlay" onClick={() => { if (!deletingMessage) setDeleteMessageTarget(null); }}>
+          <div className="modal-box modal-box-danger" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+            <div className="modal-title">
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="modal-danger-icon">⚠</span>
+                Delete Message
+              </span>
+              <button className="msg-icon-btn" onClick={() => setDeleteMessageTarget(null)} disabled={deletingMessage}><X size={16} /></button>
+            </div>
+            <p style={{ fontSize: 14, color: "hsl(var(--muted-foreground))", margin: "0 0 10px" }}>
+              Delete this message for everyone?
+            </p>
+            {deleteMessageTarget.content && (
+              <div className="modal-message-preview">"{deleteMessageTarget.content}"</div>
+            )}
+            <p style={{ fontSize: 13, color: "#ef4444", margin: "14px 0 20px" }}>
+              This cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button className="modal-btn secondary" onClick={() => setDeleteMessageTarget(null)} disabled={deletingMessage}>Cancel</button>
+              <button className="modal-btn danger" onClick={confirmDeleteMessage} disabled={deletingMessage}>
+                {deletingMessage ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Conversation Confirm Modal ───────────────────────────────── */}
+      {deleteConversationTarget && (
+        <div className="modal-overlay" onClick={() => { if (!deletingConversation) setDeleteConversationTarget(null); }}>
+          <div className="modal-box modal-box-danger" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div className="modal-title">
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="modal-danger-icon">⚠</span>
+                Delete Conversation
+              </span>
+              <button className="msg-icon-btn" onClick={() => setDeleteConversationTarget(null)} disabled={deletingConversation}><X size={16} /></button>
+            </div>
+            <p style={{ fontSize: 14, color: "hsl(var(--muted-foreground))", margin: "0 0 6px" }}>
+              Are you sure you want to delete your entire conversation with
+            </p>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "hsl(var(--foreground))", margin: "0 0 18px", wordBreak: "break-word" }}>
+              "{deleteConversationTarget}"?
+            </p>
+            <p style={{ fontSize: 13, color: "#ef4444", margin: "0 0 20px" }}>
+              All messages in this chat will be permanently deleted for both of you. This cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button className="modal-btn secondary" onClick={() => setDeleteConversationTarget(null)} disabled={deletingConversation}>Cancel</button>
+              <button className="modal-btn danger" onClick={confirmDeleteConversation} disabled={deletingConversation}>
+                {deletingConversation ? "Deleting…" : "Delete Conversation"}
               </button>
             </div>
           </div>
