@@ -208,15 +208,18 @@ function DownloadPopup({ onClose, onDownload }: {
 }) {
   const [hovered, setHovered] = useState(false);
   const [selected, setSelected] = useState(false);
+  const [showDownloadPopup, setShowDownloadPopup] = useState(false);
   const isDark = useTheme();
 
-  const handleDownloadClick = () => {
-    setSelected(true);
-    setTimeout(() => {
-      onDownload();
-      setSelected(false);
-    }, 300);
-  };
+  const handleDownload = useCallback(() => {
+  const link = document.createElement('a');
+  link.href = 'https://github.com/yourorg/yourrepo/releases/download/v1.0.0/windows.exe';
+  link.download = 'windows.exe';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setShowDownloadPopup(false);
+}, []);
 
   return (
     <div className={`fc-download-overlay ${isDark ? 'dark' : 'light'}`} onClick={onClose}>
