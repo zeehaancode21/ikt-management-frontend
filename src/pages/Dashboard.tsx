@@ -593,6 +593,117 @@ function downloadProjectWorkbook(project, changeOrders = []) {
   XLSX.writeFile(wb, `${safeFileName(project.projectName)}_details.xlsx`);
 }
 
+// ─── CLIENT (ALL PROJECTS) EXCEL EXPORT ────────────────────────────────────
+// Excel sheet names: max 31 chars, no []*/\?: and must be unique within a workbook.
+function uniqueSheetName(rawName, usedNames) {
+  let base = (rawName || "Project")
+    .replace(/[\[\]\*\/\\\?:]/g, " ")
+    .trim()
+    .slice(0, 31) || "Project";
+
+  if (!usedNames.has(base)) {
+    usedNames.add(base);
+    return base;
+  }
+  let i = 2;
+  let candidate;
+  do {
+    const suffix = ` (${i})`;
+    candidate = base.slice(0, 31 - suffix.length) + suffix;
+    i++;
+  } while (usedNames.has(candidate));
+  usedNames.add(candidate);
+  return candidate;
+}
+
+function buildClientWorkbook(clientName, projects = [], changeOrdersByProject = {}) {
+  const wb = XLSX.utils.book_new();
+
+  // ── Summary sheet: one row per project ──
+  const summaryHeader = [
+    "Project Name", "Job Number", "Year", "Project Manager",
+    "Approval Status", "FAB Status", "Modeler", "Editor", "Checker",
+    "Change Orders", "Remarks",
+  ];
+  const summaryRows = projects.map((p) => {
+    const team = parseTeam(p.team);
+    const cos = changeOrdersByProject[p.projectName] || [];
+    return [
+      p.projectName || "",
+      p.jobNumber || "",
+      p.year || "",
+      p.projectManager || "",
+      p.approvalStatus || "",
+      p.fabStatus || "",
+      team.modeler === "—" ? "" : team.modeler,
+      team.editor === "—" ? "" : team.editor,
+      team.checker === "—" ? "" : team.checker,
+      cos.length,
+      p.remarks || "",
+    ];
+  });
+  const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeader, ...summaryRows]);
+  wsSummary["!cols"] = summaryHeader.map((h) => ({ wch: Math.max(14, h.length + 2) }));
+  XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+
+  // ── One detail sheet per project (main details + its change orders) ──
+  const usedNames = new Set(["Summary"]);
+  projects.forEach((p) => {
+    const team = parseTeam(p.team);
+    const cos = changeOrdersByProject[p.projectName] || [];
+
+    const mainRows = [
+      ["Field", "Value"],
+      ["Client", p.client || ""],
+      ["Project Name", p.projectName || ""],
+      ["Job Number", p.jobNumber || ""],
+      ["Year", p.year || ""],
+      ["Project Manager", p.projectManager || ""],
+      ["Approval Status", p.approvalStatus || ""],
+      ["FAB Status", p.fabStatus || ""],
+      ["Modeler", team.modeler === "—" ? "" : team.modeler],
+      ["Editor", team.editor === "—" ? "" : team.editor],
+      ["Checker", team.checker === "—" ? "" : team.checker],
+      ["Remarks", p.remarks || ""],
+      ["Created At", p.createdAt || ""],
+      ["Updated At", p.updatedAt || ""],
+      [],
+      ["Change Orders"],
+    ];
+
+    const coHeader = [
+      "CO No.", "Description", "Status", "Amount",
+      "IFA Date", "IFA %", "IFF Date", "IFF %",
+      "Remarks", "Created At", "Updated At",
+    ];
+    const coRows = cos.map((c) => [
+      c.co || "",
+      c.description || "",
+      c.status || "",
+      c.amount ?? "",
+      c.ifaDate || "",
+      c.ifaPer || "",
+      c.iffDate || "",
+      c.iffPer || "",
+      c.remarks || "",
+      c.createdAt || "",
+      c.updatedAt || "",
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet([...mainRows, coHeader, ...coRows]);
+    ws["!cols"] = [{ wch: 18 }, { wch: 42 }, { wch: 16 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 28 }];
+    const sheetName = uniqueSheetName(p.projectName || p.jobNumber, usedNames);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  });
+
+  return wb;
+}
+
+function downloadClientWorkbook(clientName, projects = [], changeOrdersByProject = {}) {
+  const wb = buildClientWorkbook(clientName, projects, changeOrdersByProject);
+  XLSX.writeFile(wb, `${safeFileName(clientName)}_all_projects.xlsx`);
+}
+
 const fadeUp = {
   hidden: { opacity: 0, y: 22 },
   show: { opacity: 1, y: 0, transition: { staggerChildren: 0.06 } },
@@ -687,6 +798,13 @@ export default function Dashboard() {
   const [viewLoading, setViewLoading] = useState(false);
   const [viewError, setViewError] = useState("");
   const [downloadingKey, setDownloadingKey] = useState(null);
+  const [downloadingClient, setDownloadingClient] = useState(false);
+
+  // ── View ALL of a client's projects (with change orders) ──
+  const [viewClient, setViewClient] = useState(null);       // { client, projects }
+  const [viewClientData, setViewClientData] = useState(null); // [{ project, changeOrders }, ...]
+  const [viewClientLoading, setViewClientLoading] = useState(false);
+  const [viewClientError, setViewClientError] = useState("");
 
   const savingProjectRef = useRef(false);
   const deletingProjectRef = useRef(false);
@@ -771,6 +889,52 @@ export default function Dashboard() {
     } finally {
       setDownloadingKey(null);
     }
+  };
+
+  // ── Download ALL of a client's projects (with their change orders) as one Excel workbook ──
+  const handleDownloadClientAll = async (e, client, projects) => {
+    if (e) e.stopPropagation();
+    if (!projects || projects.length === 0) return;
+    setDownloadingClient(true);
+    try {
+      const results = await Promise.all(
+        projects.map((p) => api.getChangeOrders(p.projectName).catch(() => []))
+      );
+      const changeOrdersByProject = {};
+      projects.forEach((p, i) => { changeOrdersByProject[p.projectName] = results[i]; });
+      downloadClientWorkbook(client, projects, changeOrdersByProject);
+    } catch (err) {
+      setError(err.message || "Failed to download client projects");
+    } finally {
+      setDownloadingClient(false);
+    }
+  };
+
+  // ── View ALL of a client's projects (with change orders) in a modal ──────
+  const handleViewClientAll = async (e, client, projects) => {
+    if (e) e.stopPropagation();
+    if (!projects || projects.length === 0) return;
+    setViewClient({ client, projects });
+    setViewClientData(null);
+    setViewClientError("");
+    setViewClientLoading(true);
+    try {
+      const results = await Promise.all(
+        projects.map((p) => api.getChangeOrders(p.projectName).catch(() => []))
+      );
+      const data = projects.map((p, i) => ({ project: p, changeOrders: results[i] }));
+      setViewClientData(data);
+    } catch (err) {
+      setViewClientError(err.message || "Failed to load client details");
+    } finally {
+      setViewClientLoading(false);
+    }
+  };
+
+  const closeViewClientModal = () => {
+    setViewClient(null);
+    setViewClientData(null);
+    setViewClientError("");
   };
 
   const handleSaveProject = async () => {
@@ -1135,12 +1299,34 @@ export default function Dashboard() {
                   <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "60px 0" }}>No projects found for {selectedYear}.</p>
                 ) : (
                   <div className="client-grid">
-                    {clientsForYear.map((client) => (
-                      <motion.div key={client} variants={item} className="client-card" onClick={() => setSelectedClient(client)} whileTap={{ scale: 0.98 }}>
-                        <div className="client-card-name">{client}</div>
-                        <div className="client-card-count">{filteredByYear.filter(p => p.client === client).length} project(s)</div>
-                      </motion.div>
-                    ))}
+                    {clientsForYear.map((client) => {
+                      const clientProjects = filteredByYear.filter(p => p.client === client);
+                      return (
+                        <motion.div key={client} variants={item} className="client-card" onClick={() => setSelectedClient(client)} whileTap={{ scale: 0.98 }}>
+                          <div className="client-card-name">{client}</div>
+                          <div className="client-card-count">{clientProjects.length} project(s)</div>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="View all projects for this client"
+                            style={{ position: "absolute", top: 14, right: 52, zIndex: 2 }}
+                            onClick={(e) => handleViewClientAll(e, client, clientProjects)}
+                          >
+                            👁
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="Download all projects for this client (Excel)"
+                            disabled={downloadingClient}
+                            style={{ position: "absolute", top: 14, right: 14, zIndex: 2 }}
+                            onClick={(e) => handleDownloadClientAll(e, client, clientProjects)}
+                          >
+                            {downloadingClient ? <span className="btn-spinner btn-spinner-dark" /> : "⬇"}
+                          </button>
+                        </motion.div>
+                      );
+                    })}
                   </div>
                 )}
               </motion.div>
@@ -1153,6 +1339,24 @@ export default function Dashboard() {
                 <p className="section-title">{selectedClient}</p>
                 <p className="section-subtitle">{projectsForClient.length} project(s) in {selectedYear}</p>
                 <div className="section-actions">
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    disabled={projectsForClient.length === 0}
+                    onClick={(e) => handleViewClientAll(e, selectedClient, projectsForClient)}
+                    title="View all of this client's projects"
+                  >
+                    👁 View All
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-gold"
+                    disabled={downloadingClient || projectsForClient.length === 0}
+                    onClick={(e) => handleDownloadClientAll(e, selectedClient, projectsForClient)}
+                    title="Download all of this client's projects as one Excel file"
+                  >
+                    {downloadingClient ? <BtnSpinner dark /> : "⬇ Download All (Excel)"}
+                  </button>
                   <button className="btn btn-gold" onClick={() => {
                     setShowAddProject(v => !v);
                     if (selectedClient) {
@@ -1473,6 +1677,129 @@ export default function Dashboard() {
                           </table>
                         </div>
                       )}
+                    </>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ════ VIEW CLIENT (ALL PROJECTS) MODAL ════ */}
+        <AnimatePresence>
+          {viewClient && (
+            <motion.div className="modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={closeViewClientModal}>
+              <motion.div className="modal-box" variants={scaleIn} initial="hidden" animate="show" exit="exit"
+                onClick={e => e.stopPropagation()} style={{ position: "relative", maxWidth: 1040 }}>
+                <button className="modal-close" onClick={closeViewClientModal}>✕</button>
+
+                <div className="modal-header">
+                  <p className="modal-title">{viewClient.client}</p>
+                  <p className="modal-subtitle">{viewClient.projects.length} project(s)</p>
+                </div>
+
+                <div className="modal-body">
+                  {viewClientLoading ? (
+                    <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
+                      <div className="spinner" style={{ margin: "0 auto 12px" }} />
+                      Loading all projects...
+                    </div>
+                  ) : viewClientError ? (
+                    <div className="error-banner">⚠ {viewClientError}</div>
+                  ) : viewClientData && (
+                    <>
+                      <div className="section-actions">
+                        <button
+                          className="btn btn-gold btn-sm"
+                          onClick={() => {
+                            const changeOrdersByProject = {};
+                            viewClientData.forEach(({ project, changeOrders: cos }) => {
+                              changeOrdersByProject[project.projectName] = cos;
+                            });
+                            downloadClientWorkbook(viewClient.client, viewClient.projects, changeOrdersByProject);
+                          }}
+                        >
+                          ⬇ Download All (Excel)
+                        </button>
+                      </div>
+
+                      {viewClientData.map(({ project, changeOrders: cos }, i) => {
+                        const team = parseTeam(project.team);
+                        return (
+                          <div key={project.jobNumber || project.projectName || i} style={{ marginBottom: 32 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+                              <span className="co-title">
+                                {i + 1}. {project.projectName}
+                                {project.jobNumber && <span className="project-job" style={{ marginLeft: 10 }}>#{project.jobNumber}</span>}
+                              </span>
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => downloadProjectWorkbook(project, cos)}
+                              >
+                                ⬇ This Project
+                              </button>
+                            </div>
+
+                            <p className="detail-section-heading">Main Details</p>
+                            <div className="view-table-wrap">
+                              <table className="view-table">
+                                <tbody>
+                                  {[
+                                    ["Client", project.client || "—"],
+                                    ["Job Number", project.jobNumber || "N/A"],
+                                    ["Year", project.year || "—"],
+                                    ["Project Manager", project.projectManager || "—"],
+                                    ["Approval Status", project.approvalStatus || "—"],
+                                    ["FAB Status", project.fabStatus || "—"],
+                                    ["Modeler", team.modeler],
+                                    ["Editor", team.editor],
+                                    ["Checker", team.checker],
+                                    ["Remarks", project.remarks || "—"],
+                                  ].map(([label, value]) => (
+                                    <tr key={label}>
+                                      <td className="view-field-label">{label}</td>
+                                      <td>{value}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            <p className="detail-section-heading">Change Orders ({cos.length})</p>
+                            {cos.length === 0 ? (
+                              <p style={{ color: "var(--text-muted)", padding: "10px 0" }}>No change orders for this project.</p>
+                            ) : (
+                              <div className="view-table-wrap">
+                                <table className="view-table" style={{ minWidth: 900 }}>
+                                  <thead>
+                                    <tr>
+                                      <th>#</th><th>CO</th><th>Description</th><th>Status</th><th>Amount</th>
+                                      <th>IFA Date</th><th>IFA %</th><th>IFF Date</th><th>IFF %</th><th>Remarks</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {cos.map((co, idx) => (
+                                      <tr key={co.id}>
+                                        <td>{idx + 1}</td>
+                                        <td style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color: "var(--copper)" }}>{co.co || "—"}</td>
+                                        <td>{co.description || "—"}</td>
+                                        <td><span className={getBadgeClass(co.status)}>{co.status}</span></td>
+                                        <td style={{ fontFamily: "'JetBrains Mono',monospace" }}>${(co.amount || 0).toLocaleString()}</td>
+                                        <td>{co.ifaDate || "—"}</td>
+                                        <td>{co.ifaPer || "—"}</td>
+                                        <td>{co.iffDate || "—"}</td>
+                                        <td>{co.iffPer || "—"}</td>
+                                        <td>{co.remarks || "—"}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </>
                   )}
                 </div>
