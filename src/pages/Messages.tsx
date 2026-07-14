@@ -1847,7 +1847,8 @@ export default function Messages() {
                       {lastMsg && <span className="msg-contact-time">{fmtDate(lastMsg.sentAt)}</span>}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2 }}>
-                      <span className="msg-role-tag" style={{ background: rc + "18", color: rc, border: `1px solid ${rc}30` }}>{u.role}</span>
+                      {/* hide the role */}
+                      {/* <span className="msg-role-tag" style={{ background: rc + "18", color: rc, border: `1px solid ${rc}30` }}>{u.role}</span> */}
                       {lastMsg && (
                         <span className={`msg-contact-preview ${isUnread ? "unread" : ""}`} style={{ flex: 1, marginTop: 0 }}>
                           {lastMsg.senderUsername === name ? "You: " : ""}{lastMsg.content}
