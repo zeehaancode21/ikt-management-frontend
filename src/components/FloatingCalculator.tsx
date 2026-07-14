@@ -318,7 +318,7 @@ export function FloatingCalculator() {
 
   /* ── Download handler (Windows only) ─────────── */
   const WINDOWS_EXE_URL =
-'https://github.com/zeehaancode21/ikt-management-frontend/releases/download/v1.0.0/FloatingCalculator.exe';
+'https://github.com/zeehaancode21/ikt-management-frontend/releases/download/v1.0.0/calculator.exe';
   const handleDownload = useCallback(() => {
     const link = document.createElement('a');
     link.href = WINDOWS_EXE_URL;
