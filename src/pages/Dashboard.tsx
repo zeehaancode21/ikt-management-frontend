@@ -1730,7 +1730,7 @@ export default function Dashboard() {
                           <div key={project.jobNumber || project.projectName || i} style={{ marginBottom: 32 }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
                               <span className="co-title">
-                                {i + 1}. {project.projectName}
+                                {project.projectName}
                                 {project.jobNumber && <span className="project-job" style={{ marginLeft: 10 }}>#{project.jobNumber}</span>}
                               </span>
                               <button
