@@ -750,11 +750,11 @@ export function FloatingCalculator() {
                   onClick={() => setMode('fi')}>Ft·In·Fr</button>
               </div>
               <div className="fc-header-actions">
-                {/* <button type="button" className="fc-download-btn"
+                {<button type="button" className="fc-download-btn"
                   onClick={() => setShowDownloadPopup(true)}
                   title="Download Calculator" aria-label="Download calculator">
                   <Download size={14} />
-                </button> */}
+                </button> }
                 <button type="button" className="fc-close" onClick={() => setIsOpen(false)}
                   aria-label="Close calculator">
                   <X size={14} />
