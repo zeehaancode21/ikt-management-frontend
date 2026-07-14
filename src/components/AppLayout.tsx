@@ -4,10 +4,50 @@ import { AppSidebar } from "./AppSidebar";
 import HolidayHover from "@/pages/HolidayHover";
 import { useAuth } from "@/context/AuthContext";
 import NotificationBell from "./NotificationBell";
-import { ThemeToggle } from "./ThemeToggle";           // ← NEW
+import { ThemeToggle } from "./ThemeToggle";
 import { FloatingCalculator } from "./FloatingCalculator";
 import { useState, useEffect } from "react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+
+// ─── Display name formatter ────────────────────────────────────────────────
+const displayNameCache = new Map<string, string>();
+
+function formatDisplayName(username: string): string {
+  if (!username) return "";
+  
+  if (displayNameCache.has(username)) {
+    return displayNameCache.get(username)!;
+  }
+  
+  let result = username;
+  
+  // If username already has spaces, just title-case it
+  if (username.includes(' ')) {
+    result = username
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  } else {
+    // If it's camelCase or has underscores, convert to title case with spaces
+    // e.g., "johnDoe" -> "John Doe", "john_doe" -> "John Doe"
+    const withSpaces = username
+      // Insert space before capital letters (camelCase)
+      .replace(/([A-Z])/g, ' $1')
+      // Replace underscores with spaces
+      .replace(/_/g, ' ')
+      // Trim extra spaces
+      .trim();
+    
+    // Title case each word
+    result = withSpaces
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  }
+  
+  displayNameCache.set(username, result);
+  return result;
+}
 
 // Inner component so the hook call is always at top level but conditionally rendered
 const PushNotificationsRegistrar = () => {
@@ -83,7 +123,9 @@ export const AppLayout = () => {
       <div className="main-content-container">
         {/* HEADER */}
         <header className="app-header">
-          <h1 className="header-title">Welcome, {user?.name || "User"} 👋</h1>
+          <h1 className="header-title">
+            Welcome, {formatDisplayName(user?.name || "User")} 👋
+          </h1>
 
           <div className="header-actions">
             {location.pathname.includes("leave") && (

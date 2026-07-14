@@ -66,17 +66,17 @@ type WorkType =
   | "ESTIMATION";
 
 const WORK_TYPE_LABELS: Record<WorkType, string> = {
-  E_PLAN: "E Plan",
-  SHOP_DRAWING: "Shop Drawing",
-  LINKING: "Linking",
-  PART_DRAWING: "Part Drawing",
-  DISCUSSION_STUDY: "Discussion / Study",
-  CHECKING: "Checking",
-  MODELING: "Modeling",
-  TRAINING: "Training",
-  PRACTICING: "Practicing",
-  MISCELLANEOUS: "Miscellaneous",
-  ESTIMATION: "Estimation",
+     CHECKING: "Checking",
+     DISCUSSION_STUDY: "Discussion / Study",
+     E_PLAN: "E Plan",
+     ESTIMATION: "Estimation",
+     LINKING: "Linking",
+     MODELING: "Modeling",
+     MISCELLANEOUS: "Miscellaneous",
+     PART_DRAWING: "Part Drawing",
+     SHOP_DRAWING: "Shop Drawing",
+     PRACTICING: "Practicing",
+     TRAINING: "Training",
 };
 
 const WORK_TYPE_COLORS: Record<WorkType, string> = {
@@ -1058,18 +1058,18 @@ const EmployeeView = () => {
 
                                 return (
                                   <DropdownMenuCheckboxItem
-                                    key={k}
-                                    checked={entry.workTypes.includes(k)}
-                                    disabled={isDisabled}
-                                    onCheckedChange={() => toggleWorkType(entry.localId, k)}
-                                    onSelect={(e) => e.preventDefault()}
-                                    className={`text-xs ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
-                                  >
-                                    <div className="flex items-center gap-1.5">
-                                      {(k === "TRAINING" || k === "PRACTICING" || k === "MISCELLANEOUS" || k === "ESTIMATION") && <GraduationCap className="h-2.5 w-2.5" />}
-                                      {WORK_TYPE_LABELS[k]}
-                                    </div>
-                                  </DropdownMenuCheckboxItem>
+  key={k}
+  checked={entry.workTypes.includes(k)}
+  disabled={isDisabled}
+  onCheckedChange={() => toggleWorkType(entry.localId, k)}
+  onSelect={(e) => e.preventDefault()}
+  className={`text-xs ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+>
+  <div className="flex items-center gap-1.5">
+    {(k === "TRAINING" || k === "PRACTICING") && <GraduationCap className="h-2.5 w-2.5" />}
+    {WORK_TYPE_LABELS[k]}
+  </div>
+</DropdownMenuCheckboxItem>
                                 );
                               })}
                             </DropdownMenuContent>

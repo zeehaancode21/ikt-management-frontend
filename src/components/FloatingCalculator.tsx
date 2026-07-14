@@ -9,18 +9,76 @@
  *  - Standard mode with Apple-style keypad
  *  - Ft·In·Fr mode for construction measurements
  *  - Full keyboard support
- *  - Persistent state (mode, position) across sessions
+ *  - Persistent state (mode, position, Ft·In·Fr history) across sessions
  *  - Download button for Windows installer with animated popup
  *  - Automatic dark/light mode detection
  *
- * Bug fixes:
- *  FIX 1 — = shows result in main display (not only the history list)
- *  FIX 2 — Pressing any operator resets cursor to the Feet field
- *  FIX 3 — × and ÷ take a plain scalar second operand, not ft/in/fraction
- *  FIX 4 — Unicode escapes are safe (no raw escapes inside template literals)
- *  FIX 5 — Debounce timer is a useRef; mutating it never triggers a re-render
- *  FIX 6 — Number overflow protection (> 1e15 → "Overflow")
- *  FIX 7 — Removed isApplying state that caused an infinite useEffect loop
+ * ─────────────────────────────────────────────────────────────────────────
+ * FIX LOG (kept for future maintainers)
+ * ─────────────────────────────────────────────────────────────────────────
+ *  FIX 1  — "=" shows the result in the main display (not only history).
+ *  FIX 2  — Pressing any operator resets cursor to the Feet field.
+ *  FIX 3  — × and ÷ take a plain scalar second operand, not ft/in/fraction.
+ *  FIX 4  — Unicode escapes are safe (no raw escapes inside template literals).
+ *  FIX 5  — Number overflow protection (> 1e15 → "Overflow"), both modes.
+ *  FIX 6  — Ft·In·Fr history now records the FULL chained expression
+ *           (e.g. "5' + 3' + 2' = 10'"), not just the last two operands.
+ *           Previously only the running total and the most recent operand
+ *           were kept, so "5+3+2=" showed up in history as "8 + 2 = 10".
+ *  FIX 7  — Ft·In·Fr history persists to localStorage across sessions
+ *           (was in-memory only), capped at 50 entries, with a "Clear"
+ *           control so it can't grow forever.
+ *  FIX 8  — Standard mode: pressing "." right after "=" or right after an
+ *           operator now starts a fresh "0." entry, instead of appending
+ *           the decimal point onto the previously displayed number.
+ *  FIX 9  — Standard mode: removed a React anti-pattern where clearAll()
+ *           (several state updates) was invoked from inside another
+ *           state updater (setDisplay(prev => { ...clearAll()... })).
+ *           handleOperation now reads current state directly and returns
+ *           early on error instead of nesting state updates.
+ *  FIX 10 — Standard mode: "%" now guards against being pressed while the
+ *           display shows "Error"/"Overflow" (previously produced "NaN").
+ *  FIX 11 — Standard mode: pressing "=" a second time (no new operator or
+ *           operand entered) now repeats the last operation against the
+ *           currently displayed number, matching standard calculator
+ *           behavior, instead of silently doing nothing.
+ *  FIX 12 — Ft·In·Fr mode: REMOVED the 300ms debounce that used to commit
+ *           typed feet/inches to state. It created a genuine race
+ *           condition — pressing an operator or "=" immediately after
+ *           typing (within the debounce window) would use the STALE
+ *           pre-keystroke value instead of what was just typed, silently
+ *           producing a wrong result. Feet/inches are now committed to
+ *           state on every keystroke, which also makes the live decimal
+ *           readout update instantly instead of lagging by ~300ms.
+ *  FIX 13 — Ft·In·Fr mode: dividing by zero or overflowing no longer
+ *           silently resets the calculator with no explanation. It now
+ *           shows an explicit "Cannot divide by zero" / "Error" /
+ *           "Overflow" message (like Standard mode does) until the user
+ *           clears or starts a new entry.
+ *  FIX 14 — Ft·In·Fr mode: fixed a regex bug where swapping the pending
+ *           operator (e.g. pressing "−" right after "+", with no new
+ *           operand typed) silently failed for subtraction specifically.
+ *           The swap regex matched an ASCII hyphen ("-", U+002D) but the
+ *           UI actually uses the proper minus sign ("−", U+2212), so the
+ *           match never fired and the displayed/queued operator went out
+ *           of sync with the one actually used in the calculation.
+ *  FIX 15 — Ft·In·Fr mode: fixed lost history text when continuing a
+ *           calculation after "=". fiOpPress() only distinguished two
+ *           cases — "very first operator" (fiAccum === null) and "new
+ *           operand typed since last operator" (fiOp && !fiNewEntry) —
+ *           and treated everything else, including "operator pressed
+ *           right after '=' to continue from the result", as an operator
+ *           SWAP (regex-replacing the trailing operator in fiExprChain).
+ *           But after "=", fiExprChain is reset to '' and fiOp is reset
+ *           to null, so the swap regex had nothing to match and the
+ *           chain stayed empty. The running total (fiAccum) was still
+ *           correct, but the logged history entry silently dropped the
+ *           starting operand — e.g. "5' + 3' = 8'" then "× 2 =" logged
+ *           as "2 = 16'" instead of "8' × 2 = 16'". Added an explicit
+ *           branch for fiOp === null (post-"=" continuation) that seeds
+ *           fiExprChain from the current accumulator, the same way the
+ *           very-first-operator branch does.
+ * ─────────────────────────────────────────────────────────────────────────
  */
 
 import {
@@ -29,8 +87,8 @@ import {
   useState,
   useCallback,
   Component,
-  type ErrorInfo,
   type ReactNode,
+  type ErrorInfo,
 } from 'react';
 import { Calculator, X, GripHorizontal, Delete, Download, Laptop } from 'lucide-react';
 
@@ -135,9 +193,10 @@ interface FiHistItem { expr: string; result: string; }
 
 /* ── localStorage helpers ──────────────────────── */
 
-const LS_OPEN = 'ikt-calc-open';
-const LS_POS  = 'ikt-calc-pos';
-const LS_MODE = 'ikt-calc-mode';
+const LS_OPEN    = 'ikt-calc-open';
+const LS_POS      = 'ikt-calc-pos';
+const LS_MODE     = 'ikt-calc-mode';
+const LS_FI_HIST  = 'ikt-calc-fi-history';
 
 function readLS<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
@@ -164,7 +223,12 @@ const SIMPLE_LAYOUT: [string, string, boolean?][] = [
 
 const FI_NUM_LAYOUT = ['7','8','9','4','5','6','1','2','3','.','0','⌫'] as const;
 const OP_SYM: Record<string, string> = { '+':'+', '-':'−', '*':'×', '/':'÷' };
+// FIX 14 — regex used to find/replace a trailing pending operator in the
+// expression chain. Must match the ACTUAL glyphs used in OP_SYM above,
+// including the proper minus sign U+2212 (not the ASCII hyphen U+002D).
+const OP_TRAIL_REGEX = /[+\u2212×÷]\s*$/;
 const PANEL_WIDTH = 312;
+const FI_HIST_MAX = 50;
 
 /* ── Theme detection ──────────────────────────── */
 
@@ -180,8 +244,7 @@ function useTheme() {
     const handler = (e: MediaQueryListEvent) => {
       setIsDark(e.matches);
     };
-    
-    // Also check for class changes on document
+
     const observer = new MutationObserver(() => {
       setIsDark(document.documentElement.classList.contains('dark'));
     });
@@ -213,7 +276,7 @@ function DownloadPopup({ onClose, onDownload }: {
   const handleDownloadClick = () => {
     setSelected(true);
     setTimeout(() => {
-      onDownload();   
+      onDownload();
       setSelected(false);
     }, 300);
   };
@@ -224,7 +287,7 @@ function DownloadPopup({ onClose, onDownload }: {
         <button className={`fc-download-close ${isDark ? 'dark' : 'light'}`} onClick={onClose}>
           <X size={20} />
         </button>
-        
+
         <div className="fc-download-header">
           <div className={`fc-download-icon-wrap ${isDark ? 'dark' : 'light'}`}>
             <Download size={28} className="fc-download-icon" />
@@ -234,7 +297,7 @@ function DownloadPopup({ onClose, onDownload }: {
         </div>
 
         <div className="fc-download-options">
-          <button 
+          <button
             className={`fc-download-option windows ${isDark ? 'dark' : 'light'} ${hovered ? 'hovered' : ''} ${selected ? 'selected' : ''}`}
             onClick={handleDownloadClick}
             onMouseEnter={() => setHovered(true)}
@@ -338,17 +401,16 @@ export function FloatingCalculator() {
 
   /* ── Download handler (Windows only) ─────────── */
   const WINDOWS_EXE_URL =
-  'https://github.com/zeehaancode21/ikt-management-frontend/releases/download/v1.0.0/windows.exe';
-
-const handleDownload = useCallback(() => {
-  const link = document.createElement('a');
-  link.href = WINDOWS_EXE_URL;
-  link.download = 'windows.exe';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  setShowDownloadPopup(false);
-}, []);
+'https://github.com/zeehaancode21/ikt-management-frontend/releases/download/v1.0.0/FloatingCalculator.exe';
+  const handleDownload = useCallback(() => {
+    const link = document.createElement('a');
+    link.href = WINDOWS_EXE_URL;
+    link.download = 'windows.exe';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setShowDownloadPopup(false);
+  }, []);
 
   /* ══════════════════════════════════════════════
      STANDARD MODE STATE
@@ -358,6 +420,10 @@ const handleDownload = useCallback(() => {
   const [operation,           setOperation]           = useState<string | null>(null);
   const [waitingForOperand,   setWaitingForOperand]   = useState(false);
   const [shouldResetOnDigit,  setShouldResetOnDigit]  = useState(false);
+  // FIX 11 — remembers the last operand/operator used, so pressing "="
+  // again with nothing new entered repeats that operation.
+  const [lastOperand,         setLastOperand]         = useState<number | null>(null);
+  const [lastOp,               setLastOp]              = useState<string | null>(null);
 
   const sCompute = useCallback((a: number, b: number, op: string): number | 'Error' | 'Overflow' => {
     let r: number;
@@ -376,6 +442,7 @@ const handleDownload = useCallback(() => {
   const clearAll = useCallback(() => {
     setDisplay('0'); setPrevValue(null); setOperation(null);
     setWaitingForOperand(false); setShouldResetOnDigit(false);
+    setLastOperand(null); setLastOp(null);
   }, []);
 
   const inputDigit = useCallback((d: string) => {
@@ -406,45 +473,77 @@ const handleDownload = useCallback(() => {
     });
   }, []);
 
+  // FIX 9 — no more nested setState-in-updater. Reads current state
+  // directly and returns early on error instead of calling clearAll()
+  // from inside a setDisplay() updater function.
   const handleOperation = useCallback((op: string) => {
-    setDisplay(prev => {
-      if (prev === 'Error' || prev === 'Overflow') { clearAll(); return '0'; }
-      return prev;
-    });
-    setPrevValue(pv => {
-      const cur = parseFloat(display);
-      if (pv !== null && !waitingForOperand) {
-        const r = sCompute(pv, cur, operation || '');
-        if (r === 'Error' || r === 'Overflow') {
-          setDisplay(r); setOperation(null); setWaitingForOperand(false); return null;
-        }
-        setDisplay(String(r));
-        return r;
+    if (display === 'Error' || display === 'Overflow') { clearAll(); return; }
+
+    const cur = parseFloat(display);
+
+    if (prevValue !== null && !waitingForOperand) {
+      const r = sCompute(prevValue, cur, operation || '');
+      if (r === 'Error' || r === 'Overflow') {
+        setDisplay(r);
+        setPrevValue(null);
+        setOperation(null);
+        setWaitingForOperand(false);
+        setShouldResetOnDigit(true);
+        setLastOperand(null);
+        setLastOp(null);
+        return;
       }
-      return cur;
-    });
+      setDisplay(String(r));
+      setPrevValue(r);
+    } else {
+      setPrevValue(cur);
+    }
+
     setOperation(op);
     setWaitingForOperand(true);
     setShouldResetOnDigit(false);
-  }, [display, waitingForOperand, operation, sCompute, clearAll]);
+  }, [display, prevValue, waitingForOperand, operation, sCompute, clearAll]);
 
+  // FIX 11 — supports repeat-equals when pressed with nothing new entered.
   const handleEquals = useCallback(() => {
-    if (prevValue === null || !operation) return;
-    const cur = parseFloat(display);
-    const r   = sCompute(prevValue, cur, operation);
-    if (r === 'Error' || r === 'Overflow') {
-      setDisplay(r); setPrevValue(null); setOperation(null); setWaitingForOperand(false); return;
+    if (prevValue !== null && operation) {
+      const cur = parseFloat(display);
+      const r   = sCompute(prevValue, cur, operation);
+      if (r === 'Error' || r === 'Overflow') {
+        setDisplay(r);
+        setPrevValue(null); setOperation(null); setWaitingForOperand(false);
+        setLastOperand(null); setLastOp(null);
+        return;
+      }
+      setDisplay(String(r));
+      setLastOperand(cur);
+      setLastOp(operation);
+      setPrevValue(null);
+      setOperation(null);
+      setWaitingForOperand(false);
+      setShouldResetOnDigit(true);
+      return;
     }
-    setDisplay(String(r));
-    setPrevValue(null);
-    setOperation(null);
-    setWaitingForOperand(false);
-    setShouldResetOnDigit(true);
-  }, [display, prevValue, operation, sCompute]);
+
+    // Nothing pending — repeat the last completed operation, if any.
+    if (lastOperand !== null && lastOp) {
+      const cur = parseFloat(display);
+      const r   = sCompute(cur, lastOperand, lastOp);
+      if (r === 'Error' || r === 'Overflow') {
+        setDisplay(r); setLastOperand(null); setLastOp(null); return;
+      }
+      setDisplay(String(r));
+      setShouldResetOnDigit(true);
+    }
+  }, [display, prevValue, operation, sCompute, lastOperand, lastOp]);
 
   const simplePress = useCallback((k: string) => {
+    // FIX 8 — decimal point now also resets to a fresh "0." here, same as
+    // digits already did, instead of falling through to inputDecimal()
+    // and appending onto whatever number was previously displayed.
     if (waitingForOperand || shouldResetOnDigit) {
       if (/^[0-9]$/.test(k)) { setDisplay(k); setWaitingForOperand(false); setShouldResetOnDigit(false); return; }
+      if (k === '.') { setDisplay('0.'); setWaitingForOperand(false); setShouldResetOnDigit(false); return; }
     }
     switch (k) {
       case 'AC': clearAll(); break;
@@ -453,7 +552,13 @@ const handleDownload = useCallback(() => {
           ? (d.startsWith('-') ? d.slice(1) : '-' + d) : d);
         break;
       case '%':
-        setDisplay(d => String(parseFloat(d) / 100));
+        // FIX 10 — guard against Error/Overflow producing "NaN".
+        setDisplay(d => {
+          if (d === 'Error' || d === 'Overflow') return d;
+          const n = parseFloat(d) / 100;
+          if (!isFinite(n)) return 'Error';
+          return String(parseFloat(n.toFixed(10)));
+        });
         break;
       case '⌫': backspace(); break;
       case '÷': case '×': case '−': case '+': handleOperation(k); break;
@@ -484,7 +589,7 @@ const handleDownload = useCallback(() => {
      FT·IN·FR MODE STATE
   ══════════════════════════════════════════════ */
 
-  const [fiHistory,     setFiHistory]     = useState<FiHistItem[]>([]);
+  const [fiHistory,     setFiHistory]     = useState<FiHistItem[]>(() => readLS(LS_FI_HIST, []));
   const [fiAccum,       setFiAccum]       = useState<number | null>(null);
   const [fiOp,          setFiOp]          = useState<string | null>(null);
   const [fiNewEntry,    setFiNewEntry]    = useState(true);
@@ -495,9 +600,15 @@ const handleDownload = useCallback(() => {
   const [fiInputTarget, setFiInputTarget] = useState<'ft' | 'in'>('ft');
   const [fiScalarValue, setFiScalarValue] = useState('');    // FIX 3
   const [fiLastResult,  setFiLastResult]  = useState<number | null>(null); // FIX 1
+  // FIX 13 — explicit error state instead of silently clearing.
+  const [fiError,       setFiError]       = useState<string | null>(null);
 
-  // FIX 5 / FIX 7: timer as a ref — mutations never cause re-renders
-  const applyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // FIX 6 — running display string of the FULL chained expression, e.g.
+  // "5' 3\" + 3' + " — built up as operators/operands are entered, so the
+  // history entry written on "=" reflects every step, not just the last two.
+  const [fiExprChain,   setFiExprChain]   = useState('');
+
+  useEffect(() => { writeLS(LS_FI_HIST, fiHistory); }, [fiHistory]); // FIX 7
 
   const isScalarEntry = fiOp === '*' || fiOp === '/';
 
@@ -512,88 +623,92 @@ const handleDownload = useCallback(() => {
   }, [isScalarEntry, fiScalarValue, curFt, curIn, curFr]);
 
   const applyFiInput = useCallback((value: string, target: 'ft' | 'in') => {
-  if (!value) return;
-  const n = parseFloat(value);
-  if (isNaN(n)) return;
-  if (target === 'ft') { setCurFt(Math.min(Math.max(0, n), 1e9)); }
-  else                 { setCurIn(Math.max(0, Math.min(11, Math.round(n)))); }
-}, []);
+    if (!value) return;
+    const n = parseFloat(value);
+    if (isNaN(n)) return;
+    if (target === 'ft') { setCurFt(Math.min(Math.max(0, n), 1e9)); }
+    else                 { setCurIn(Math.max(0, Math.min(11, Math.round(n)))); }
+  }, []);
 
   const selectFiField = useCallback((target: 'ft' | 'in') => {
     setFiLastResult(null);
+    setFiError(null);
     setFiNewEntry(false);
     setFiInputTarget(target);
     setFiInputValue(target === 'ft' ? String(curFt) : String(curIn));
   }, [curFt, curIn]);
 
+  // FIX 12 — feet/inches/scalar are now committed to state on EVERY
+  // keystroke (no debounce). setFiInputValue and applyFiInput are both
+  // called with the SAME freshly-computed `next` string, so there's no
+  // reliance on a stale closure or a pending timer — eliminating the race
+  // where pressing an operator/"=" right after typing used an outdated
+  // value.
   const handleFiNumberInput = useCallback((d: string) => {
     setFiLastResult(null);
-    setFiNewEntry(false); 
+    setFiError(null);
+    setFiNewEntry(false);
 
     if (isScalarEntry) {
-      // FIX 3: plain number for × and ÷
       if (d === '⌫') { setFiScalarValue(v => v.slice(0, -1)); return; }
       if (d === '.') {
-        setFiScalarValue(v => v.includes('.') ? v : (v === '' ? '0.' : v + '.')); return;
+        setFiScalarValue(v => v.includes('.') ? v : (v === '' ? '0.' : v + '.'));
+        return;
       }
-      setFiScalarValue(v => {
-        if (v.replace('.','').length >= 9) return v;
-        return v === '0' ? d : v + d;
-      });
+      setFiScalarValue(v => (v.replace('.', '').length >= 9 ? v : (v === '0' ? d : v + d)));
       return;
     }
 
-    if (d === '⌫') { setFiInputValue(v => v.slice(0, -1)); return; }
-    if (d === '.') {
-      if (fiInputTarget !== 'ft') return;
-      setFiInputValue(v => v.includes('.') ? v : v + '.');
-      return;
+    let next = fiInputValue;
+    if (d === '⌫') {
+      next = fiInputValue.slice(0, -1);
+    } else if (d === '.') {
+      if (fiInputTarget !== 'ft') return; // whole inches only, no decimals
+      next = fiInputValue.includes('.') ? fiInputValue : fiInputValue + '.';
+    } else {
+      next = fiInputValue.replace('.', '').length >= 6
+        ? fiInputValue
+        : (fiInputValue === '0' ? d : fiInputValue + d);
     }
-    setFiInputValue(v => {
-      if (v.replace('.','').length >= 6) return v;
-      return v === '0' ? d : v + d;
-    });
-  }, [isScalarEntry, fiInputTarget]);
-
-  // FIX 7: the debounce effect reads fiInputValue and fiInputTarget, but
-  // writing to applyTimerRef (a ref) never re-triggers the effect — no loop.
-  useEffect(() => {
-    if (isScalarEntry) return;
-    if (!fiInputValue)  return;
-
-    if (applyTimerRef.current) { clearTimeout(applyTimerRef.current); }
-    applyTimerRef.current = setTimeout(() => {
-      applyFiInput(fiInputValue, fiInputTarget);
-      applyTimerRef.current = null;
-    }, 300);
-
-    return () => {
-      if (applyTimerRef.current) { clearTimeout(applyTimerRef.current); applyTimerRef.current = null; }
-    };
-  }, [fiInputValue, fiInputTarget, applyFiInput, isScalarEntry]);
-
-  const flushFiInput = useCallback(() => {
-    if (applyTimerRef.current) { clearTimeout(applyTimerRef.current); applyTimerRef.current = null; }
-    if (!isScalarEntry && fiInputValue) applyFiInput(fiInputValue, fiInputTarget);
-  }, [isScalarEntry, fiInputValue, fiInputTarget, applyFiInput]);
+    setFiInputValue(next);
+    applyFiInput(next, fiInputTarget);
+  }, [isScalarEntry, fiInputTarget, fiInputValue, applyFiInput]);
 
   const fiOpPress = useCallback((op: string) => {
-    flushFiInput();
     const t = getCurEntryValue();
+    const opSym = OP_SYM[op] ?? op;
+    const secondStr = isScalarEntry ? String(t) : fmtFI(t);
 
-    setFiAccum(prev => {
-      if (prev === null) return t;
-      if (fiOp && !fiNewEntry) {
-        const r = applyOp(prev, t, fiOp);
-        if (isNaN(r) || !isFinite(r) || Math.abs(r) > 1e15) {
-          // trigger clear
-          setTimeout(() => fiClear(), 0);
-          return prev;
-        }
-        return r;
+    setFiError(null);
+
+    if (fiAccum === null) {
+      // Very first operator press: seed the accumulator and the chain.
+      setFiAccum(t);
+      setFiExprChain(`${secondStr} ${opSym}`);
+    } else if (fiOp === null) {
+      // FIX 15 — Continuing a calculation after "=" (accum holds the
+      // previous result, but fiOp/fiExprChain were both reset). Seed the
+      // chain fresh from the current accumulator instead of falling into
+      // the swap branch below, which would find nothing to swap and
+      // silently leave the chain empty — dropping the starting operand
+      // from the eventual history entry.
+      setFiExprChain(`${fmtFI(fiAccum)} ${opSym}`);
+    } else if (!fiNewEntry) {
+      // A new operand was entered since the last operator: fold it in.
+      const r = applyOp(fiAccum, t, fiOp);
+      if (isNaN(r) || !isFinite(r) || Math.abs(r) > 1e15) {
+        setFiError(fiOp === '/' && t === 0 ? 'Cannot divide by zero'
+          : (isNaN(r) || !isFinite(r)) ? 'Error' : 'Overflow');
+        fiClear();
+        return;
       }
-      return prev;
-    });
+      setFiAccum(r);
+      setFiExprChain(prev => `${prev} ${secondStr} ${opSym}`);
+    } else {
+      // Operator pressed again with no new operand entered: swap the
+      // trailing operator symbol instead of appending a duplicate. FIX 14.
+      setFiExprChain(prev => prev.replace(OP_TRAIL_REGEX, opSym));
+    }
 
     setFiOp(op);
     setFiNewEntry(true);
@@ -601,22 +716,30 @@ const handleDownload = useCallback(() => {
     setFiInputValue(''); setFiScalarValue(''); setFiLastResult(null);
     setFiInputTarget('ft'); // FIX 2
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flushFiInput, getCurEntryValue, fiOp, fiNewEntry]);
+  }, [getCurEntryValue, fiOp, fiNewEntry, fiAccum, isScalarEntry]);
 
   const fiEqual = useCallback(() => {
-    flushFiInput();
     if (fiAccum === null || !fiOp) return;
     const t = getCurEntryValue();
     const r = applyOp(fiAccum, t, fiOp);
-    if (isNaN(r) || !isFinite(r) || Math.abs(r) > 1e15) { fiClear(); return; }
+
+    if (isNaN(r) || !isFinite(r) || Math.abs(r) > 1e15) {
+      setFiError(fiOp === '/' && t === 0 ? 'Cannot divide by zero'
+        : (isNaN(r) || !isFinite(r)) ? 'Error' : 'Overflow');
+      fiClear();
+      return;
+    }
 
     const secondStr = isScalarEntry ? String(t) : fmtFI(t);
-    const exprStr   = `${fmtFI(fiAccum)} ${OP_SYM[fiOp] ?? fiOp} ${secondStr}`;
+    // FIX 6 — the full expression is everything accumulated in
+    // fiExprChain (all prior operands/operators) plus this final operand.
+    const fullExpr = `${fiExprChain} ${secondStr}`.trim();
 
     setFiHistory(h => {
-      const next = [...h, { expr: exprStr, result: fmtFI(r) }];
-      return next.length > 20 ? next.slice(-20) : next;
+      const next = [...h, { expr: fullExpr, result: fmtFI(r) }];
+      return next.length > FI_HIST_MAX ? next.slice(-FI_HIST_MAX) : next; // FIX 7
     });
+    setFiError(null);
     setFiAccum(r);
     setFiOp(null);
     setFiNewEntry(true);
@@ -624,15 +747,26 @@ const handleDownload = useCallback(() => {
     setFiInputValue(''); setFiScalarValue('');
     setFiLastResult(r);   // FIX 1
     setFiInputTarget('ft'); // FIX 2
+    setFiExprChain(''); // chain resets after being committed to history
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flushFiInput, fiAccum, fiOp, getCurEntryValue, isScalarEntry]);
+  }, [fiAccum, fiOp, getCurEntryValue, isScalarEntry, fiExprChain]);
 
   function fiClear() {
-    if (applyTimerRef.current) { clearTimeout(applyTimerRef.current); applyTimerRef.current = null; }
     setFiAccum(null); setFiOp(null); setFiNewEntry(true);
     setCurFt(0); setCurIn(0); setCurFr('0');
     setFiInputValue(''); setFiScalarValue(''); setFiLastResult(null); setFiInputTarget('ft');
+    setFiExprChain('');
+    // Note: fiError is intentionally NOT cleared here when this is called
+    // internally after an error (fiOpPress/fiEqual) — it stays visible
+    // until the user explicitly presses Clear (below) or starts typing.
   }
+
+  const fiClearPress = useCallback(() => {
+    fiClear();
+    setFiError(null);
+  }, []);
+
+  const fiClearHistory = useCallback(() => { setFiHistory([]); }, []);
 
   // Keyboard handler — Ft·In·Fr mode
   useEffect(() => {
@@ -651,8 +785,7 @@ const handleDownload = useCallback(() => {
         case 'Delete':  e.preventDefault(); handleFiNumberInput('⌫'); break;
         case 'Escape':
           e.preventDefault();
-          setFiInputValue(''); setFiScalarValue('');
-          if (applyTimerRef.current) { clearTimeout(applyTimerRef.current); applyTimerRef.current = null; }
+          setFiInputValue(''); setFiScalarValue(''); setFiError(null);
           break;
       }
     };
@@ -665,7 +798,9 @@ const handleDownload = useCallback(() => {
   const curTotal  = getCurTotal();
   const fiDecVal  = fiLastResult !== null ? fiLastResult
                   : isScalarEntry ? (parseFloat(fiScalarValue) || 0) : curTotal;
-  const fiResStr  = fiLastResult !== null ? fmtFI(fiLastResult)
+  // FIX 13 — an active error message takes priority over everything else.
+  const fiResStr  = fiError !== null ? fiError
+                  : fiLastResult !== null ? fmtFI(fiLastResult)
                   : isScalarEntry ? (fiScalarValue || '0') : fmtFI(curTotal);
   const fiExprStr = fiAccum !== null && fiOp
     ? `${fmtFI(fiAccum)} ${OP_SYM[fiOp] ?? fiOp}` : '';
@@ -698,7 +833,7 @@ const handleDownload = useCallback(() => {
                   onClick={() => setMode('fi')}>Ft·In·Fr</button>
               </div>
               <div className="fc-header-actions">
-                <button type="button" className="fc-download-btn" 
+                <button type="button" className="fc-download-btn"
                   onClick={() => setShowDownloadPopup(true)}
                   title="Download Calculator" aria-label="Download calculator">
                   <Download size={14} />
@@ -739,9 +874,11 @@ const handleDownload = useCallback(() => {
                   {/* Display */}
                   <div className="fc-fi-display">
                     <div className="fc-fi-expr">{fiExprStr || '\u00a0'}</div>
-                    <div className="fc-fi-result">{fiResStr}</div>
+                    <div className={`fc-fi-result${fiError ? ' fc-fi-result-error' : ''}`}>{fiResStr}</div>
                     <div className="fc-fi-decimal">
-                      {isScalarEntry && fiLastResult === null
+                      {fiError !== null
+                        ? '\u00a0'
+                        : isScalarEntry && fiLastResult === null
                         ? 'plain number (\u00d7/\u00f7)'
                         : `${fiDecVal.toFixed(4)}\u2033 decimal`}
                     </div>
@@ -781,7 +918,7 @@ const handleDownload = useCallback(() => {
                           <div className="fc-fi-segment fc-fi-frac-seg">
                             <span className="fc-fi-seg-label">Fraction</span>
                             <select className="fc-fi-frac" value={curFr}
-  onChange={e => { setFiLastResult(null); setCurFr(e.target.value); setFiNewEntry(false); }}>
+                              onChange={e => { setFiLastResult(null); setFiError(null); setCurFr(e.target.value); setFiNewEntry(false); }}>
                               {FRACS.map(f => <option key={f} value={f}>{f === '0' ? '\u2014' : f}</option>)}
                             </select>
                           </div>
@@ -807,7 +944,14 @@ const handleDownload = useCallback(() => {
 
                   {/* History */}
                   <div className="fc-fi-history">
-                    <div className="fc-fi-hist-label">History</div>
+                    <div className="fc-fi-hist-row">
+                      <div className="fc-fi-hist-label">History</div>
+                      {fiHistory.length > 0 && (
+                        <button type="button" className="fc-fi-hist-clear" onClick={fiClearHistory}>
+                          Clear
+                        </button>
+                      )}
+                    </div>
                     {fiHistory.length === 0
                       ? <div className="fc-fi-hist-empty">No calculations yet</div>
                       : [...fiHistory].reverse().map((h, i) => (
@@ -831,7 +975,7 @@ const handleDownload = useCallback(() => {
                     ))}
                   </div>
                   <div className="fc-fi-ops fc-fi-ops-bottom">
-                    <button type="button" className="fc-fi-op fc-fi-action" onClick={fiClear}>Clear</button>
+                    <button type="button" className="fc-fi-op fc-fi-action" onClick={fiClearPress}>Clear</button>
                     <button type="button" className="fc-fi-op fc-fi-eq" onClick={fiEqual}>=</button>
                   </div>
                 </div>
@@ -844,11 +988,11 @@ const handleDownload = useCallback(() => {
 
         {/* Download Popup */}
         {showDownloadPopup && (
-  <DownloadPopup
-    onClose={() => setShowDownloadPopup(false)}
-    onDownload={handleDownload}
-  />
-)}
+          <DownloadPopup
+            onClose={() => setShowDownloadPopup(false)}
+            onDownload={handleDownload}
+          />
+        )}
 
         <style>{FAB_CSS}</style>
         <style>{DOWNLOAD_POPUP_CSS}</style>
@@ -895,14 +1039,14 @@ const PANEL_CSS = `
 .fc-toggle-btn.active { background: linear-gradient(135deg,#0a84ff,#5ac8fa); color: #fff; }
 .fc-toggle-btn:hover:not(.active) { color: #fff; }
 .fc-header-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.fc-download-btn { 
-  background: rgba(255,255,255,.04); border: none; 
-  color: #8e8e93; width: 22px; height: 22px; border-radius: 6px; 
-  display: flex; align-items: center; justify-content: center; cursor: pointer; 
+.fc-download-btn {
+  background: rgba(255,255,255,.04); border: none;
+  color: #8e8e93; width: 22px; height: 22px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
   transition: all .2s;
 }
-.fc-download-btn:hover { 
-  background: rgba(10,132,255,.15); color: #0a84ff; 
+.fc-download-btn:hover {
+  background: rgba(10,132,255,.15); color: #0a84ff;
   transform: scale(1.05);
 }
 .fc-close    { background: rgba(255,255,255,.04); border: none; color: #8e8e93; width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all .2s; }
@@ -924,6 +1068,7 @@ const PANEL_CSS = `
 .fc-fi-display { background: linear-gradient(180deg,#232325,#1c1c1e); padding: 18px 20px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); flex-shrink: 0; text-align: right; }
 .fc-fi-expr    { font-size: 12px; color: rgba(142,142,147,.7); font-family: 'SF Mono',monospace; min-height: 15px; }
 .fc-fi-result  { font-size: 34px; font-weight: 300; color: #fff; line-height: 1.15; letter-spacing: -.3px; }
+.fc-fi-result-error { color: #ff453a; font-size: 24px; }
 .fc-fi-decimal { font-size: 11px; color: #0a84ff; font-family: 'SF Mono',monospace; opacity: .8; margin-top: 2px; }
 .fc-fi-card    { margin: 12px 12px 4px; flex-shrink: 0; }
 .fc-fi-segments { display: flex; align-items: stretch; gap: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 14px; padding: 8px; }
@@ -955,7 +1100,10 @@ const PANEL_CSS = `
 .fc-fi-eq { background: #0a84ff !important; color: #fff !important; font-size: 19px; font-weight: 500; }
 .fc-fi-eq:active { background: #409cff !important; }
 .fc-fi-history     { flex-shrink: 0; padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 4px; border-top: 1px solid rgba(255,255,255,0.04); }
-.fc-fi-hist-label  { font-size: 8.5px; color: #8e8e93; text-transform: uppercase; letter-spacing: .12em; font-weight: 700; padding-top: 6px; padding-bottom: 2px; }
+.fc-fi-hist-row    { display: flex; align-items: center; justify-content: space-between; padding-top: 6px; padding-bottom: 2px; }
+.fc-fi-hist-label  { font-size: 8.5px; color: #8e8e93; text-transform: uppercase; letter-spacing: .12em; font-weight: 700; }
+.fc-fi-hist-clear  { background: none; border: none; color: #ff453a; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; cursor: pointer; padding: 2px 4px; }
+.fc-fi-hist-clear:hover { opacity: .75; }
 .fc-fi-hist-item   { background: rgba(255,255,255,.025); border-radius: 8px; padding: 6px 10px; font-size: 11px; color: #8e8e93; font-family: 'SF Mono',monospace; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .fc-fi-hist-item span { color: #5ac8fa; font-weight: 600; flex-shrink: 0; }
 .fc-fi-hist-empty  { font-size: 10.5px; color: rgba(142,142,147,.35); text-align: center; padding: 14px 0; }
@@ -1001,14 +1149,14 @@ const DOWNLOAD_POPUP_CSS = `
 }
 .fc-download-popup.light {
   background: #ffffff;
-  box-shadow: 
+  box-shadow:
     0 30px 80px rgba(0, 0, 0, 0.15),
     0 10px 30px rgba(0, 0, 0, 0.05),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 .fc-download-popup.dark {
   background: #1c1c1e;
-  box-shadow: 
+  box-shadow:
     0 30px 80px rgba(0, 0, 0, 0.5),
     0 10px 30px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);

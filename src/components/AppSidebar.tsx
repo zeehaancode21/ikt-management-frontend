@@ -26,6 +26,46 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
 import { UserAvatar } from "@/components/UserAvatar";
 
+// ── Display name formatter ────────────────────────────────────────────────
+const displayNameCache = new Map<string, string>();
+
+function formatDisplayName(username: string): string {
+  if (!username) return "";
+  
+  if (displayNameCache.has(username)) {
+    return displayNameCache.get(username)!;
+  }
+  
+  let result = username;
+  
+  // If username already has spaces, just title-case it
+  if (username.includes(' ')) {
+    result = username
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  } else {
+    // If it's camelCase or has underscores, convert to title case with spaces
+    // e.g., "johnDoe" -> "John Doe", "john_doe" -> "John Doe"
+    const withSpaces = username
+      // Insert space before capital letters (camelCase)
+      .replace(/([A-Z])/g, ' $1')
+      // Replace underscores with spaces
+      .replace(/_/g, ' ')
+      // Trim extra spaces
+      .trim();
+    
+    // Title case each word
+    result = withSpaces
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  }
+  
+  displayNameCache.set(username, result);
+  return result;
+}
+
 // ── Company website ───────────────────────────────────────────────────────
 const COMPANY_WEBSITE_URL = "https://www.iktangience.com";
 const COMPANY_WEBSITE_LABEL = "IK Tangience";
@@ -802,7 +842,7 @@ export const AppSidebar = () => {
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-white">{name || "User"}</div>
+              <div className="truncate text-sm font-medium text-white">{formatDisplayName(name || "User")}</div>
               <div className="text-xs uppercase tracking-wide text-sidebar-primary">{role}</div>
             </div>
             <User className="h-4 w-4 text-sidebar-primary shrink-0" />

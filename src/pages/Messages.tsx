@@ -18,9 +18,7 @@ interface Message {
   readByReceiver: boolean;
   sentAt: string;
   attachments?: Attachment[];
-  // JSON-encoded map of emoji -> usernames who reacted with it, e.g. {"👍":["alice"]}
   reactions?: string;
-  // Present when this message is a reply to an earlier message in the conversation.
   replyToId?: number;
   replyToSender?: string;
   replyToContent?: string;
@@ -37,15 +35,12 @@ interface GroupMessage {
   attachments?: Attachment[];
   sentAt: string;
   reactions?: string;
-  // Present when this message is a reply to an earlier message in the group.
   replyToId?: number;
   replyToSender?: string;
   replyToContent?: string;
   replyToHasAttachment?: boolean;
 }
 
-// Shared shape used to drive the "replying to…" preview bar above the
-// composer, for both DM and group chats.
 interface ReplyTarget {
   id: number;
   sender: string;
@@ -119,6 +114,39 @@ type ChatTarget =
   | { type: "user"; username: string }
   | { type: "broadcast" }
   | { type: "group"; group: Group };
+
+// ─── Display name formatter ────────────────────────────────────────────────
+const displayNameCache = new Map<string, string>();
+
+function formatDisplayName(username: string): string {
+  if (!username) return "";
+
+  if (displayNameCache.has(username)) {
+    return displayNameCache.get(username)!;
+  }
+
+  let result = username;
+
+  if (username.includes(' ')) {
+    result = username
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  } else {
+    const withSpaces = username
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/_/g, ' ')
+      .trim();
+
+    result = withSpaces
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  displayNameCache.set(username, result);
+  return result;
+}
 
 // ─── Timestamp helpers ────────────────────────────────────────────────────────
 function parseUTC(raw: string): Date {
@@ -196,7 +224,6 @@ function FileAttachment({ attachment, isMine }: { attachment: Attachment; isMine
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Forces a real "Save As" download — always available via the 📥 button.
   const handleDownload = async () => {
     try {
       const response = await api.get(`/attachments/${attachment.id}/download`, {
@@ -215,13 +242,7 @@ function FileAttachment({ attachment, isMine }: { attachment: Attachment; isMine
     }
   };
 
-  // Default action: open the file for viewing instead of downloading it.
-  // Must go through the authenticated `api` client (not window.open on a
-  // bare URL) because the backend requires the Authorization header on
-  // every request — a plain window.open() would 401.
   const handleView = async () => {
-    // Open the tab synchronously (before any await) so the browser still
-    // treats it as part of the user's click and doesn't pop-up-block it.
     const tab = window.open('', '_blank');
 
     try {
@@ -236,15 +257,12 @@ function FileAttachment({ attachment, isMine }: { attachment: Attachment; isMine
         tab.location.href = url;
         setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
       } else {
-        // Genuinely blocked before we even had the file — fall back once.
         window.URL.revokeObjectURL(url);
         handleDownload();
       }
     } catch (error) {
       console.error('Preview failed:', error);
       if (tab) tab.close();
-      // Don't auto-fallback to /download here — if /preview 404'd, /download
-      // will very likely 404 too, and you'd fire two failing requests per click.
       alert(`Couldn't open "${attachment.originalName}". Please try downloading it instead.`);
     }
   };
@@ -483,7 +501,7 @@ function ReplyPreviewBar({ target, onCancel }: { target: ReplyTarget; onCancel: 
     <div className="msg-reply-preview-bar">
       <Reply size={14} className="msg-reply-preview-icon" />
       <div className="msg-reply-preview-text">
-        <span className="msg-reply-preview-sender">{target.sender}</span>
+        <span className="msg-reply-preview-sender">{formatDisplayName(target.sender)}</span>
         <span className="msg-reply-preview-content">{preview}</span>
       </div>
       <button type="button" className="msg-reply-preview-cancel" onClick={onCancel} title="Cancel reply">
@@ -513,7 +531,7 @@ function ReplyQuoteBlock({
       onClick={() => onJump(replyToId)}
       title="Jump to original message"
     >
-      <span className="msg-reply-quote-sender">{sender}</span>
+      <span className="msg-reply-quote-sender">{formatDisplayName(sender || "")}</span>
       <span className="msg-reply-quote-content">{preview}</span>
     </button>
   );
@@ -574,6 +592,30 @@ function PollBubble({
       <div className="poll-footer">{totalVotes} vote{totalVotes !== 1 ? "s" : ""}</div>
     </div>
   );
+}
+
+// ─── Small helper: merge server-sent message data with any locally-known ────
+// reply metadata. Some backend payloads (especially WebSocket broadcasts)
+// don't always echo back replyToId/replyToSender/replyToContent/
+// replyToHasAttachment the way the REST responses do. If we blindly
+// overwrite a message object with a WS payload that's missing those fields,
+// a reply preview that was visible a second ago silently vanishes.
+// This helper keeps whatever we already had locally whenever the incoming
+// payload doesn't carry the field itself.
+function mergeReplyMeta<T extends {
+  replyToId?: number;
+  replyToSender?: string;
+  replyToContent?: string;
+  replyToHasAttachment?: boolean;
+}>(incoming: T, existing?: T): T {
+  if (!existing) return incoming;
+  return {
+    ...incoming,
+    replyToId: incoming.replyToId ?? existing.replyToId,
+    replyToSender: incoming.replyToSender ?? existing.replyToSender,
+    replyToContent: incoming.replyToContent ?? existing.replyToContent,
+    replyToHasAttachment: incoming.replyToHasAttachment ?? existing.replyToHasAttachment,
+  };
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -638,11 +680,7 @@ export default function Messages() {
   const [removingMessageIds, setRemovingMessageIds] = useState<Set<number>>(new Set());
 
   // ── Reply-to-message state ────────────────────────────────────────────────
-  // The message currently being replied to (works for both DM and group chats
-  // since ReplyTarget only stores the small preview fields each needs).
   const [replyingTo, setReplyingTo] = useState<ReplyTarget | null>(null);
-  // Refs to each rendered bubble, keyed by message id, so tapping a quoted
-  // reply preview can scroll back to the original message.
   const messageBubbleRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
 
@@ -747,6 +785,11 @@ export default function Messages() {
   useEffect(() => {
     if (!connected || !name) return;
 
+    // FIX: previously this did a straight `newMsg` replace, which wiped out
+    // replyToId/replyToSender/replyToContent/replyToHasAttachment whenever the
+    // WebSocket payload didn't carry those fields (they were only guaranteed on
+    // the REST /messages/send response). Now we merge, keeping whatever reply
+    // metadata we already had locally if the incoming payload is missing it.
     const unsubDM = subscribe(`/user/queue/messages`, (newMsg: Message) => {
       const target = chatTargetRef.current;
       if (
@@ -754,26 +797,38 @@ export default function Messages() {
         (newMsg.senderUsername === target.username ||
           newMsg.receiverUsername === target.username)
       ) {
-        setConversation((prev) =>
-          prev.some((m) => m.id === newMsg.id)
-            ? prev.map((m) => (m.id === newMsg.id ? newMsg : m))
-            : [...prev, newMsg]
-        );
+        setConversation((prev) => {
+          const existing = prev.find((m) => m.id === newMsg.id);
+          if (existing) {
+            const merged = mergeReplyMeta(newMsg, existing);
+            return prev.map((m) => (m.id === newMsg.id ? merged : m));
+          }
+          return [...prev, newMsg];
+        });
       }
       const other = newMsg.senderUsername === name ? newMsg.receiverUsername : newMsg.senderUsername;
       setInboxMap((prev) => {
         const ex = prev[other];
         if (ex && parseUTC(ex.sentAt) >= parseUTC(newMsg.sentAt)) return prev;
-        return { ...prev, [other]: newMsg };
+        // Preserve reply metadata in the inbox preview entry too, in case the
+        // same under-populated WS payload is what ends up cached there.
+        const merged = mergeReplyMeta(newMsg, ex);
+        return { ...prev, [other]: merged };
       });
     });
 
+    // FIX: same merge treatment for group messages.
     const unsubGroup = subscribe(`/user/queue/group-messages`, (newMsg: GroupMessage) => {
       const target = chatTargetRef.current;
       if (target?.type === "group" && newMsg.groupId === target.group.id) {
-        setGroupMessages((prev) =>
-          prev.some((m) => m.id === newMsg.id) ? prev.map((m) => m.id === newMsg.id ? newMsg : m) : [...prev, newMsg]
-        );
+        setGroupMessages((prev) => {
+          const existing = prev.find((m) => m.id === newMsg.id);
+          if (existing) {
+            const merged = mergeReplyMeta(newMsg, existing);
+            return prev.map((m) => (m.id === newMsg.id ? merged : m));
+          }
+          return [...prev, newMsg];
+        });
       }
     });
 
@@ -955,8 +1010,18 @@ export default function Messages() {
           messageType: attachments.length > 0 ? "FILE" : "MESSAGE",
           replyToId: replyToIdToSend
         });
+        // Belt-and-suspenders: make sure the reply fields we just sent are
+        // present on the message we store locally, even if the server's
+        // create-response happens to omit them for some reason.
+        const savedMsg = r.data;
+        if (replyBeingSent && !savedMsg.replyToId) {
+          savedMsg.replyToId = replyBeingSent.id;
+          savedMsg.replyToSender = replyBeingSent.sender;
+          savedMsg.replyToContent = replyBeingSent.content;
+          savedMsg.replyToHasAttachment = replyBeingSent.hasAttachment;
+        }
         setGroupMessages((prev) =>
-          prev.some((m) => m.id === r.data.id) ? prev : [...prev, r.data]
+          prev.some((m) => m.id === savedMsg.id) ? prev.map((m) => m.id === savedMsg.id ? savedMsg : m) : [...prev, savedMsg]
         );
       } catch (error) {
         console.error('Group message failed:', error);
@@ -1002,7 +1067,20 @@ export default function Messages() {
         attachments: attachments.map(a => a.id),
         replyToId: replyToIdToSend
       });
-      setConversation((prev) => prev.map((m) => m.id === tempId ? r.data : m));
+
+      // IMPORTANT FIX: When replacing the optimistic message with the server response,
+      // we need to preserve the reply data if the server didn't send it back
+      const serverMessage = r.data;
+
+      // If the server didn't include the reply data but we sent a reply, copy it over
+      if (replyBeingSent && !serverMessage.replyToId) {
+        serverMessage.replyToId = replyBeingSent.id;
+        serverMessage.replyToSender = replyBeingSent.sender;
+        serverMessage.replyToContent = replyBeingSent.content;
+        serverMessage.replyToHasAttachment = replyBeingSent.hasAttachment;
+      }
+
+      setConversation((prev) => prev.map((m) => m.id === tempId ? serverMessage : m));
       if (!loadingLockRef.current) {
         fetchInbox(0, true);
       }
@@ -1022,9 +1100,11 @@ export default function Messages() {
   const toggleDmReaction = async (msg: Message, emoji: string) => {
     try {
       const r = await api.post<Message>(`/messages/${msg.id}/react`, { emoji });
-      setConversation((prev) => prev.map((m) => (m.id === r.data.id ? r.data : m)));
-      const other = r.data.senderUsername === name ? r.data.receiverUsername : r.data.senderUsername;
-      setInboxMap((prev) => (prev[other]?.id === r.data.id ? { ...prev, [other]: r.data } : prev));
+      // Preserve reply data when updating
+      const updatedMsg = mergeReplyMeta(r.data, msg);
+      setConversation((prev) => prev.map((m) => (m.id === updatedMsg.id ? updatedMsg : m)));
+      const other = updatedMsg.senderUsername === name ? updatedMsg.receiverUsername : updatedMsg.senderUsername;
+      setInboxMap((prev) => (prev[other]?.id === updatedMsg.id ? { ...prev, [other]: updatedMsg } : prev));
     } catch { /* ignore */ }
   };
 
@@ -1032,7 +1112,9 @@ export default function Messages() {
     if (!chatTarget || chatTarget.type !== "group") return;
     try {
       const r = await api.post<GroupMessage>(`/groups/${chatTarget.group.id}/messages/${msg.id}/react`, { emoji });
-      setGroupMessages((prev) => prev.map((m) => (m.id === r.data.id ? r.data : m)));
+      // Preserve reply data when updating
+      const updatedMsg = mergeReplyMeta(r.data, msg);
+      setGroupMessages((prev) => prev.map((m) => (m.id === updatedMsg.id ? updatedMsg : m)));
     } catch { /* ignore */ }
   };
 
@@ -1049,9 +1131,6 @@ export default function Messages() {
   };
 
   // ── Reply-to-message ─────────────────────────────────────────────────────
-  // Builds a ReplyTarget preview from whichever message the user tapped
-  // "reply" on (works the same for DM and group bubbles) and focuses the
-  // composer so they can start typing immediately.
   const startReply = (msg: Message | GroupMessage) => {
     setReplyingTo({
       id: msg.id,
@@ -1199,7 +1278,6 @@ export default function Messages() {
     setShowPollModal(true);
   };
 
-  // Duplicate check (case-insensitive, trimmed) — "Yes" and "yes " are the same option
   const normalizedPollOptions = pollOptions.map(o => o.trim().toLowerCase());
   const duplicatePollOptionIndexes = new Set<number>();
   normalizedPollOptions.forEach((val, idx) => {
@@ -1217,7 +1295,7 @@ export default function Messages() {
     const opts = pollOptions.map(o => o.trim()).filter(Boolean);
     if (opts.length < 2) return;
     const uniqueOpts = new Set(opts.map(o => o.toLowerCase()));
-    if (uniqueOpts.size !== opts.length) return; // block duplicate options
+    if (uniqueOpts.size !== opts.length) return;
     try {
       const r = await api.post<GroupMessage>(`/groups/${chatTarget.group.id}/polls`, {
         question: pollQuestion.trim(), options: opts,
@@ -1322,8 +1400,8 @@ export default function Messages() {
           background:none; border:none; cursor:pointer; padding:2px 4px; border-radius:4px;
         }
         .msg-section-label button:hover { background:hsl(var(--accent)); }
-        .msg-sidebar-list { 
-          flex:1; overflow-y:auto; padding-bottom:8px; 
+        .msg-sidebar-list {
+          flex:1; overflow-y:auto; padding-bottom:8px;
         }
         .msg-contact {
           display:flex; align-items:center; gap:10px; padding:9px 14px;
@@ -1369,8 +1447,8 @@ export default function Messages() {
         .msg-chat-header-info h3 { font-size:15px; font-weight:700; color:hsl(var(--foreground)); margin:0 0 2px; }
         .msg-chat-header-info p { font-size:12px; color:hsl(var(--muted-foreground)); margin:0; }
         .msg-online-dot { width:10px; height:10px; background:#10b981; border-radius:50%; position:absolute; bottom:1px; right:1px; border:2px solid hsl(var(--card)); }
-        .msg-messages { 
-          flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:2px; 
+        .msg-messages {
+          flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:2px;
         }
         .msg-day-divider { display:flex; align-items:center; gap:12px; margin:16px 0 8px; }
         .msg-day-divider::before,.msg-day-divider::after { content:''; flex:1; height:1px; background:hsl(var(--border)); }
@@ -1391,8 +1469,8 @@ export default function Messages() {
         .msg-react-trigger { color:hsl(var(--muted-foreground)); }
         .msg-react-trigger:hover { color:hsl(var(--foreground)); }
         .msg-loading-more {
-          text-align:center; padding:10px; font-size:12px; 
-          color:hsl(var(--muted-foreground)); 
+          text-align:center; padding:10px; font-size:12px;
+          color:hsl(var(--muted-foreground));
         }
         .msg-loading-spinner {
           display:inline-block; width:16px; height:16px;
@@ -1456,7 +1534,7 @@ export default function Messages() {
           display:flex; align-items:flex-end; gap:8px;
           background:hsl(var(--background)); border:1.5px solid hsl(var(--border));
           border-radius:12px; padding:6px 6px 6px 16px; transition:border-color .15s;
-          width:100%; max-width:100%; box-sizing:border-box; 
+          width:100%; max-width:100%; box-sizing:border-box;
         }
         .msg-input-row:focus-within { border-color:hsl(var(--primary)); }
         .msg-input-row input { flex:1 1 auto; min-width:0; border:none; background:transparent; color:hsl(var(--foreground)); font-size:14px; outline:none; padding:6px 0; }
@@ -1708,7 +1786,7 @@ export default function Messages() {
                     <Users size={15} color="#fff" />
                   </div>
                   <div className="msg-contact-info">
-                    <div className="msg-contact-name">{g.name}</div>
+                    <div className="msg-contact-name">{formatDisplayName(g.name)}</div>
                     <div className="msg-contact-preview">{memberCount} member{memberCount !== 1 ? "s" : ""}</div>
                   </div>
                   <div className="msg-group-actions">
@@ -1746,7 +1824,9 @@ export default function Messages() {
                   <UserAvatar username={u.username} size={36} className="msg-avatar" style={{ background: undefined }} />
                   <div className="msg-contact-info">
                     <div className="msg-contact-name">
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.username}</span>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {formatDisplayName(u.username)}
+                      </span>
                       {lastMsg && <span className="msg-contact-time">{fmtDate(lastMsg.sentAt)}</span>}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2 }}>
@@ -1811,7 +1891,7 @@ export default function Messages() {
                     <div key={bc.id}>
                       {showDivider && <div className="msg-day-divider"><span>{longDateLabel(bc.createdAt)}</span></div>}
                       <div className="msg-bubble-group broadcast-msg">
-                        <div className="msg-sender-label">{bc.senderUsername || "Noor"}</div>
+                        <div className="msg-sender-label">{formatDisplayName(bc.senderUsername || "Noor")}</div>
                         <div className="msg-bubble broadcast">{bc.content}</div>
                         {bc.attachments?.map(attachment => (
                           <FileAttachment key={attachment.id} attachment={attachment} isMine={false} />
@@ -1856,7 +1936,7 @@ export default function Messages() {
                   <Users size={18} color="#fff" />
                 </div>
                 <div className="msg-chat-header-info" style={{ flex: 1 }}>
-                  <h3>{chatTarget.group.name}</h3>
+                  <h3>{formatDisplayName(chatTarget.group.name)}</h3>
                   <p>{chatTarget.group.members ? chatTarget.group.members.split(",").filter(Boolean).length : 0} members</p>
                 </div>
                 {canManageGroup && (
@@ -1880,7 +1960,7 @@ export default function Messages() {
                     <div className="msg-empty-icon" style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
                       <Users size={28} color="#8b5cf6" />
                     </div>
-                    <h3>{chatTarget.group.name}</h3>
+                    <h3>{formatDisplayName(chatTarget.group.name)}</h3>
                     <p>This is the beginning of this group chat. Say hello!</p>
                   </div>
                 ) : (
@@ -1900,7 +1980,7 @@ export default function Messages() {
                           {showSender && !isMine && (
                             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, paddingLeft: 6 }}>
                               <UserAvatar username={msg.senderUsername} size={20} />
-                              <span className="msg-sender-label" style={{ marginBottom: 0, padding: 0 }}>{msg.senderUsername}</span>
+                              <span className="msg-sender-label" style={{ marginBottom: 0, padding: 0 }}>{formatDisplayName(msg.senderUsername)}</span>
                             </div>
                           )}
                           {msg.messageType === "POLL" ? (
@@ -1919,7 +1999,7 @@ export default function Messages() {
                                   {msg.replyToId && (
                                     <ReplyQuoteBlock
                                       replyToId={msg.replyToId}
-                                      sender={msg.replyToSender}
+                                      sender={formatDisplayName(msg.replyToSender || "")}
                                       content={msg.replyToContent}
                                       hasAttachment={msg.replyToHasAttachment}
                                       isMine={isMine}
@@ -1991,7 +2071,7 @@ export default function Messages() {
                 <div className="msg-input-row">
                   <input
                     ref={inputRef}
-                    placeholder={`Message ${chatTarget.group.name}…`}
+                    placeholder={`Message ${formatDisplayName(chatTarget.group.name)}…`}
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
@@ -2029,7 +2109,7 @@ export default function Messages() {
                   showOnlineDot={true}
                 />
                 <div className="msg-chat-header-info">
-                  <h3>{chatTarget.username}</h3>
+                  <h3>{formatDisplayName(chatTarget.username)}</h3>
                   <p>{convTotalElements} messages</p>
                 </div>
                 <button
@@ -2055,7 +2135,7 @@ export default function Messages() {
                     <div className="msg-empty-icon">
                       <UserAvatar username={chatTarget.username} size={48} />
                     </div>
-                    <h3>{chatTarget.username}</h3>
+                    <h3>{formatDisplayName(chatTarget.username)}</h3>
                     <p>This is the beginning of your conversation. Say hello!</p>
                   </div>
                 ) : (
@@ -2072,13 +2152,13 @@ export default function Messages() {
                       >
                         {showDivider && <div className="msg-day-divider"><span>{longDateLabel(msg.sentAt)}</span></div>}
                         <div className={`msg-bubble-group msg-bubble-wrap ${isMine ? "mine" : "theirs"}`}>
-                          {showSender && !isMine && <div className="msg-sender-label">{msg.senderUsername}</div>}
+                          {showSender && !isMine && <div className="msg-sender-label">{formatDisplayName(msg.senderUsername)}</div>}
                           {(msg.content || msg.replyToId) && (
                             <div className={`msg-bubble ${isMine ? "mine" : "theirs"}`}>
                               {msg.replyToId && (
                                 <ReplyQuoteBlock
                                   replyToId={msg.replyToId}
-                                  sender={msg.replyToSender}
+                                  sender={formatDisplayName(msg.replyToSender || "")}
                                   content={msg.replyToContent}
                                   hasAttachment={msg.replyToHasAttachment}
                                   isMine={isMine}
@@ -2150,7 +2230,7 @@ export default function Messages() {
                 <div className="msg-input-row">
                   <input
                     ref={inputRef}
-                    placeholder={`Message ${chatTarget.username}…`}
+                    placeholder={`Message ${formatDisplayName(chatTarget.username)}…`}
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
@@ -2214,7 +2294,7 @@ export default function Messages() {
                 <div key={u.id} className="modal-member-item" onClick={() => toggleMember(u.username)}>
                   <input type="checkbox" readOnly checked={groupForm.members.includes(u.username)} />
                   <UserAvatar username={u.username} size={28} />
-                  <span style={{ fontSize: 13, flex: 1 }}>{u.username}</span>
+                  <span style={{ fontSize: 13, flex: 1 }}>{formatDisplayName(u.username)}</span>
                   <span className="msg-role-tag" style={{ background: getRoleColor(u.role) + "18", color: getRoleColor(u.role), border: `1px solid ${getRoleColor(u.role)}30`, fontSize: 10 }}>{u.role}</span>
                 </div>
               ))}
@@ -2245,7 +2325,7 @@ export default function Messages() {
               Are you sure you want to delete
             </p>
             <p style={{ fontSize: 15, fontWeight: 700, color: "hsl(var(--foreground))", margin: "0 0 18px", wordBreak: "break-word" }}>
-              "{deleteGroupTarget.name}"?
+              "{formatDisplayName(deleteGroupTarget.name)}"?
             </p>
             <p style={{ fontSize: 13, color: "#ef4444", margin: "0 0 20px" }}>
               This will permanently delete the group and all its messages. This cannot be undone.
@@ -2312,7 +2392,7 @@ export default function Messages() {
               Are you sure you want to delete your entire conversation with
             </p>
             <p style={{ fontSize: 15, fontWeight: 700, color: "hsl(var(--foreground))", margin: "0 0 18px", wordBreak: "break-word" }}>
-              "{deleteConversationTarget}"?
+              "{formatDisplayName(deleteConversationTarget)}"?
             </p>
             <p style={{ fontSize: 13, color: "#ef4444", margin: "0 0 20px" }}>
               All messages in this chat will be permanently deleted for both of you. This cannot be undone.
