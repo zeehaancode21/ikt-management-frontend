@@ -1,86 +1,3 @@
-/**
- * FloatingCalculator.tsx
- *
- * An in-page, draggable floating calculator panel with Apple-style design.
- * Usage: Place this component anywhere that renders for all users (e.g. AppLayout.tsx).
- *
- * Features:
- *  - Draggable panel with position persistence (localStorage)
- *  - Standard mode with Apple-style keypad
- *  - Ft·In·Fr mode for construction measurements
- *  - Full keyboard support
- *  - Persistent state (mode, position, Ft·In·Fr history) across sessions
- *  - Download button for Windows installer with animated popup
- *  - Automatic dark/light mode detection
- *
- * ─────────────────────────────────────────────────────────────────────────
- * FIX LOG (kept for future maintainers)
- * ─────────────────────────────────────────────────────────────────────────
- *  FIX 1  — "=" shows the result in the main display (not only history).
- *  FIX 2  — Pressing any operator resets cursor to the Feet field.
- *  FIX 3  — × and ÷ take a plain scalar second operand, not ft/in/fraction.
- *  FIX 4  — Unicode escapes are safe (no raw escapes inside template literals).
- *  FIX 5  — Number overflow protection (> 1e15 → "Overflow"), both modes.
- *  FIX 6  — Ft·In·Fr history now records the FULL chained expression
- *           (e.g. "5' + 3' + 2' = 10'"), not just the last two operands.
- *           Previously only the running total and the most recent operand
- *           were kept, so "5+3+2=" showed up in history as "8 + 2 = 10".
- *  FIX 7  — Ft·In·Fr history persists to localStorage across sessions
- *           (was in-memory only), capped at 50 entries, with a "Clear"
- *           control so it can't grow forever.
- *  FIX 8  — Standard mode: pressing "." right after "=" or right after an
- *           operator now starts a fresh "0." entry, instead of appending
- *           the decimal point onto the previously displayed number.
- *  FIX 9  — Standard mode: removed a React anti-pattern where clearAll()
- *           (several state updates) was invoked from inside another
- *           state updater (setDisplay(prev => { ...clearAll()... })).
- *           handleOperation now reads current state directly and returns
- *           early on error instead of nesting state updates.
- *  FIX 10 — Standard mode: "%" now guards against being pressed while the
- *           display shows "Error"/"Overflow" (previously produced "NaN").
- *  FIX 11 — Standard mode: pressing "=" a second time (no new operator or
- *           operand entered) now repeats the last operation against the
- *           currently displayed number, matching standard calculator
- *           behavior, instead of silently doing nothing.
- *  FIX 12 — Ft·In·Fr mode: REMOVED the 300ms debounce that used to commit
- *           typed feet/inches to state. It created a genuine race
- *           condition — pressing an operator or "=" immediately after
- *           typing (within the debounce window) would use the STALE
- *           pre-keystroke value instead of what was just typed, silently
- *           producing a wrong result. Feet/inches are now committed to
- *           state on every keystroke, which also makes the live decimal
- *           readout update instantly instead of lagging by ~300ms.
- *  FIX 13 — Ft·In·Fr mode: dividing by zero or overflowing no longer
- *           silently resets the calculator with no explanation. It now
- *           shows an explicit "Cannot divide by zero" / "Error" /
- *           "Overflow" message (like Standard mode does) until the user
- *           clears or starts a new entry.
- *  FIX 14 — Ft·In·Fr mode: fixed a regex bug where swapping the pending
- *           operator (e.g. pressing "−" right after "+", with no new
- *           operand typed) silently failed for subtraction specifically.
- *           The swap regex matched an ASCII hyphen ("-", U+002D) but the
- *           UI actually uses the proper minus sign ("−", U+2212), so the
- *           match never fired and the displayed/queued operator went out
- *           of sync with the one actually used in the calculation.
- *  FIX 15 — Ft·In·Fr mode: fixed lost history text when continuing a
- *           calculation after "=". fiOpPress() only distinguished two
- *           cases — "very first operator" (fiAccum === null) and "new
- *           operand typed since last operator" (fiOp && !fiNewEntry) —
- *           and treated everything else, including "operator pressed
- *           right after '=' to continue from the result", as an operator
- *           SWAP (regex-replacing the trailing operator in fiExprChain).
- *           But after "=", fiExprChain is reset to '' and fiOp is reset
- *           to null, so the swap regex had nothing to match and the
- *           chain stayed empty. The running total (fiAccum) was still
- *           correct, but the logged history entry silently dropped the
- *           starting operand — e.g. "5' + 3' = 8'" then "× 2 =" logged
- *           as "2 = 16'" instead of "8' × 2 = 16'". Added an explicit
- *           branch for fiOp === null (post-"=" continuation) that seeds
- *           fiExprChain from the current accumulator, the same way the
- *           very-first-operator branch does.
- * ─────────────────────────────────────────────────────────────────────────
- */
-
 import {
   useEffect,
   useRef,
@@ -296,7 +213,7 @@ function DownloadPopup({ onClose, onDownload }: {
           <p className={isDark ? 'dark' : 'light'}>Get the Windows app to get started</p>
         </div>
 
-        <div className="fc-download-options">
+        {<div className="fc-download-options">
           <button
             className={`fc-download-option windows ${isDark ? 'dark' : 'light'} ${hovered ? 'hovered' : ''} ${selected ? 'selected' : ''}`}
             onClick={handleDownloadClick}
@@ -315,7 +232,7 @@ function DownloadPopup({ onClose, onDownload }: {
               Download
             </span>
           </button>
-        </div>
+        </div> }
 
         <div className="fc-download-footer">
           <div className={`fc-download-features ${isDark ? 'dark' : 'light'}`}>
@@ -833,11 +750,11 @@ export function FloatingCalculator() {
                   onClick={() => setMode('fi')}>Ft·In·Fr</button>
               </div>
               <div className="fc-header-actions">
-                <button type="button" className="fc-download-btn"
+                {/* <button type="button" className="fc-download-btn"
                   onClick={() => setShowDownloadPopup(true)}
                   title="Download Calculator" aria-label="Download calculator">
                   <Download size={14} />
-                </button>
+                </button> */}
                 <button type="button" className="fc-close" onClick={() => setIsOpen(false)}
                   aria-label="Close calculator">
                   <X size={14} />

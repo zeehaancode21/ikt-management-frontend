@@ -53,7 +53,7 @@ function App() {
 
   return (
     <AuthProvider>
-      <ThemeProvider>          {/* ← WRAP HERE */}
+      <ThemeProvider>          
         <WebSocketProvider>
           <BrowserRouter>
             <div className="app-wrapper">

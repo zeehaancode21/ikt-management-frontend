@@ -18,25 +18,21 @@ interface UserAvatarProps {
   size?: number;
   className?: string;
   style?: React.CSSProperties;
-  /** Render a small green "online" dot in the corner, same as the old msg-avatar did. */
   showOnlineDot?: boolean;
+  enableExpand?: boolean; // NEW: click-to-enlarge, like WhatsApp
 }
 
-/**
- * Drop-in replacement for the old `<div className="msg-avatar">{initials}</div>`
- * pattern. Renders the employee's uploaded profile picture if one exists;
- * otherwise falls back to the same colored-initials look as before, so
- * nothing looks broken for employees who haven't uploaded a photo yet.
- */
 export function UserAvatar({
   username,
   size = 36,
   className = "",
   style = {},
   showOnlineDot = false,
+  enableExpand = true,
 }: UserAvatarProps) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const { bg, initials } = fallbackFor(username);
 
   useEffect(() => {
@@ -56,6 +52,18 @@ export function UserAvatar({
     };
   }, [username]);
 
+  // Close the lightbox on Escape
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpanded(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expanded]);
+
+  const hasPhoto = !loading && !!photoUrl;
+
   const baseStyle: React.CSSProperties = {
     width: size,
     height: size,
@@ -68,24 +76,89 @@ export function UserAvatar({
     flexShrink: 0,
     fontWeight: 700,
     color: "#fff",
-    background: !loading && photoUrl ? "transparent" : bg,
+    background: hasPhoto ? "transparent" : bg,
     fontSize: size * 0.42,
+    cursor: enableExpand && hasPhoto ? "pointer" : "default",
     ...style,
   };
 
   return (
-    <div className={className} style={baseStyle}>
-      {!loading && photoUrl ? (
-        <img
-          src={photoUrl}
-          alt={username}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          onError={() => setPhotoUrl(null)}
-        />
-      ) : (
-        initials
+    <>
+      <div
+        className={className}
+        style={baseStyle}
+        onClick={() => {
+          if (enableExpand && hasPhoto) setExpanded(true);
+        }}
+      >
+        {hasPhoto ? (
+          <img
+            src={photoUrl}
+            alt={username}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            onError={() => setPhotoUrl(null)}
+          />
+        ) : (
+          initials
+        )}
+        {showOnlineDot && <div className="msg-online-dot" />}
+      </div>
+
+      {expanded && hasPhoto && (
+        <div
+          onClick={() => setExpanded(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.9)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            cursor: "zoom-out",
+            animation: "avatarFadeIn 0.15s ease-out",
+          }}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded(false);
+            }}
+            aria-label="Close"
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 20,
+              background: "transparent",
+              border: "none",
+              color: "#fff",
+              fontSize: 28,
+              cursor: "pointer",
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+          <img
+            src={photoUrl}
+            alt={username}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: "90vw",
+              maxHeight: "90vh",
+              borderRadius: 12,
+              objectFit: "contain",
+            }}
+          />
+        </div>
       )}
-      {showOnlineDot && <div className="msg-online-dot" />}
-    </div>
+
+      <style>{`
+        @keyframes avatarFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+      `}</style>
+    </>
   );
 }

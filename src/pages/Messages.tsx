@@ -609,13 +609,30 @@ function mergeReplyMeta<T extends {
   replyToHasAttachment?: boolean;
 }>(incoming: T, existing?: T): T {
   if (!existing) return incoming;
-  return {
-    ...incoming,
-    replyToId: incoming.replyToId ?? existing.replyToId,
-    replyToSender: incoming.replyToSender ?? existing.replyToSender,
-    replyToContent: incoming.replyToContent ?? existing.replyToContent,
-    replyToHasAttachment: incoming.replyToHasAttachment ?? existing.replyToHasAttachment,
-  };
+
+  // A "valid" reply id is a real, non-zero, non-null id. Some backend update
+  // events (e.g. read-receipt pushes, reaction echoes) re-serialize the
+  // message without its replyTo relation and send replyToId as 0 or ""
+  // instead of omitting it/sending null. `??` doesn't catch that (0 and ""
+  // aren't nullish), so a perfectly good quote could get silently cleared
+  // the moment one of those updates arrives. We only trust the incoming
+  // value when it actually looks like a real id — otherwise we keep
+  // whatever reply metadata we already had locally.
+  const incomingHasReply = incoming.replyToId !== undefined && incoming.replyToId !== null && incoming.replyToId !== 0;
+  if (incomingHasReply) return incoming;
+
+  const existingHasReply = existing.replyToId !== undefined && existing.replyToId !== null && existing.replyToId !== 0;
+  if (existingHasReply) {
+    return {
+      ...incoming,
+      replyToId: existing.replyToId,
+      replyToSender: existing.replyToSender,
+      replyToContent: existing.replyToContent,
+      replyToHasAttachment: existing.replyToHasAttachment,
+    };
+  }
+
+  return incoming;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
