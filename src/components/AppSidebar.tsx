@@ -17,6 +17,7 @@ import {
   BarChart3,
   Stars,
   Zap,
+  Timer,
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
@@ -712,6 +713,7 @@ export const AppSidebar = () => {
         { to: "/documents", label: "Documents", icon: FolderOpen },
         { to: "/reports", label: "Work Report", icon: FileText },
         { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+        { to: "/permission", label: "Permission Portal", icon: Timer },
         { to: "/messages", label: "Messages", icon: MessageSquare },
       ]
       : role === "LEAD"
@@ -720,11 +722,13 @@ export const AppSidebar = () => {
           { to: "/dashboard", label: "Projects", icon: Briefcase },
           { to: "/documents", label: "Documents", icon: FolderOpen },
           { to: "/leave", label: "Leave Report", icon: CalendarDays },
+          { to: "/permission", label: "Permission Portal", icon: Timer },
           { to: "/messages", label: "Messages", icon: MessageSquare },
         ]
         : [
           { to: "/reports", label: "Work Report", icon: FileText },
           { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+          { to: "/permission", label: "Permission Portal", icon: Timer },
           { to: "/documents", label: "Documents", icon: FolderOpen },
           { to: "/messages", label: "Messages", icon: MessageSquare },
         ];

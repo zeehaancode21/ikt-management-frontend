@@ -9,6 +9,7 @@ import { useEffect } from "react";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import LeavePortal from "./pages/LeavePortal";
+import PermissionPortal from "./pages/PermissionPortal";
 import WorkProgress from "./pages/WorkProgress";
 import WorkReport from "./pages/WorkReport";
 import WorkHoursDashboard from "./pages/WorkHoursDashboard";
@@ -74,6 +75,7 @@ function App() {
                   <Route path="/hours-dashboard" element={<OwnerOrLead><WorkHoursDashboard /></OwnerOrLead>} />
                   <Route path="/progress" element={<WorkProgress />} />
                   <Route path="/leave" element={<LeavePortal />} />
+                  <Route path="/permission" element={<PermissionPortal />} />
                   <Route path="/reports" element={<WorkReport />} />
                   <Route path="/messages" element={<Messages />} />
                   <Route path="/my-documents" element={<OwnerOrLead><MyDocuments /></OwnerOrLead>} />
@@ -88,7 +90,7 @@ function App() {
             </div>
           </BrowserRouter>
         </WebSocketProvider>
-      </ThemeProvider>         {/* ← CLOSE HERE */}
+      </ThemeProvider>         
     </AuthProvider>
   );
 }

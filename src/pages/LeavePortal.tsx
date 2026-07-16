@@ -1,7 +1,15 @@
 import { useEffect, useState, useRef, FormEvent, useCallback } from "react";
 import { format, differenceInCalendarDays } from "date-fns";
-import { InfoIcon, CalendarCheck2, CalendarX2, Clock3, AlertCircle, RefreshCw } from "lucide-react";
-
+import { CalendarRange, InfoIcon} from "lucide-react";
+import {
+  Calendar,
+  CalendarCheck2,
+  CalendarClock,
+  CalendarX2,
+  Clock3,
+  AlertCircle,
+  RefreshCw
+} from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -39,9 +47,6 @@ interface Leave {
   toDate: string;
   dateType: string;
   halfSession?: string | null;
-  // Only relevant when dateType === "SHORT_LEAVE" — the number of hours
-  // requested for that single day (e.g. 1, 1.5, 2).
-  hours?: number | null;
   days: number;
   reason: string;
   status?: string;
@@ -52,18 +57,11 @@ interface Leave {
   pendingToDate?: string | null;
   pendingDateType?: string | null;
   pendingHalfSession?: string | null;
-  pendingHours?: number | null;
   pendingLeaveType?: string | null;
   pendingReason?: string | null;
   pendingDays?: number | null;
 }
 
-// Response shape returned by POST /leaves/request and POST /leaves/:id/reapproval
-interface LeaveSaveResponse {
-  leave: Leave;
-  convertedToHalfDay: boolean;
-  message?: string | null;
-}
 
 /* ─── Constants ─────────────────────────────────────────── */
 
@@ -75,26 +73,18 @@ interface LeaveSaveResponse {
 const DEFAULT_LEAVE_LIMIT = 18;
 const MIN_DATE_OFFSET = 1;
 
-// ── Short Leave quota constants (mirrors backend LeaveController) ───────
-const SHORT_LEAVE_MAX_HOURS_PER_DAY = 2;
-const SHORT_LEAVE_MAX_HOURS_PER_MONTH = 4;
-
 const DATE_TYPE_LABELS: Record<string, string> = {
   SINGLE: "Single day",
   RANGE: "Date range",
   HALF_DAY: "Half day",
-  SHORT_LEAVE: "Short leave",
 };
 
-const formatDateType = (dateType?: string, halfSession?: string | null, hours?: number | null) => {
+const formatDateType = (dateType?: string, halfSession?: string | null) => {
   if (!dateType) return "";
   const base = DATE_TYPE_LABELS[dateType] ?? dateType.toLowerCase().replace(/_/g, " ");
   if (dateType === "HALF_DAY" && halfSession) {
     const sessionLabel = halfSession === "SECOND_HALF" ? "2nd half" : "1st half";
     return `${base} · ${sessionLabel}`;
-  }
-  if (dateType === "SHORT_LEAVE" && hours) {
-    return `${base} · ${formatDays(hours)}h`;
   }
   return base;
 };
@@ -135,9 +125,8 @@ const fmt = (d: string) => {
   }
 };
 
-// Compact duration badge: "1.5h" for short leave, otherwise "Xd".
-const formatDurationBadge = (dateType?: string, days?: number | null, hours?: number | null) => {
-  if (dateType === "SHORT_LEAVE") return `${formatDays(hours || 0)}h`;
+// Compact duration badge: "Xd".
+const formatDurationBadge = (days?: number | null) => {
   return `${formatDays(days || 0)}d`;
 };
 
@@ -521,7 +510,7 @@ const AppliedLeavesTable = ({
               <div className="flex items-center gap-2 flex-shrink-0">
                 <div className="flex items-center gap-1 text-sm font-bold text-foreground bg-muted rounded-lg px-2.5 py-1">
                   <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />
-                  {formatDurationBadge(l.dateType, l.days, l.hours)}
+                  {formatDurationBadge(l.days)}
                 </div>
                 <StatusBadge status={l.status} />
               </div>
@@ -537,7 +526,7 @@ const AppliedLeavesTable = ({
                 }
               </div>
               {l.dateType && (
-                <p className="text-xs text-muted-foreground">{formatDateType(l.dateType, l.halfSession, l.hours)}</p>
+                <p className="text-xs text-muted-foreground">{formatDateType(l.dateType, l.halfSession)}</p>
               )}
               {l.reason && (
                 <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
@@ -608,9 +597,8 @@ const EmployeeView = () => {
   const { name } = useAuth();
 
   const [leaveType, setLeaveType] = useState("SICK");
-  const [dateMode, setDateMode] = useState<"single" | "range" | "half" | "short">("single");
+  const [dateMode, setDateMode] = useState<"single" | "range" | "half">("single");
   const [halfSession, setHalfSession] = useState<"FIRST_HALF" | "SECOND_HALF">("FIRST_HALF");
-  const [shortHours, setShortHours] = useState<string>("1");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [reason, setReason] = useState("");
@@ -618,31 +606,26 @@ const EmployeeView = () => {
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [historyTab, setHistoryTab] = useState<"applied" | "taken">("applied");
-  // Annual leave entitlement, derived from date of joining (24 days once
-  // past 3 years of service, 18 before that) — fetched from the backend.
+  const [historyTab, setHistoryTab] = useState<"pending" | "all" | "approved" | "rejected">("pending"); // NEW
   const [leaveLimit, setLeaveLimit] = useState<number>(DEFAULT_LEAVE_LIMIT);
 
-  // ── Reapproval (change-request) modal state ──────────────────────────
+  // ── Reapproval state ──────────────────────────────────────────
   const [reapprovalTarget, setReapprovalTarget] = useState<Leave | null>(null);
-  const [reDateMode, setReDateMode] = useState<"single" | "range" | "half" | "short">("single");
+  const [reDateMode, setReDateMode] = useState<"single" | "range" | "half">("single");
   const [reHalfSession, setReHalfSession] = useState<"FIRST_HALF" | "SECOND_HALF">("FIRST_HALF");
-  const [reShortHours, setReShortHours] = useState<string>("1");
   const [reFromDate, setReFromDate] = useState("");
   const [reToDate, setReToDate] = useState("");
   const [reReason, setReReason] = useState("");
   const [reSubmitting, setReSubmitting] = useState(false);
   const [cancelingId, setCancelingId] = useState<string | number | null>(null);
   
-  // ✅ Add ref to prevent double loading
   const initialLoadDoneRef = useRef(false);
   const loadingLockRef = useRef(false);
 
-  // ✅ Fixed: Remove loading from dependencies
+  // ── Load leaves ──────────────────────────────────────────────
   const load = useCallback(async () => {
     if (!name) return;
     if (loadingLockRef.current) return;
-    
     loadingLockRef.current = true;
     setLoading(true);
     setError(null);
@@ -657,22 +640,16 @@ const EmployeeView = () => {
       setLoading(false);
       loadingLockRef.current = false;
     }
-  }, [name]); // ✅ Only depend on name
+  }, [name]);
 
-  // ✅ Fixed: Run only once on mount
-  useEffect(() => { 
+  useEffect(() => {
     if (!initialLoadDoneRef.current) {
       initialLoadDoneRef.current = true;
       load();
     }
   }, [load]);
 
-  // Fetch this employee's annual leave limit (24 vs 18 days, based on
-  // date of joining). Re-fetched on mount AND whenever the tab regains
-  // focus/visibility — otherwise, if the profile's Date of Joining is
-  // changed (e.g. in another tab, or on the Profile page and then
-  // navigated back to), this page would keep showing whatever value it
-  // fetched last until a hard reload.
+  // ── Leave limit (as before) ─────────────────────────────────
   const fetchLeaveLimit = useCallback(async () => {
     if (!name) return;
     try {
@@ -682,7 +659,7 @@ const EmployeeView = () => {
       });
       setLeaveLimit(data.leaveLimit);
     } catch {
-      // Non-fatal — keep showing whatever limit we already have.
+      // non-fatal
     }
   }, [name]);
 
@@ -703,6 +680,7 @@ const EmployeeView = () => {
     };
   }, [fetchLeaveLimit]);
 
+  // ── Form helpers (unchanged) ────────────────────────────────
   const resetForm = () => {
     setFromDate("");
     setToDate("");
@@ -710,45 +688,18 @@ const EmployeeView = () => {
     setLeaveType("SICK");
     setDateMode("single");
     setHalfSession("FIRST_HALF");
-    setShortHours("1");
   };
-
-  // Short leave already used this month (any non-rejected request),
-  // computed from the employee's own loaded leave history — mirrors the
-  // cap enforced server-side.
-  const shortLeaveHoursThisMonth = (() => {
-    const now = new Date();
-    return leaves
-      .filter((l) => l.dateType === "SHORT_LEAVE" && l.status?.toUpperCase() !== "REJECTED")
-      .filter((l) => {
-        const d = new Date(l.fromDate);
-        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-      })
-      .reduce((sum, l) => sum + (l.hours || 0), 0);
-  })();
-  const shortLeaveHoursRemainingThisMonth = Math.max(0, SHORT_LEAVE_MAX_HOURS_PER_MONTH - shortLeaveHoursThisMonth);
 
   const validateForm = (): string | null => {
     if (!name) return "User name is required. Please log in again.";
     if (!fromDate) return "Please select a date.";
     if (dateMode === "range" && !toDate) return "Please select an end date.";
-    // COMMENTING THE DATE CHECK
-    // const fromDateObj = new Date(fromDate);
-    // const today = new Date(getToday());
-    // if (fromDateObj < today) return "Cannot apply for leave on past dates.";
     if (dateMode === "range") {
       const fromDateObj = new Date(fromDate);
       const toDateObj = new Date(toDate);
       if (toDateObj < fromDateObj) return "End date cannot be before start date.";
       const days = calcDays(fromDate, toDate);
       if (days > 30) return "Leave duration cannot exceed 30 days. Please contact your manager.";
-    }
-    if (dateMode === "short") {
-      const h = parseFloat(shortHours);
-      if (!shortHours || isNaN(h) || h <= 0) return "Please enter the number of hours for your short leave.";
-      if (h > SHORT_LEAVE_MAX_HOURS_PER_DAY) {
-        return `Short leave is capped at ${SHORT_LEAVE_MAX_HOURS_PER_DAY} hours a day. Please select Half Day instead for longer time off.`;
-      }
     }
     if (!reason.trim()) return "Please provide a reason for your leave.";
     if (reason.trim().length < 10) return "Reason must be at least 10 characters.";
@@ -764,37 +715,27 @@ const EmployeeView = () => {
     }
     setSubmitting(true);
     const effectiveToDate = dateMode === "range" ? toDate : fromDate;
-    const dateType = dateMode === "half" ? "HALF_DAY" : dateMode === "short" ? "SHORT_LEAVE" : dateMode.toUpperCase();
+    const dateType = dateMode === "half" ? "HALF_DAY" : dateMode.toUpperCase();
     let days: number;
     if (dateMode === "range") days = calcDays(fromDate, toDate);
     else if (dateMode === "half") days = 0.5;
-    else if (dateMode === "short") days = 0;
     else days = 1;
     try {
-      const { data } = await api.post<LeaveSaveResponse>("/leaves/request", {
+      const { data } = await api.post<Leave>("/leaves/request", {
         employeeName: name,
         leaveType,
         fromDate,
         toDate: effectiveToDate,
         dateType,
         halfSession: dateMode === "half" ? halfSession : null,
-        hours: dateMode === "short" ? parseFloat(shortHours) : null,
         days,
         reason: reason.trim(),
       });
-      if (data?.convertedToHalfDay) {
-        toast({
-          title: "Recorded as Half Day",
-          description: data.message || "This exceeded the daily short-leave limit, so it was recorded as a Half Day leave instead.",
-          className: "border-amber-500 bg-amber-500 text-white",
-        });
-      } else {
-        toast({
-          title: "Successfully Applied for Leave",
-          description: "Your leave request has been submitted successfully.",
-          className: "border-green-500 bg-green-500 text-white animate-success-bounce",
-        });
-      }
+      toast({
+        title: "Successfully Applied for Leave",
+        description: "Your leave request has been submitted successfully.",
+        className: "border-green-500 bg-green-500 text-white animate-success-bounce",
+      });
       resetForm();
       await load();
     } catch (err) {
@@ -804,16 +745,14 @@ const EmployeeView = () => {
     }
   };
 
-  // ── Reapproval (change-request) handlers ──────────────────────────────
+  // ── Reapproval handlers (unchanged) ─────────────────────────
   const openReapproval = (l: Leave) => {
     setReapprovalTarget(l);
     const mode =
       l.dateType === "HALF_DAY" ? "half" :
-      l.dateType === "SHORT_LEAVE" ? "short" :
       l.dateType === "RANGE" ? "range" : "single";
-    setReDateMode(mode as "single" | "range" | "half" | "short");
+    setReDateMode(mode as "single" | "range" | "half");
     setReHalfSession((l.halfSession as "FIRST_HALF" | "SECOND_HALF") || "FIRST_HALF");
-    setReShortHours(l.hours ? String(l.hours) : "1");
     setReFromDate(l.fromDate ? l.fromDate.slice(0, 10) : "");
     setReToDate(l.toDate ? l.toDate.slice(0, 10) : "");
     setReReason(l.reason || "");
@@ -832,13 +771,6 @@ const EmployeeView = () => {
       if (new Date(reToDate) < new Date(reFromDate)) return "End date cannot be before start date.";
       if (days > 30) return "Leave duration cannot exceed 30 days. Please contact your manager.";
     }
-    if (reDateMode === "short") {
-      const h = parseFloat(reShortHours);
-      if (!reShortHours || isNaN(h) || h <= 0) return "Please enter the number of hours for your short leave.";
-      if (h > SHORT_LEAVE_MAX_HOURS_PER_DAY) {
-        return `Short leave is capped at ${SHORT_LEAVE_MAX_HOURS_PER_DAY} hours a day. Please select Half Day instead for longer time off.`;
-      }
-    }
     if (!reReason.trim()) return "Please provide a reason for the change.";
     if (reReason.trim().length < 10) return "Reason must be at least 10 characters.";
     return null;
@@ -854,36 +786,26 @@ const EmployeeView = () => {
     }
     setReSubmitting(true);
     const effectiveToDate = reDateMode === "range" ? reToDate : reFromDate;
-    const newDateType = reDateMode === "half" ? "HALF_DAY" : reDateMode === "short" ? "SHORT_LEAVE" : reDateMode.toUpperCase();
+    const newDateType = reDateMode === "half" ? "HALF_DAY" : reDateMode.toUpperCase();
     let newDays: number;
     if (reDateMode === "range") newDays = calcDays(reFromDate, effectiveToDate);
     else if (reDateMode === "half") newDays = 0.5;
-    else if (reDateMode === "short") newDays = 0;
     else newDays = 1;
     try {
-      const { data } = await api.post<LeaveSaveResponse>(`/leaves/${reapprovalTarget.id}/reapproval`, {
+      const { data } = await api.post<Leave>(`/leaves/${reapprovalTarget.id}/reapproval`, {
         fromDate: reFromDate,
         toDate: effectiveToDate,
         dateType: newDateType,
         halfSession: reDateMode === "half" ? reHalfSession : null,
-        hours: reDateMode === "short" ? parseFloat(reShortHours) : null,
         leaveType: reapprovalTarget.leaveType,
         days: newDays,
         reason: reReason.trim(),
       });
-      if (data?.convertedToHalfDay) {
-        toast({
-          title: "Recorded as Half Day",
-          description: data.message || "This exceeded the daily short-leave limit, so it was recorded as a Half Day leave instead.",
-          className: "border-amber-500 bg-amber-500 text-white",
-        });
-      } else {
-        toast({
-          title: "Change Requested",
-          description: "Your reapproval request has been sent for the owner's review.",
-          className: "border-green-500 bg-green-500 text-white animate-success-bounce",
-        });
-      }
+      toast({
+        title: "Change Requested",
+        description: "Your reapproval request has been sent for the owner's review.",
+        className: "border-green-500 bg-green-500 text-white animate-success-bounce",
+      });
       setReapprovalTarget(null);
       await load();
     } catch (err) {
@@ -906,14 +828,33 @@ const EmployeeView = () => {
     }
   };
 
+  // ── Counts for tab badges ────────────────────────────────────
   const pendingCount = leaves.filter((l) => l.status?.toUpperCase() === "PENDING").length;
+  const allCount = leaves.length;
   const approvedCount = leaves.filter((l) => l.status?.toUpperCase() === "APPROVED").length;
+  const rejectedCount = leaves.filter((l) => l.status?.toUpperCase() === "REJECTED").length;
   const reapprovalCount = leaves.filter((l) => l.status?.toUpperCase() === "REAPPROVAL_PENDING").length;
-  // const minDate = getMinDate();  commenting out the min date check for testing purposes
 
+  // ── Filtered leaves based on selected tab ────────────────────
+  const getFilteredLeaves = () => {
+    switch (historyTab) {
+      case "pending":
+        return leaves.filter((l) => l.status?.toUpperCase() === "PENDING");
+      case "approved":
+        return leaves.filter((l) => l.status?.toUpperCase() === "APPROVED");
+      case "rejected":
+        return leaves.filter((l) => l.status?.toUpperCase() === "REJECTED");
+      case "all":
+      default:
+        return leaves;
+    }
+  };
+  const filteredLeaves = getFilteredLeaves();
+
+  // ── Render ────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* APPLY FORM */}
+      {/* APPLY FORM – unchanged */}
       <section className="rounded-xl border border-border bg-card p-4 md:p-6 shadow-sm card-hover overflow-visible animate-fade-in-up">
         <div className="flex items-center gap-2 mb-4">
           <div className="p-1.5 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg">
@@ -923,6 +864,7 @@ const EmployeeView = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2 overflow-visible">
+          {/* ... form fields (unchanged) ... */}
           <div className="space-y-2 overflow-visible">
             <Label>Leave Type</Label>
             <Select value={leaveType} onValueChange={setLeaveType}>
@@ -945,18 +887,12 @@ const EmployeeView = () => {
 
           <div className="space-y-2 overflow-visible">
             <Label>Date Type</Label>
-            <Select value={dateMode} onValueChange={(val) => setDateMode(val as "single" | "range" | "half" | "short")}>
+            <Select value={dateMode} onValueChange={(val) => setDateMode(val as "single" | "range" | "half")}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent className="overflow-visible z-50">
                 <SelectItem value="single">Single Date</SelectItem>
                 <SelectItem value="range">Date Range</SelectItem>
                 <SelectItem value="half">Half Day</SelectItem>
-                <SelectItem value="short">
-                  <LeaveOption
-                    title="Short Leave (Few Hours)"
-                    description={`For quick errands or appointments\nMax ${SHORT_LEAVE_MAX_HOURS_PER_DAY}h/day · ${SHORT_LEAVE_MAX_HOURS_PER_MONTH}h/month\nRequests over the daily cap are recorded as a Half Day`}
-                  />
-                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -967,8 +903,6 @@ const EmployeeView = () => {
               id="from"
               type="date"
               required
-              // COMMENTING OUT THE MIN DATE CHECK FOR TESTING PURPOSES
-              // min={minDate}
               value={fromDate}
               onChange={(e) => {
                 setFromDate(e.target.value);
@@ -986,7 +920,6 @@ const EmployeeView = () => {
                 id="to"
                 type="date"
                 required
-                // min={fromDate || minDate}  COMMENTING OUT THE MIN DATE CHECK FOR TESTING PURPOSES
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
               />
@@ -1009,25 +942,6 @@ const EmployeeView = () => {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">Duration: 0.5 day</p>
-            </div>
-          )}
-
-          {dateMode === "short" && (
-            <div className="space-y-2">
-              <Label htmlFor="short-hours">Number of Hours</Label>
-              <Input
-                id="short-hours"
-                type="number"
-                required
-                min={0.5}
-                max={SHORT_LEAVE_MAX_HOURS_PER_DAY}
-                step={0.5}
-                value={shortHours}
-                onChange={(e) => setShortHours(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Max {SHORT_LEAVE_MAX_HOURS_PER_DAY}h/day · {shortLeaveHoursRemainingThisMonth}h of {SHORT_LEAVE_MAX_HOURS_PER_MONTH}h remaining this month
-              </p>
             </div>
           )}
 
@@ -1061,68 +975,104 @@ const EmployeeView = () => {
 
         {/* Header */}
         <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 md:px-6">
-          {/* Title row */}
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h2 className="text-base font-semibold leading-tight">Leave History</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {leaves.length} total request{leaves.length !== 1 ? "s" : ""}
-                {pendingCount > 0 && (
-                  <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
-                    {pendingCount} pending
-                  </span>
-                )}
-                {approvedCount > 0 && (
-                  <span className="ml-1.5 inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
-                    {approvedCount} approved
-                  </span>
-                )}
-                {reapprovalCount > 0 && (
-                  <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
-                    {reapprovalCount} reapproval pending
-                  </span>
-                )}
-              </p>
-            </div>
+          <div>
+            <h2 className="text-base font-semibold leading-tight">Leave History</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {leaves.length} total request{leaves.length !== 1 ? "s" : ""}
+              {pendingCount > 0 && (
+                <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+                  {pendingCount} pending
+                </span>
+              )}
+              {approvedCount > 0 && (
+                <span className="ml-1.5 inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                  {approvedCount} approved
+                </span>
+              )}
+              {rejectedCount > 0 && (
+                <span className="ml-1.5 inline-flex items-center rounded-full bg-rose-100 px-1.5 py-0.5 text-[11px] font-medium text-rose-700">
+                  {rejectedCount} rejected
+                </span>
+              )}
+              {reapprovalCount > 0 && (
+                <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+                  {reapprovalCount} reapproval pending
+                </span>
+              )}
+            </p>
           </div>
 
-          {/* Tab toggle — full width on mobile */}
+          {/* ── NEW: Four filter tabs ── */}
           <div className="inline-flex w-full sm:w-auto items-center rounded-lg border border-border bg-muted/40 p-1">
-            <button
-              type="button"
-              onClick={() => setHistoryTab("applied")}
-              className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium tab-transition ${
-                historyTab === "applied" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <CalendarX2 className="h-3.5 w-3.5" />
-              Applied
-              {leaves.length > 0 && (
-                <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
-                  historyTab === "applied" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                }`}>
-                  {leaves.length}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setHistoryTab("taken")}
-              className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium tab-transition ${
-                historyTab === "taken" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-           <CalendarCheck2 className="h-3.5 w-3.5" style={{ color: 'var(--foreground)' }} />
-              Taken
-              {approvedCount > 0 && (
-                <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
-                  historyTab === "taken" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                }`}>
-                  {approvedCount}
-                </span>
-              )}
-            </button>
-          </div>
+  <button
+    type="button"
+    onClick={() => setHistoryTab("pending")}
+    className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium tab-transition ${
+      historyTab === "pending" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+    }`}
+  >
+    <CalendarClock className="h-3.5 w-3.5" />
+    Pending
+    {pendingCount > 0 && (
+      <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+        historyTab === "pending" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+      }`}>
+        {pendingCount}
+      </span>
+    )}
+  </button>
+  <button
+    type="button"
+    onClick={() => setHistoryTab("all")}
+    className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium tab-transition ${
+      historyTab === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+    }`}
+  >
+    <CalendarRange className="h-3.5 w-3.5" />
+    All
+    {allCount > 0 && (
+      <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+        historyTab === "all" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+      }`}>
+        {allCount}
+      </span>
+    )}
+  </button>
+  <button
+    type="button"
+    onClick={() => setHistoryTab("approved")}
+    className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium tab-transition ${
+      historyTab === "approved" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+    }`}
+  >
+    <CalendarCheck2 className="h-3.5 w-3.5" />
+    Approved
+    {approvedCount > 0 && (
+      <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+        historyTab === "approved" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+      }`}>
+        {approvedCount}
+      </span>
+    )}
+  </button>
+  <button
+    type="button"
+    onClick={() => setHistoryTab("rejected")}
+    className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium tab-transition ${
+      historyTab === "rejected" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+    }`}
+  >
+    <CalendarX2 className="h-3.5 w-3.5" />
+    Rejected
+    {rejectedCount > 0 && (
+      <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+        historyTab === "rejected" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+      }`}>
+        {rejectedCount}
+      </span>
+    )}
+  </button>
+</div>
         </div>
 
         {/* Body */}
@@ -1139,20 +1089,28 @@ const EmployeeView = () => {
                 <RefreshCw className="h-3 w-3" />Try again
               </button>
             </div>
-          ) : historyTab === "applied" ? (
+          ) : filteredLeaves.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground animate-fade-in-up">
+              <CalendarX2 className="h-8 w-8 opacity-30" />
+              <p className="text-sm">
+                {historyTab === "pending" && "No pending leave requests."}
+                {historyTab === "all" && "You haven't applied for any leave yet."}
+                {historyTab === "approved" && "No approved leaves yet."}
+                {historyTab === "rejected" && "No rejected leaves."}
+              </p>
+            </div>
+          ) : (
             <AppliedLeavesTable
-              leaves={leaves}
+              leaves={filteredLeaves}
               onRequestChange={openReapproval}
               onCancelReapproval={cancelReapproval}
               cancelingId={cancelingId}
             />
-          ) : (
-            <LeaveTakenSummary leaves={leaves} leaveLimit={leaveLimit} />
           )}
         </div>
       </section>
 
-      {/* ── Reapproval (Request Change) Modal ─────────────────────────── */}
+      {/* ── Reapproval Modal (unchanged) ────────────────────────── */}
       {reapprovalTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 animate-fade-slide-down"
@@ -1192,13 +1150,12 @@ const EmployeeView = () => {
             <form onSubmit={submitReapproval} className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Date Type</Label>
-                <Select value={reDateMode} onValueChange={(val) => setReDateMode(val as "single" | "range" | "half" | "short")}>
+                <Select value={reDateMode} onValueChange={(val) => setReDateMode(val as "single" | "range" | "half")}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="single">Single Date</SelectItem>
                     <SelectItem value="range">Date Range</SelectItem>
                     <SelectItem value="half">Half Day</SelectItem>
-                    <SelectItem value="short">Short Leave (Few Hours)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1247,25 +1204,6 @@ const EmployeeView = () => {
                       <SelectItem value="SECOND_HALF">Second Half (Afternoon)</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-              )}
-
-              {reDateMode === "short" && (
-                <div className="space-y-2">
-                  <Label htmlFor="re-short-hours">Number of Hours</Label>
-                  <Input
-                    id="re-short-hours"
-                    type="number"
-                    required
-                    min={0.5}
-                    max={SHORT_LEAVE_MAX_HOURS_PER_DAY}
-                    step={0.5}
-                    value={reShortHours}
-                    onChange={(e) => setReShortHours(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Max {SHORT_LEAVE_MAX_HOURS_PER_DAY}h/day · {SHORT_LEAVE_MAX_HOURS_PER_MONTH}h/month
-                  </p>
                 </div>
               )}
 
@@ -1531,7 +1469,7 @@ const OwnerView = () => {
                         </span>
                         <span className="inline-flex items-center gap-1 text-xs font-bold text-foreground bg-muted rounded-lg px-2 py-0.5">
                           <Clock3 className="h-3 w-3 text-muted-foreground" />
-                          {formatDurationBadge(l.dateType, l.days ?? calcDays(l.fromDate, l.toDate), l.hours)}
+                          {formatDurationBadge(l.days ?? calcDays(l.fromDate, l.toDate))}
                         </span>
                       </div>
 
@@ -1562,7 +1500,7 @@ const OwnerView = () => {
                               ? fmt(l.pendingFromDate || "")
                               : <>{fmt(l.pendingFromDate || "")} <span>→</span> {fmt(l.pendingToDate || "")}</>}
                             {l.pendingDateType && (
-                              <span className="font-normal text-amber-700">· {formatDateType(l.pendingDateType, l.pendingHalfSession, l.pendingHours)}</span>
+                              <span className="font-normal text-amber-700">· {formatDateType(l.pendingDateType, l.pendingHalfSession)}</span>
                             )}
                           </div>
                           {l.pendingReason && (
@@ -1715,7 +1653,7 @@ const OwnerView = () => {
                             </span>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <span className="inline-flex items-center gap-1 text-sm font-bold text-foreground bg-muted rounded-lg px-2.5 py-1">
-                                <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />{formatDurationBadge(l.dateType, l.days, l.hours)}
+                                <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />{formatDurationBadge(l.days)}
                               </span>
                               <StatusBadge status={l.status} />
                             </div>
@@ -1728,7 +1666,7 @@ const OwnerView = () => {
                               {isSingleDay ? fmt(l.fromDate) : <>{fmt(l.fromDate)} <span className="text-muted-foreground font-normal">→</span> {fmt(l.toDate)}</>}
                             </div>
                             {l.dateType && (
-                              <span className="text-xs text-muted-foreground">{formatDateType(l.dateType, l.halfSession, l.hours)}</span>
+                              <span className="text-xs text-muted-foreground">{formatDateType(l.dateType, l.halfSession)}</span>
                             )}
                             {l.reason && (
                               <p className="text-xs text-muted-foreground line-clamp-2">{l.reason}</p>
