@@ -1003,20 +1003,18 @@ const EmployeeView = () => {
           </div>
 
           {/* ── NEW: Four filter tabs ── */}
-          <div className="inline-flex w-full sm:w-auto items-center rounded-lg border border-border bg-muted/40 p-1">
+          <div className="inline-flex w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
   <button
     type="button"
     onClick={() => setHistoryTab("pending")}
-    className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium tab-transition ${
+    className={`flex flex-1 min-w-[60px] items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
       historyTab === "pending" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
     }`}
   >
     <CalendarClock className="h-3.5 w-3.5" />
     Pending
     {pendingCount > 0 && (
-      <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
-        historyTab === "pending" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-      }`}>
+      <span className="ml-0.5 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
         {pendingCount}
       </span>
     )}
@@ -1024,16 +1022,14 @@ const EmployeeView = () => {
   <button
     type="button"
     onClick={() => setHistoryTab("all")}
-    className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium tab-transition ${
+    className={`flex flex-1 min-w-[60px] items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
       historyTab === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
     }`}
   >
     <CalendarRange className="h-3.5 w-3.5" />
     All
     {allCount > 0 && (
-      <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
-        historyTab === "all" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-      }`}>
+      <span className="ml-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
         {allCount}
       </span>
     )}
@@ -1041,16 +1037,14 @@ const EmployeeView = () => {
   <button
     type="button"
     onClick={() => setHistoryTab("approved")}
-    className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium tab-transition ${
+    className={`flex flex-1 min-w-[60px] items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
       historyTab === "approved" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
     }`}
   >
     <CalendarCheck2 className="h-3.5 w-3.5" />
     Approved
     {approvedCount > 0 && (
-      <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
-        historyTab === "approved" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-      }`}>
+      <span className="ml-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
         {approvedCount}
       </span>
     )}
@@ -1058,16 +1052,14 @@ const EmployeeView = () => {
   <button
     type="button"
     onClick={() => setHistoryTab("rejected")}
-    className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium tab-transition ${
+    className={`flex flex-1 min-w-[60px] items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
       historyTab === "rejected" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
     }`}
   >
     <CalendarX2 className="h-3.5 w-3.5" />
     Rejected
     {rejectedCount > 0 && (
-      <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
-        historyTab === "rejected" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-      }`}>
+      <span className="ml-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
         {rejectedCount}
       </span>
     )}
