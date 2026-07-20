@@ -1432,9 +1432,18 @@ const OwnerView = () => {
   const [error, setError] = useState<string | null>(null);
   const [missingDatesCount, setMissingDatesCount] = useState(0);
 
+  const [dateFilterMode, setDateFilterMode] = useState<"single" | "range">("single");
   const [filterDate, setFilterDate] = useState<string>("all");
+  const [filterDateFrom, setFilterDateFrom] = useState<string>("");
+  const [filterDateTo, setFilterDateTo] = useState<string>("");
   const [filterEmployee, setFilterEmployee] = useState<string>("all");
+  const [filterClient, setFilterClient] = useState<string>("all");
+  const [filterProject, setFilterProject] = useState<string>("all");
 
+  /* Fetch every report once on mount. At this dataset size (a few hundred
+     rows, one team) this is faster and simpler than filtering on the server
+     per-keystroke: one request, then all filtering is instant in the
+     browser with no loading flicker between filter changes. */
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -1443,13 +1452,13 @@ const OwnerView = () => {
         const reportsData = Array.isArray(data) ? data : [];
 
         // Count reports with missing dates
-        const missingCount = reportsData.filter(r => !r.date).length;
+        const missingCount = reportsData.filter((r) => !r.date).length;
         setMissingDatesCount(missingCount);
 
         // Process reports: assign default date to those without one
-        const processedReports = reportsData.map(report => ({
+        const processedReports = reportsData.map((report) => ({
           ...report,
-          date: report.date || new Date().toISOString().split('T')[0] // Use today's date as fallback
+          date: report.date || new Date().toISOString().split("T")[0], // fallback for display only
         }));
 
         if (!cancelled) {
@@ -1465,7 +1474,13 @@ const OwnerView = () => {
     return () => { cancelled = true; };
   }, []);
 
-  // Now all reports have dates, so we can safely process them
+  // Changing the client resets the project filter, since a project picked
+  // under the old client may no longer be valid for the new one.
+  const handleClientFilterChange = (value: string) => {
+    setFilterClient(value);
+    setFilterProject("all");
+  };
+
   const uniqueDates = [
     ...new Set(reports.map((r) => toDateKey(r.date))),
   ].sort((a, b) => a.localeCompare(b));
@@ -1474,14 +1489,49 @@ const OwnerView = () => {
     ...new Set(reports.map((r) => r.employeeName).filter(Boolean)),
   ].sort() as string[];
 
+  const uniqueClients = [
+    ...new Set(reports.map((r) => r.client).filter(Boolean)),
+  ].sort() as string[];
+
+  // Projects are scoped to the selected client (if any), same cascading
+  // behaviour as the employee-side client -> project pickers.
+  const uniqueProjects = [
+    ...new Set(
+      reports
+        .filter((r) => filterClient === "all" || r.client === filterClient)
+        .map((r) => r.project)
+        .filter(Boolean)
+    ),
+  ].sort() as string[];
+
   const filtered = reports.filter((r) => {
-    const dateMatch = filterDate === "all" || toDateKey(r.date) === filterDate;
+    const dateMatch =
+      dateFilterMode === "single"
+        ? filterDate === "all" || toDateKey(r.date) === filterDate
+        : (!filterDateFrom || toDateKey(r.date) >= filterDateFrom) &&
+          (!filterDateTo || toDateKey(r.date) <= filterDateTo);
     const empMatch = filterEmployee === "all" || r.employeeName === filterEmployee;
-    return dateMatch && empMatch;
+    const clientMatch = filterClient === "all" || r.client === filterClient;
+    const projectMatch = filterProject === "all" || r.project === filterProject;
+    return dateMatch && empMatch && clientMatch && projectMatch;
   });
 
-  const hasFilter = filterDate !== "all" || filterEmployee !== "all";
-  const clearFilters = () => { setFilterDate("all"); setFilterEmployee("all"); };
+  const hasFilter =
+    (dateFilterMode === "single" && filterDate !== "all") ||
+    (dateFilterMode === "range" && (filterDateFrom !== "" || filterDateTo !== "")) ||
+    filterEmployee !== "all" ||
+    filterClient !== "all" ||
+    filterProject !== "all";
+
+  const clearFilters = () => {
+    setDateFilterMode("single");
+    setFilterDate("all");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setFilterEmployee("all");
+    setFilterClient("all");
+    setFilterProject("all");
+  };
 
   const totalFilteredHours = filtered.reduce((sum, r) => sum + (r.time || 0), 0);
   const uniqueFilteredEmployees = new Set(filtered.map((r) => r.employeeName)).size;
@@ -1543,17 +1593,69 @@ const OwnerView = () => {
               <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
                 <Calendar className="h-2.5 w-2.5" /> Date
               </label>
-              <Select value={filterDate} onValueChange={setFilterDate}>
-                <SelectTrigger className="h-8 text-xs w-[160px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
-                  <SelectValue placeholder="All dates" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" className="text-xs font-medium">All dates</SelectItem>
-                  {uniqueDates.map((d) => (
-                    <SelectItem key={d} value={d} className="text-xs">{fmt(d)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+              {/* Single date / date range toggle */}
+              <div className="flex items-center gap-1 mb-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateFilterMode("single");
+                    setFilterDateFrom("");
+                    setFilterDateTo("");
+                  }}
+                  className={`h-6 px-2 rounded-md text-[10px] font-semibold transition-colors ${
+                    dateFilterMode === "single"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                  }`}
+                >
+                  Single date
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateFilterMode("range");
+                    setFilterDate("all");
+                  }}
+                  className={`h-6 px-2 rounded-md text-[10px] font-semibold transition-colors ${
+                    dateFilterMode === "range"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                  }`}
+                >
+                  Date range
+                </button>
+              </div>
+
+              {dateFilterMode === "single" ? (
+                <Select value={filterDate} onValueChange={setFilterDate}>
+                  <SelectTrigger className="h-8 text-xs w-[160px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
+                    <SelectValue placeholder="All dates" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-xs font-medium">All dates</SelectItem>
+                    {uniqueDates.map((d) => (
+                      <SelectItem key={d} value={d} className="text-xs">{fmt(d)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="date"
+                    value={filterDateFrom}
+                    onChange={(e) => setFilterDateFrom(e.target.value)}
+                    className="h-8 text-xs w-[130px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
+                  />
+                  <span className="text-[10px] text-slate-400">to</span>
+                  <Input
+                    type="date"
+                    value={filterDateTo}
+                    onChange={(e) => setFilterDateTo(e.target.value)}
+                    className="h-8 text-xs w-[130px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-0.5">
@@ -1573,6 +1675,41 @@ const OwnerView = () => {
               </Select>
             </div>
 
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                <Briefcase className="h-2.5 w-2.5" /> Client
+              </label>
+              <Select value={filterClient} onValueChange={handleClientFilterChange}>
+                <SelectTrigger className="h-8 text-xs w-[160px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
+                  <SelectValue placeholder="All clients" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-xs font-medium">All clients</SelectItem>
+                  {uniqueClients.map((c) => (
+                    <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                <Tag className="h-2.5 w-2.5" /> Project
+              </label>
+              <Select value={filterProject} onValueChange={setFilterProject}>
+                <SelectTrigger className="h-8 text-xs w-[180px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
+                  <SelectValue placeholder="All projects" />
+                </SelectTrigger>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-xs font-medium">All projects</SelectItem>
+                  {uniqueProjects.map((p) => (
+                    <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {hasFilter && (
               <button
                 onClick={clearFilters}
@@ -1584,16 +1721,34 @@ const OwnerView = () => {
 
             {hasFilter && (
               <div className="flex flex-wrap gap-1.5 self-end">
-                {filterDate !== "all" && (
+                {dateFilterMode === "single" && filterDate !== "all" && (
                   <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
                     <Calendar className="h-2.5 w-2.5" />
                     {fmt(filterDate)}
+                  </span>
+                )}
+                {dateFilterMode === "range" && (filterDateFrom || filterDateTo) && (
+                  <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
+                    <Calendar className="h-2.5 w-2.5" />
+                    {filterDateFrom ? fmt(filterDateFrom) : "…"} – {filterDateTo ? fmt(filterDateTo) : "…"}
                   </span>
                 )}
                 {filterEmployee !== "all" && (
                   <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
                     <User className="h-2.5 w-2.5" />
                     {filterEmployee}
+                  </span>
+                )}
+                {filterClient !== "all" && (
+                  <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
+                    <Briefcase className="h-2.5 w-2.5" />
+                    {filterClient}
+                  </span>
+                )}
+                {filterProject !== "all" && (
+                  <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
+                    <Tag className="h-2.5 w-2.5" />
+                    {filterProject}
                   </span>
                 )}
               </div>
