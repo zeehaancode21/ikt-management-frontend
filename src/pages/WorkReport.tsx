@@ -1700,7 +1700,6 @@ const OwnerView = () => {
                 <SelectTrigger className="h-8 text-xs w-[180px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
                   <SelectValue placeholder="All projects" />
                 </SelectTrigger>
-                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all" className="text-xs font-medium">All projects</SelectItem>
                   {uniqueProjects.map((p) => (
