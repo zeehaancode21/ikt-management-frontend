@@ -48,6 +48,8 @@ import {
   GraduationCap,
   Pencil,
   ChevronDown,
+  ChevronRight,
+  ArrowLeft,
 } from "lucide-react";
 
 /* ─── Types ─────────────────────────────────────────────── */
@@ -66,17 +68,17 @@ type WorkType =
   | "ESTIMATION";
 
 const WORK_TYPE_LABELS: Record<WorkType, string> = {
-     CHECKING: "Checking",
-     DISCUSSION_STUDY: "Discussion / Study",
-     E_PLAN: "E Plan",
-     ESTIMATION: "Estimation",
-     LINKING: "Linking",
-     MODELING: "Modeling",
-     MISCELLANEOUS: "Miscellaneous",
-     PART_DRAWING: "Part Drawing",
-     SHOP_DRAWING: "Shop Drawing",
-     PRACTICING: "Practicing",
-     TRAINING: "Training",
+  CHECKING: "Checking",
+  DISCUSSION_STUDY: "Discussion / Study",
+  E_PLAN: "E Plan",
+  ESTIMATION: "Estimation",
+  LINKING: "Linking",
+  MODELING: "Modeling",
+  MISCELLANEOUS: "Miscellaneous",
+  PART_DRAWING: "Part Drawing",
+  SHOP_DRAWING: "Shop Drawing",
+  PRACTICING: "Practicing",
+  TRAINING: "Training",
 };
 
 const WORK_TYPE_COLORS: Record<WorkType, string> = {
@@ -133,6 +135,15 @@ const fmt = (d: string) => {
     return format(new Date(d), "MMM d, yyyy");
   } catch {
     return "Invalid date";
+  }
+};
+
+const fmtLong = (d: string) => {
+  if (!d) return "";
+  try {
+    return format(new Date(d), "EEEE, MMMM d, yyyy");
+  } catch {
+    return "";
   }
 };
 
@@ -196,6 +207,15 @@ const animationStyles = `
 
   @keyframes progressFill {
     from { width: 0%; }
+  }
+
+  @keyframes stepIn {
+    0%   { opacity: 0; transform: translateY(16px) scale(0.985); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .animate-step-in {
+    animation: stepIn 0.32s cubic-bezier(0.34,1.05,0.64,1) forwards;
   }
 
   .animate-conflict-modal {
@@ -320,6 +340,23 @@ const animationStyles = `
   }
   .edit-mode-banner {
     animation: editBannerIn 0.22s ease-out forwards;
+  }
+
+  /* ── Date step card ── */
+  .date-step-input::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s ease;
+  }
+  .date-step-input::-webkit-calendar-picker-indicator:hover { opacity: 0.9; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-step-in, .animate-conflict-modal, .animate-backdrop, .animate-modal-enter,
+    .animate-slide-right, .animate-fade-in-up, .animate-float-up, .animate-success-bounce,
+    .subtle-pulse, .table-row-animate, .edit-mode-banner {
+      animation: none !important;
+      opacity: 1 !important;
+    }
   }
 `;
 
@@ -512,12 +549,18 @@ const EmployeeView = () => {
   const [hasInteracted, setHasInteracted] = useState(false);
   const [clientsError, setClientsError] = useState(false);
 
+  // Draft date used only in Step 1, before the user has committed to it.
+  const [draftDate, setDraftDate] = useState("");
+
   const totalHours = entries.reduce((s, e) => s + (parseFloat(e.time) || 0), 0);
   const progressPercent = Math.min(100, (totalHours / 8) * 100);
   const hasAnyData = entries.some(
     (e) => e.client || e.project || e.workTypes.length > 0 || e.time || e.description
   );
   const showProgress = hasInteracted && (hasAnyData || totalHours > 0);
+
+  // Step 2 (the entry form) only appears once a date has been committed.
+  const hasDate = Boolean(date);
 
   const reportsByDate = reports.reduce<Record<string, Report[]>>((acc, r) => {
     if (!r.date) return acc; // Skip reports without date
@@ -527,6 +570,10 @@ const EmployeeView = () => {
     return acc;
   }, {});
   const groupedDates = Object.keys(reportsByDate).sort((a, b) => a.localeCompare(b));
+
+  const existingReportForDraft = draftDate
+    ? reports.some((r) => toDateKey(r.date) === draftDate)
+    : false;
 
   // Helper function to check if the selected work type(s) require client/project.
   // Only optional when EVERY selected type is one of the no-client types (e.g. Training).
@@ -564,25 +611,17 @@ const EmployeeView = () => {
     setReportsError(null);
     try {
       const { data } = await api.get<Report[]>("/reports/my");
-      const reportsData = Array.isArray(data) 
+      const reportsData = Array.isArray(data)
         ? data.filter(report => report.date && report.date.trim() !== '') // Filter out reports without date
         : [];
       setReports(reportsData);
-      const todayTaken = reportsData.some((r) => toDateKey(r.date) === today);
-      setDate((prevDate) => {
-        if (!prevDate || (todayTaken && prevDate === today)) {
-          return todayTaken ? "" : today;
-        }
-        return prevDate;
-      });
     } catch (err) {
       setReportsError(getErrorMessage(err));
-      setDate((prevDate) => prevDate || today);
       setReports([]);
     } finally {
       setLoadingReports(false);
     }
-  }, [today]);
+  }, []);
 
   useEffect(() => { loadReports(); }, [loadReports]);
 
@@ -613,8 +652,8 @@ const EmployeeView = () => {
     [projectsCache]
   );
 
-  /* ── Date picker — now supports edit mode ── */
-  const handleDateChange = (newDate: string) => {
+  /* ── Step 1 → Step 2: commit the chosen date and load (or reset) entries ── */
+  const commitDate = (newDate: string) => {
     if (!newDate) return;
 
     const existingReports = reports.filter((r) => toDateKey(r.date) === newDate);
@@ -661,8 +700,8 @@ const EmployeeView = () => {
       uniqueClients.forEach((c) => fetchProjects(c));
 
       toast({
-        title: "Edit Mode",
-        description: `Editing existing report for ${fmt(newDate)}.`,
+        title: "Edit mode",
+        description: `Editing the existing report for ${fmt(newDate)}.`,
         className: "bg-amber-500 text-white border-none text-xs",
         duration: 2000,
       });
@@ -671,7 +710,7 @@ const EmployeeView = () => {
       setIsEditMode(false);
       setEntries([createEntry()]);
       toast({
-        title: "Date Selected",
+        title: "Date selected",
         description: format(new Date(newDate), "MMMM d, yyyy"),
         className: "bg-emerald-500 text-white border-none text-xs",
         duration: 1500,
@@ -682,13 +721,21 @@ const EmployeeView = () => {
     setHasInteracted(true);
   };
 
-  /* ── Cancel edit mode ── */
-  const handleCancelEdit = () => {
+  /* ── Row "Edit" action from the reports table jumps straight to Step 2 ── */
+  const handleDateChange = (newDate: string) => {
+    commitDate(newDate);
+  };
+
+  /* ── Go back to Step 1 (change date / cancel edit) ── */
+  const handleChangeDate = () => {
     setIsEditMode(false);
     setEntries([createEntry()]);
     setDate("");
+    setDraftDate("");
     setHasInteracted(false);
   };
+
+  const handleCancelEdit = () => handleChangeDate();
 
   /* Entry helpers */
   const updateEntry = (localId: string, field: "client" | "project" | "time" | "description", value: string) => {
@@ -703,9 +750,8 @@ const EmployeeView = () => {
     );
   };
 
-  // Toggle a work type on/off for a given row (multi-select).
- // Toggle a work type on/off for a given row (multi-select),
-  // with TRAINING / PRACTICING / MISCELLANEOUS /ESTIMATION treated as exclusive:
+  // Toggle a work type on/off for a given row (multi-select),
+  // with TRAINING / PRACTICING / MISCELLANEOUS / ESTIMATION treated as exclusive:
   // picking one of them clears every other selection (and vice versa).
   const toggleWorkType = (localId: string, workType: WorkType) => {
     if (!hasInteracted) setHasInteracted(true);
@@ -719,7 +765,7 @@ const EmployeeView = () => {
           // Just deselecting — simple removal.
           updatedTypes = e.workTypes.filter((t) => t !== workType);
         } else if (OPTIONAL_WORK_TYPES.has(workType)) {
-          // Selecting an exclusive type (Training/Practicing/Miscellaneous/Estimation) — clear all other types so:
+          // Selecting an exclusive type (Training/Practicing/Miscellaneous/Estimation) — clear all other types so
           // it becomes the ONLY selected type.
           updatedTypes = [workType];
         } else {
@@ -744,12 +790,12 @@ const EmployeeView = () => {
   const addEntry = () => {
     setHasInteracted(true);
     setEntries((prev) => [...prev, createEntry()]);
-    toast({ title: "Row Added", description: "Fill in the details for the new entry.", className: "bg-indigo-500 text-white border-none text-xs", duration: 1200 });
+    toast({ title: "Row added", description: "Fill in the details for the new entry.", className: "bg-indigo-500 text-white border-none text-xs", duration: 1200 });
   };
 
   const removeEntry = (localId: string) => {
     if (entries.length <= 1) {
-      toast({ title: "Cannot Remove", description: "At least one entry is required.", variant: "destructive" });
+      toast({ title: "Cannot remove", description: "At least one entry is required.", variant: "destructive" });
       return;
     }
     setEntries((prev) => prev.filter((e) => e.localId !== localId));
@@ -758,7 +804,7 @@ const EmployeeView = () => {
   /* ── Submit / Update ── */
   const handleFinalSubmit = async () => {
     if (!date) {
-      toast({ title: "No Date Selected", description: "Please pick a date first.", variant: "destructive" });
+      toast({ title: "No date selected", description: "Please pick a date first.", variant: "destructive" });
       return;
     }
 
@@ -772,13 +818,13 @@ const EmployeeView = () => {
     });
 
     if (incompleteEntry) {
-      toast({ title: "Incomplete Rows", description: "Please fill in all required fields — including at least one type — for every row.", variant: "destructive" });
+      toast({ title: "Incomplete rows", description: "Please fill in all required fields — including at least one type — for every row.", variant: "destructive" });
       return;
     }
 
     const timeSum = entries.reduce((s, e) => s + (parseFloat(e.time) || 0), 0);
     if (timeSum > 24) {
-      toast({ title: "Invalid Time", description: "Total time cannot exceed 24 hours in a day.", variant: "destructive" });
+      toast({ title: "Invalid time", description: "Total time cannot exceed 24 hours in a day.", variant: "destructive" });
       return;
     }
 
@@ -805,7 +851,7 @@ const EmployeeView = () => {
         // ── UPDATE existing report ──
         await api.put(`/reports/update/${date}`, payload);
         toast({
-          title: "Report Updated!",
+          title: "Report updated",
           description: `${entries.length} record(s) updated for ${fmt(date)}.`,
           className: "bg-amber-500 text-white border-none text-xs animate-success-bounce",
         });
@@ -813,18 +859,16 @@ const EmployeeView = () => {
         // ── CREATE new report ──
         await api.post("/reports/submit", payload);
         toast({
-          title: "Submitted Successfully!",
+          title: "Submitted successfully",
           description: `${entries.length} record(s) saved for ${fmt(date)}.`,
           className: "bg-emerald-500 text-white border-none text-xs animate-success-bounce",
         });
       }
 
-      setIsEditMode(false);
-      setEntries([createEntry()]);
-      setHasInteracted(false);
+      handleChangeDate();
       await loadReports();
     } catch (err) {
-      toast({ title: isEditMode ? "Update Failed" : "Submission Failed", description: getErrorMessage(err) || "An unexpected error occurred.", variant: "destructive" });
+      toast({ title: isEditMode ? "Update failed" : "Submission failed", description: getErrorMessage(err) || "An unexpected error occurred.", variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
@@ -842,342 +886,411 @@ const EmployeeView = () => {
       >
         <div className="space-y-5">
 
-          {/* ══ Submit / Edit Form ══ */}
-          <section
-            className={`rounded-2xl border bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-5 shadow-sm card-hover transition-colors duration-300 ${
-              isEditMode
-                ? "border-amber-300 dark:border-amber-700/80 ring-1 ring-amber-200/60"
-                : "border-slate-200/80 dark:border-slate-700/60"
-            }`}
-          >
-            {/* ── Edit mode banner ── */}
-            {isEditMode && (
-              <div className="edit-mode-banner mb-4 flex items-center justify-between gap-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3.5 py-2.5">
-                <div className="flex items-center gap-2">
-                  <div className="p-1 bg-amber-100 rounded-lg">
-                    <Pencil className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-amber-800">Edit Mode</p>
-                    <p className="text-[10px] text-amber-600 dark:text-amber-400">
-                      Editing report for{" "}
-                      <span className="font-bold">{date ? fmt(date) : "selected date"}</span>.
-                      Changes will replace the existing entries.
-                    </p>
-                  </div>
+          {/* ══ STEP 1 — Date selection ══ */}
+          {!hasDate && (
+            <section className="rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm shadow-sm card-hover animate-step-in p-6">
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="p-1.5 rounded-xl shadow-sm bg-gradient-to-br from-indigo-500 to-purple-600">
+                  <Calendar className="h-4 w-4 text-white" />
                 </div>
-                <button
-                  onClick={handleCancelEdit}
-                  className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 hover:text-rose-600 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 hover:border-rose-200 dark:hover:border-rose-800 rounded-lg transition-all duration-150 btn-hover-scale flex-shrink-0"
-                >
-                  <XCircle className="h-3 w-3" />
-                  Cancel
-                </button>
-              </div>
-            )}
-
-            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-              <div className="flex items-center gap-2.5 animate-fade-in-up">
-                <div
-                  className={`p-1.5 rounded-xl shadow-sm ${
-                    isEditMode
-                      ? "bg-gradient-to-br from-amber-500 to-orange-500"
-                      : "bg-gradient-to-br from-indigo-500 to-purple-600"
-                  }`}
-                >
-                  {isEditMode ? (
-                    <Pencil className="h-4 w-4 text-white" />
-                  ) : (
-                    <Calendar className="h-4 w-4 text-white" />
-                  )}
-                </div>
-                <h2 className="text-base font-semibold text-slate-800">
-                  {isEditMode ? "Edit Work Report" : "Submit Work Report"}
+                <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                  Select a date
                 </h2>
               </div>
 
-              <div className="space-y-0.5 animate-fade-in-up" style={{ animationDelay: "0.08s" }}>
-                <Label htmlFor="date" className="text-[11px] font-medium text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                  <Calendar className="h-2.5 w-2.5" /> Date
-                </Label>
-                <Input
-                  id="date"
-                  type="date"
-                  disabled={isEditMode}
-                  className={`w-36 h-8 text-sm focus:ring-indigo-100 ${
-                    isEditMode
-                      ? "border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-950/30 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                      : "border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500"
+              <Label htmlFor="date-step" className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5" /> Report date
+              </Label>
+              <Input
+                id="date-step"
+                type="date"
+                autoFocus
+                className="date-step-input h-12 text-base font-medium border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-indigo-100 max-w-xs"
+                value={draftDate}
+                onChange={(e) => setDraftDate(e.target.value)}
+                max={today}
+              />
+
+              {draftDate && (
+                <div
+                  className={`mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs animate-fade-in-up max-w-xs ${
+                    existingReportForDraft
+                      ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
+                      : "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
                   }`}
-                  value={date}
-                  onChange={(e) => handleDateChange(e.target.value)}
-                  max={today}
-                />
-                {isEditMode && (
-                  <p className="text-[9px] text-amber-600 dark:text-amber-400">
-                    Locked while editing — Cancel to pick a different date.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Progress bar */}
-            {showProgress && (
-              <div className="mb-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 border border-slate-100/80 dark:border-slate-800/60 animate-fade-in-up">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5 text-indigo-500" />
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Hours</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
-                      {totalHours.toFixed(1)}h
-                    </span>
-                  </div>
+                >
+                  {existingReportForDraft ? (
+                    <>
+                      <Pencil className="h-3.5 w-3.5 flex-shrink-0" />
+                      A report already exists for <span className="font-semibold">{fmt(draftDate)}</span> — continuing will let you edit it.
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
+                      <span className="font-semibold">{fmt(draftDate)}</span> is open — you'll start a fresh report.
+                    </>
+                  )}
                 </div>
-                <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-2">
-                  <div
-                    className={`progress-bar-fill h-full rounded-full ${
-                      isEditMode
-                        ? "bg-gradient-to-r from-amber-400 to-orange-400"
-                        : "bg-gradient-to-r from-indigo-500 to-purple-500"
-                    }`}
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-              </div>
-            )}
+              )}
 
-            {/* Entries table */}
-            <div
-              data-work-report-table=""
-              className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm animate-fade-in-up"
-              style={{ animationDelay: "0.15s" }}
+              <Button
+                onClick={() => commitDate(draftDate)}
+                disabled={!draftDate}
+                className="mt-5 h-10 gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-sm font-semibold shadow-sm btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 px-5"
+              >
+                Continue
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+
+              {reportsError && (
+                <p className="mt-3 text-[11px] text-red-500 flex items-center gap-1.5">
+                  <AlertCircle className="h-3 w-3" /> {reportsError}
+                </p>
+              )}
+            </section>
+          )}
+
+          {/* ══ STEP 2 — Submit / Edit Form ══ */}
+          {hasDate && (
+            <section
+              className={`rounded-2xl border bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-5 shadow-sm card-hover transition-colors duration-300 animate-step-in ${
+                isEditMode
+                  ? "border-amber-300 dark:border-amber-700/80 ring-1 ring-amber-200/60"
+                  : "border-slate-200/80 dark:border-slate-700/60"
+              }`}
             >
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50/80 dark:bg-slate-800/60">
-                    <TableHead className="min-w-[130px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Client</TableHead>
-                    <TableHead className="min-w-[150px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Project</TableHead>
-                    <TableHead className="min-w-[140px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Type</TableHead>
-                    <TableHead className="min-w-[90px]  text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Time (h)</TableHead>
-                    <TableHead className="min-w-[200px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Description</TableHead>
-                    <TableHead className="w-8" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {entries.map((entry, index) => {
-                    const isOptional = isClientProjectOptional(entry.workTypes);
-                    const safeClients = Array.isArray(clients) ? clients : [];
-                    return (
-                      <TableRow
-                        key={entry.localId}
-                        className="entry-row"
-                        style={{ animationDelay: `${index * 0.04}s` }}
-                      >
-                        <TableCell className="py-1.5">
-                          <Select
-                            value={entry.client}
-                            onValueChange={(v) => updateEntry(entry.localId, "client", v)}
-                            disabled={isOptional}
-                          >
-                            <SelectTrigger className={`h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 ${isOptional ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}>
-                              <SelectValue placeholder={isOptional ? "Not required" : (clientsError ? "Error" : "Select client")} />
-                            </SelectTrigger>
-                            <SelectContent
-                              side="top"
-                              align="start"
-                              sideOffset={4}
-                              className="max-h-[320px] overflow-y-auto"
+              {/* ── Edit mode banner ── */}
+              {isEditMode && (
+                <div className="edit-mode-banner mb-4 flex items-center justify-between gap-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3.5 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 bg-amber-100 rounded-lg">
+                      <Pencil className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-amber-800">Edit mode</p>
+                      <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                        Changes will replace the existing entries for this date.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 animate-fade-in-up">
+                  <button
+                    type="button"
+                    onClick={handleChangeDate}
+                    aria-label="Back to date selection"
+                    className="p-1.5 rounded-xl text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-all duration-150 btn-hover-scale"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+                  <div
+                    className={`p-1.5 rounded-xl shadow-sm ${
+                      isEditMode
+                        ? "bg-gradient-to-br from-amber-500 to-orange-500"
+                        : "bg-gradient-to-br from-indigo-500 to-purple-600"
+                    }`}
+                  >
+                    {isEditMode ? (
+                      <Pencil className="h-4 w-4 text-white" />
+                    ) : (
+                      <Calendar className="h-4 w-4 text-white" />
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 leading-tight">
+                      {isEditMode ? "Edit work report" : "Submit work report"}
+                    </h2>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                      {fmtLong(date)}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleChangeDate}
+                  className="flex items-center gap-1.5 h-8 px-3 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-50 dark:bg-slate-800/60 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-700 rounded-lg transition-all duration-150 btn-hover-scale animate-fade-in-up"
+                  style={{ animationDelay: "0.05s" }}
+                >
+                  <Calendar className="h-3 w-3" />
+                  Change date
+                </button>
+              </div>
+
+              {/* Progress bar */}
+              {showProgress && (
+                <div className="mb-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 border border-slate-100/80 dark:border-slate-800/60 animate-fade-in-up">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-indigo-500" />
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total hours</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                        {totalHours.toFixed(1)}h
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-2">
+                    <div
+                      className={`progress-bar-fill h-full rounded-full ${
+                        isEditMode
+                          ? "bg-gradient-to-r from-amber-400 to-orange-400"
+                          : "bg-gradient-to-r from-indigo-500 to-purple-500"
+                      }`}
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Entries table */}
+              <div
+                data-work-report-table=""
+                className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm animate-fade-in-up"
+                style={{ animationDelay: "0.1s" }}
+              >
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50/80 dark:bg-slate-800/60">
+                      <TableHead className="min-w-[130px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Client</TableHead>
+                      <TableHead className="min-w-[150px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Project</TableHead>
+                      <TableHead className="min-w-[140px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Type</TableHead>
+                      <TableHead className="min-w-[90px]  text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Time (h)</TableHead>
+                      <TableHead className="min-w-[200px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Description</TableHead>
+                      <TableHead className="w-8" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {entries.map((entry, index) => {
+                      const isOptional = isClientProjectOptional(entry.workTypes);
+                      const safeClients = Array.isArray(clients) ? clients : [];
+                      return (
+                        <TableRow
+                          key={entry.localId}
+                          className="entry-row"
+                          style={{ animationDelay: `${index * 0.04}s` }}
+                        >
+                          <TableCell className="py-1.5">
+                            <Select
+                              value={entry.client}
+                              onValueChange={(v) => updateEntry(entry.localId, "client", v)}
+                              disabled={isOptional}
                             >
-                              {safeClients.length === 0 && !clientsError ? (
-                                <SelectItem value="loading" disabled>Loading clients...</SelectItem>
-                              ) : (
-                                safeClients.map((c) => (
-                                  <SelectItem key={c} value={c} className="text-xs py-1.5">
-                                    {c}
-                                  </SelectItem>
-                                ))
-                              )}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell className="py-1.5">
-                          <Select
-                            value={entry.project}
-                            disabled={isOptional || !entry.client || loadingProjects[entry.client]}
-                            onValueChange={(v) => updateEntry(entry.localId, "project", v)}
-                          >
-                            <SelectTrigger className={`h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 ${isOptional ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}>
-                              <SelectValue placeholder={
-                                isOptional ? "Not required" :
-                                  !entry.client
-                                    ? "Select client"
-                                    : loadingProjects[entry.client]
-                                      ? "Loading..."
-                                      : "Select"
-                              } />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(projectsCache[entry.client] ?? []).map((p) => (
-                                <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell className="py-1.5">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                type="button"
-                                className="flex h-7 w-full items-center justify-between gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-xs hover:border-indigo-300 dark:hover:border-indigo-600 focus:border-indigo-400 dark:focus:border-indigo-500 focus:outline-none"
+                              <SelectTrigger className={`h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 ${isOptional ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}>
+                                <SelectValue placeholder={isOptional ? "Not required" : (clientsError ? "Error" : "Select client")} />
+                              </SelectTrigger>
+                              <SelectContent
+                                side="top"
+                                align="start"
+                                sideOffset={4}
+                                className="max-h-[320px] overflow-y-auto"
                               >
-                                <span className={`truncate ${entry.workTypes.length === 0 ? "text-slate-400 dark:text-slate-500" : "text-slate-700 dark:text-slate-300"}`}>
-                                  {entry.workTypes.length === 0
-                                    ? "Select type(s)"
-                                    : entry.workTypes.length === 1
-                                    ? WORK_TYPE_LABELS[entry.workTypes[0]]
-                                    : `${entry.workTypes.length} types selected`}
-                                </span>
-                                <ChevronDown className="h-3 w-3 shrink-0 text-slate-400 dark:text-slate-500" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="max-h-[320px] overflow-y-auto">
-                              <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                                Select one or more
-                              </DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              {(Object.keys(WORK_TYPE_LABELS) as WorkType[]).map((k) => {
-                                // If an exclusive type (Training/Practicing/Misc) is already
-                                // selected, block every other option until it's deselected.
-                                const hasExclusiveSelected = entry.workTypes.some((t) =>
-                                  OPTIONAL_WORK_TYPES.has(t)
-                                );
-                                const isDisabled =
-                                  hasExclusiveSelected && !entry.workTypes.includes(k);
-
-                                return (
-                                  <DropdownMenuCheckboxItem
-  key={k}
-  checked={entry.workTypes.includes(k)}
-  disabled={isDisabled}
-  onCheckedChange={() => toggleWorkType(entry.localId, k)}
-  onSelect={(e) => e.preventDefault()}
-  className={`text-xs ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
->
-  <div className="flex items-center gap-1.5">
-    {(k === "TRAINING" || k === "PRACTICING") && <GraduationCap className="h-2.5 w-2.5" />}
-    {WORK_TYPE_LABELS[k]}
-  </div>
-</DropdownMenuCheckboxItem>
-                                );
-                              })}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                          {entry.workTypes.length > 1 && (
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {entry.workTypes.map((wt) => (
-                                <span
-                                  key={wt}
-                                  className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium ${WORK_TYPE_COLORS[wt] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"}`}
+                                {safeClients.length === 0 && !clientsError ? (
+                                  <SelectItem value="loading" disabled>Loading clients...</SelectItem>
+                                ) : (
+                                  safeClients.map((c) => (
+                                    <SelectItem key={c} value={c} className="text-xs py-1.5">
+                                      {c}
+                                    </SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <Select
+                              value={entry.project}
+                              disabled={isOptional || !entry.client || loadingProjects[entry.client]}
+                              onValueChange={(v) => updateEntry(entry.localId, "project", v)}
+                            >
+                              <SelectTrigger className={`h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 ${isOptional ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}>
+                                <SelectValue placeholder={
+                                  isOptional ? "Not required" :
+                                    !entry.client
+                                      ? "Select client"
+                                      : loadingProjects[entry.client]
+                                        ? "Loading..."
+                                        : "Select"
+                                } />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(projectsCache[entry.client] ?? []).map((p) => (
+                                  <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="flex h-7 w-full items-center justify-between gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-xs hover:border-indigo-300 dark:hover:border-indigo-600 focus:border-indigo-400 dark:focus:border-indigo-500 focus:outline-none"
                                 >
-                                  {WORK_TYPE_LABELS[wt]}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="py-1.5">
-                          <Input
-                            type="number"
-                            min="0.5"
-                            max="24"
-                            step="0.5"
-                            placeholder="0"
-                            className="h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500"
-                            value={entry.time}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              if (value === "") { updateEntry(entry.localId, "time", value); return; }
-                              const numValue = parseFloat(value);
-                              if (!isNaN(numValue) && numValue >= 0 && numValue <= 24) {
-                                updateEntry(entry.localId, "time", value);
-                              }
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell className="py-1.5">
-                          <Input
-                            placeholder="Description..."
-                            className="h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500"
-                            value={entry.description}
-                            onChange={(e) => updateEntry(entry.localId, "description", e.target.value)}
-                            maxLength={500}
-                          />
-                        </TableCell>
-                        <TableCell className="py-1.5">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-slate-300 dark:text-slate-600 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all duration-150 rounded-lg"
-                            disabled={entries.length <= 1}
-                            onClick={() => removeEntry(entry.localId)}
-                            aria-label="Remove entry"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                                  <span className={`truncate ${entry.workTypes.length === 0 ? "text-slate-400 dark:text-slate-500" : "text-slate-700 dark:text-slate-300"}`}>
+                                    {entry.workTypes.length === 0
+                                      ? "Select type(s)"
+                                      : entry.workTypes.length === 1
+                                      ? WORK_TYPE_LABELS[entry.workTypes[0]]
+                                      : `${entry.workTypes.length} types selected`}
+                                  </span>
+                                  <ChevronDown className="h-3 w-3 shrink-0 text-slate-400 dark:text-slate-500" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="start" className="max-h-[320px] overflow-y-auto">
+                                <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                                  Select one or more
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {(Object.keys(WORK_TYPE_LABELS) as WorkType[]).map((k) => {
+                                  // If an exclusive type (Training/Practicing/Misc) is already
+                                  // selected, block every other option until it's deselected.
+                                  const hasExclusiveSelected = entry.workTypes.some((t) =>
+                                    OPTIONAL_WORK_TYPES.has(t)
+                                  );
+                                  const isDisabled =
+                                    hasExclusiveSelected && !entry.workTypes.includes(k);
 
-            <div className="mt-4 flex items-center justify-between animate-fade-in-up" style={{ animationDelay: "0.22s" }}>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addEntry}
-                className="gap-1.5 h-7 text-xs border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 btn-hover-scale transition-all duration-150"
-              >
-                <Plus className="h-3 w-3" /> Add Row
-              </Button>
-              <Button
-                onClick={handleFinalSubmit}
-                disabled={submitting || !date}
-                size="sm"
-                className={`gap-1.5 h-7 text-xs shadow-sm btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 ${
-                  isEditMode
-                    ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 hover:shadow-amber-200"
-                    : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 hover:shadow-indigo-200"
-                }`}
-              >
-                {submitting ? (
-                  <>
-                    <div className="h-2.5 w-2.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    {isEditMode ? "Updating…" : "Submitting…"}
-                  </>
-                ) : isEditMode ? (
-                  <>
-                    <Pencil className="h-3 w-3" /> Update Report
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="h-3 w-3" /> Submit Report
-                  </>
-                )}
-              </Button>
-            </div>
-          </section>
+                                  return (
+                                    <DropdownMenuCheckboxItem
+                                      key={k}
+                                      checked={entry.workTypes.includes(k)}
+                                      disabled={isDisabled}
+                                      onCheckedChange={() => toggleWorkType(entry.localId, k)}
+                                      onSelect={(e) => e.preventDefault()}
+                                      className={`text-xs ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                                    >
+                                      <div className="flex items-center gap-1.5">
+                                        {(k === "TRAINING" || k === "PRACTICING") && <GraduationCap className="h-2.5 w-2.5" />}
+                                        {WORK_TYPE_LABELS[k]}
+                                      </div>
+                                    </DropdownMenuCheckboxItem>
+                                  );
+                                })}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            {entry.workTypes.length > 1 && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {entry.workTypes.map((wt) => (
+                                  <span
+                                    key={wt}
+                                    className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium ${WORK_TYPE_COLORS[wt] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"}`}
+                                  >
+                                    {WORK_TYPE_LABELS[wt]}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <Input
+                              type="number"
+                              min="0.5"
+                              max="24"
+                              step="0.5"
+                              placeholder="0"
+                              className="h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500"
+                              value={entry.time}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === "") { updateEntry(entry.localId, "time", value); return; }
+                                const numValue = parseFloat(value);
+                                if (!isNaN(numValue) && numValue >= 0 && numValue <= 24) {
+                                  updateEntry(entry.localId, "time", value);
+                                }
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <Input
+                              placeholder="Description..."
+                              className="h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500"
+                              value={entry.description}
+                              onChange={(e) => updateEntry(entry.localId, "description", e.target.value)}
+                              maxLength={500}
+                            />
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-slate-300 dark:text-slate-600 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all duration-150 rounded-lg"
+                              disabled={entries.length <= 1}
+                              onClick={() => removeEntry(entry.localId)}
+                              aria-label="Remove entry"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between animate-fade-in-up" style={{ animationDelay: "0.18s" }}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addEntry}
+                  className="gap-1.5 h-7 text-xs border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 btn-hover-scale transition-all duration-150"
+                >
+                  <Plus className="h-3 w-3" /> Add row
+                </Button>
+                <div className="flex items-center gap-2">
+                  {isEditMode && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancelEdit}
+                      className="h-7 text-xs text-slate-500 dark:text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 btn-hover-scale transition-all duration-150"
+                    >
+                      Discard changes
+                    </Button>
+                  )}
+                  <Button
+                    onClick={handleFinalSubmit}
+                    disabled={submitting || !date}
+                    size="sm"
+                    className={`gap-1.5 h-7 text-xs shadow-sm btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 ${
+                      isEditMode
+                        ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 hover:shadow-amber-200"
+                        : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 hover:shadow-indigo-200"
+                    }`}
+                  >
+                    {submitting ? (
+                      <>
+                        <div className="h-2.5 w-2.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        {isEditMode ? "Updating…" : "Submitting…"}
+                      </>
+                    ) : isEditMode ? (
+                      <>
+                        <Pencil className="h-3 w-3" /> Update report
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-3 w-3" /> Submit report
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* ══ My Reports ══ */}
           <section className="animate-slide-right">
             <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
               <Calendar className="h-4 w-4 text-indigo-400" />
-              My Reports
+              My reports
               {!loadingReports && reports.length > 0 && (
                 <span className="text-xs font-normal text-slate-400 dark:text-slate-500">
                   ({reports.length} total)
@@ -1189,7 +1302,7 @@ const EmployeeView = () => {
               <div className="flex justify-center py-8">
                 <FullSpinner />
               </div>
-            ) : reportsError ? (
+            ) : reportsError && groupedDates.length === 0 ? (
               <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-600 animate-fade-in-up">
                 <div className="flex items-center gap-2 mb-1">
                   <AlertCircle className="h-3.5 w-3.5" />
@@ -1216,8 +1329,8 @@ const EmployeeView = () => {
                     <TableRow className="bg-slate-50/80 dark:bg-slate-800/60">
                       <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date</TableHead>
                       <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Entries</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total Time</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Work Types</TableHead>
+                      <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total time</TableHead>
+                      <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Work types</TableHead>
                       <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1328,20 +1441,20 @@ const OwnerView = () => {
       try {
         const { data } = await api.get<Report[]>("/reports/all");
         const reportsData = Array.isArray(data) ? data : [];
-        
+
         // Count reports with missing dates
         const missingCount = reportsData.filter(r => !r.date).length;
         setMissingDatesCount(missingCount);
-        
+
         // Process reports: assign default date to those without one
         const processedReports = reportsData.map(report => ({
           ...report,
           date: report.date || new Date().toISOString().split('T')[0] // Use today's date as fallback
         }));
-        
-        if (!cancelled) { 
-          setReports(processedReports); 
-          setError(null); 
+
+        if (!cancelled) {
+          setReports(processedReports);
+          setError(null);
         }
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err));
@@ -1401,7 +1514,7 @@ const OwnerView = () => {
           <div className="p-1.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-sm">
             <User className="h-4 w-4 text-white" />
           </div>
-          <h3 className="text-sm font-semibold text-slate-800">Team Reports</h3>
+          <h3 className="text-sm font-semibold text-slate-800">Team reports</h3>
           {!loading && !error && (
             <div className="ml-auto flex items-center gap-2">
               <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
