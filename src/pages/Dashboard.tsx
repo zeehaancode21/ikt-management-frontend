@@ -58,8 +58,11 @@ const api = {
     return json.data;
   },
 
-  async deleteProject(jobNumber) {
-    const res = await fetch(`${API_BASE}/project-status/${jobNumber}`, {
+  async deleteProject(id) {
+    if (!id) {
+      throw new Error("Cannot delete project: missing project ID.");
+    }
+    const res = await fetch(`${API_BASE}/project-status/id/${id}`, {
       method: "DELETE",
       headers: { ...authHeaders() },
     });
@@ -1032,7 +1035,7 @@ export default function Dashboard() {
         setSelectedProject(null);
 
         try {
-          await api.deleteProject(selectedProject.jobNumber);
+          await api.deleteProject(selectedProject.id);
           setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         } catch (e) {
           if (e.name !== 'AbortError') {
