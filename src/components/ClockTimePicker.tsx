@@ -123,22 +123,23 @@ export function ClockTimePicker({
           id={id}
           disabled={disabled}
           className={cn(
-            "flex h-10 w-full items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+            "flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-background px-3 py-2 text-base ring-offset-background md:text-sm",
             "hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             "disabled:cursor-not-allowed disabled:opacity-50",
-            "dark:bg-gray-800 dark:text-white dark:border-gray-600", // <-- dark mode classes
-            !value && "text-muted-foreground dark:text-gray-400",
+            !value && "text-muted-foreground",
             className,
           )}
           aria-required={required}
         >
-          <Clock3 className="h-4 w-4 flex-shrink-0 text-muted-foreground dark:text-gray-400" />
-          {value ? fmt12(initialHour, initialMinute) : placeholder}
+          <span className="truncate">
+            {value ? fmt12(initialHour, initialMinute) : placeholder}
+          </span>
+          <Clock3 className="h-4 w-4 flex-shrink-0 text-foreground" />
         </button>
       </PopoverTrigger>
 
       <PopoverContent
-        className="w-auto p-4 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+        className="w-auto p-4"
         align="start"
       >
         <div className="flex flex-col items-center gap-3">
@@ -152,12 +153,12 @@ export function ClockTimePicker({
                   "rounded px-1.5 py-0.5 transition-colors",
                   mode === "hour"
                     ? "bg-primary text-primary-foreground"
-                    : "text-foreground hover:bg-accent dark:text-white dark:hover:bg-gray-700",
+                    : "text-foreground hover:bg-accent",
                 )}
               >
                 {pad2(hour12)}
               </button>
-              <span className="text-muted-foreground dark:text-gray-400">:</span>
+              <span className="text-muted-foreground">:</span>
               <button
                 type="button"
                 onClick={() => setMode("minute")}
@@ -165,14 +166,14 @@ export function ClockTimePicker({
                   "rounded px-1.5 py-0.5 transition-colors",
                   mode === "minute"
                     ? "bg-primary text-primary-foreground"
-                    : "text-foreground hover:bg-accent dark:text-white dark:hover:bg-gray-700",
+                    : "text-foreground hover:bg-accent",
                 )}
               >
                 {pad2(minute)}
               </button>
             </div>
 
-            <div className="ml-1 flex flex-col overflow-hidden rounded-md border border-border dark:border-gray-600">
+            <div className="ml-1 flex flex-col overflow-hidden rounded-md border border-border">
               <button
                 type="button"
                 onClick={() => setPeriod("AM")}
@@ -180,7 +181,7 @@ export function ClockTimePicker({
                   "px-2 py-0.5 text-xs font-semibold transition-colors",
                   period === "AM"
                     ? "bg-primary text-primary-foreground"
-                    : "bg-background text-muted-foreground hover:bg-accent dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700",
+                    : "bg-background text-muted-foreground hover:bg-accent",
                 )}
               >
                 AM
@@ -192,7 +193,7 @@ export function ClockTimePicker({
                   "px-2 py-0.5 text-xs font-semibold transition-colors",
                   period === "PM"
                     ? "bg-primary text-primary-foreground"
-                    : "bg-background text-muted-foreground hover:bg-accent dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700",
+                    : "bg-background text-muted-foreground hover:bg-accent",
                 )}
               >
                 PM
@@ -200,7 +201,7 @@ export function ClockTimePicker({
             </div>
           </div>
 
-          <p className="text-xs text-muted-foreground dark:text-gray-400">
+          <p className="text-xs text-muted-foreground">
             {mode === "hour" ? "Tap an hour" : "Now tap a minute"}
           </p>
 
@@ -212,7 +213,13 @@ export function ClockTimePicker({
             className="select-none touch-none"
           >
             {/* Clock face background */}
-            <circle cx={CENTER} cy={CENTER} r={RADIUS + 20} className="fill-muted dark:fill-gray-700" />
+            <circle
+              cx={CENTER}
+              cy={CENTER}
+              r={RADIUS + 20}
+              className="fill-[hsl(var(--muted))] stroke-[hsl(var(--border))]"
+              strokeWidth={1}
+            />
 
             {/* Hand from center to the selected mark */}
             {activeIndex >= 0 && (
@@ -221,11 +228,11 @@ export function ClockTimePicker({
                 y1={CENTER}
                 x2={handPoint.x}
                 y2={handPoint.y}
-                className="stroke-primary dark:stroke-primary"
+                className="stroke-[hsl(var(--primary))]"
                 strokeWidth={2}
               />
             )}
-            <circle cx={CENTER} cy={CENTER} r={3.5} className="fill-primary" />
+            <circle cx={CENTER} cy={CENTER} r={3.5} className="fill-[hsl(var(--primary))]" />
 
             {mode === "hour"
               ? HOUR_NUMERALS.map((numeral, i) => {
@@ -241,7 +248,11 @@ export function ClockTimePicker({
                         cx={x}
                         cy={y}
                         r={HIT_RADIUS}
-                        className={selected ? "fill-primary" : "fill-transparent hover:fill-accent dark:hover:fill-gray-600"}
+                        className={
+                          selected
+                            ? "fill-[hsl(var(--primary))]"
+                            : "fill-transparent hover:fill-[hsl(var(--accent))]"
+                        }
                       />
                       <text
                         x={x}
@@ -250,7 +261,9 @@ export function ClockTimePicker({
                         dominantBaseline="central"
                         className={cn(
                           "text-sm font-medium pointer-events-none",
-                          selected ? "fill-primary-foreground" : "fill-foreground dark:fill-white",
+                          selected
+                            ? "fill-[hsl(var(--primary-foreground))]"
+                            : "fill-[hsl(var(--foreground))]",
                         )}
                       >
                         {numeral}
@@ -267,7 +280,11 @@ export function ClockTimePicker({
                         cx={x}
                         cy={y}
                         r={HIT_RADIUS}
-                        className={selected ? "fill-primary" : "fill-transparent hover:fill-accent dark:hover:fill-gray-600"}
+                        className={
+                          selected
+                            ? "fill-[hsl(var(--primary))]"
+                            : "fill-transparent hover:fill-[hsl(var(--accent))]"
+                        }
                       />
                       <text
                         x={x}
@@ -276,7 +293,9 @@ export function ClockTimePicker({
                         dominantBaseline="central"
                         className={cn(
                           "text-sm font-medium pointer-events-none",
-                          selected ? "fill-primary-foreground" : "fill-foreground dark:fill-white",
+                          selected
+                            ? "fill-[hsl(var(--primary-foreground))]"
+                            : "fill-[hsl(var(--foreground))]",
                         )}
                       >
                         {pad2(m)}
