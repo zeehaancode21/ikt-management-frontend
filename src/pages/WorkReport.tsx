@@ -1426,6 +1426,9 @@ const EmployeeView = () => {
 /* =========================================================
    OWNER VIEW
 ========================================================= */
+/* =========================================================
+   OWNER VIEW
+========================================================= */
 const OwnerView = () => {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1480,6 +1483,35 @@ const OwnerView = () => {
     setFilterClient(value);
     setFilterProject("all");
   };
+
+  // Individual clear functions
+  const clearDateFilter = () => {
+    setDateFilterMode("single");
+    setFilterDate("all");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+  };
+
+  const clearEmployeeFilter = () => {
+    setFilterEmployee("all");
+  };
+
+  const clearClientFilter = () => {
+    setFilterClient("all");
+  };
+
+  const clearProjectFilter = () => {
+    setFilterProject("all");
+  };
+
+  // Check if individual filters are active
+  const isDateFilterActive = dateFilterMode === "single" 
+    ? filterDate !== "all" 
+    : filterDateFrom !== "" || filterDateTo !== "";
+  
+  const isEmployeeFilterActive = filterEmployee !== "all";
+  const isClientFilterActive = filterClient !== "all";
+  const isProjectFilterActive = filterProject !== "all";
 
   const uniqueDates = [
     ...new Set(reports.map((r) => toDateKey(r.date))),
@@ -1589,10 +1621,22 @@ const OwnerView = () => {
               <Filter className="h-3.5 w-3.5" /> Filter by
             </div>
 
-            <div className="flex flex-col gap-0.5">
-              <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                <Calendar className="h-2.5 w-2.5" /> Date
-              </label>
+            {/* Date Filter */}
+            <div className="flex flex-col gap-0.5 relative">
+              <div className="flex items-center gap-1.5">
+                <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                  <Calendar className="h-2.5 w-2.5" /> Date
+                </label>
+                {isDateFilterActive && (
+                  <button
+                    onClick={clearDateFilter}
+                    className="text-[10px] text-rose-500 hover:text-rose-600 hover:underline transition-colors"
+                    title="Clear date filter"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
 
               {/* Single date / date range toggle */}
               <div className="flex items-center gap-1 mb-1">
@@ -1658,10 +1702,22 @@ const OwnerView = () => {
               )}
             </div>
 
-            <div className="flex flex-col gap-0.5">
-              <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                <User className="h-2.5 w-2.5" /> Employee
-              </label>
+            {/* Employee Filter */}
+            <div className="flex flex-col gap-0.5 relative">
+              <div className="flex items-center gap-1.5">
+                <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                  <User className="h-2.5 w-2.5" /> Employee
+                </label>
+                {isEmployeeFilterActive && (
+                  <button
+                    onClick={clearEmployeeFilter}
+                    className="text-[10px] text-rose-500 hover:text-rose-600 hover:underline transition-colors"
+                    title="Clear employee filter"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
               <Select value={filterEmployee} onValueChange={setFilterEmployee}>
                 <SelectTrigger className="h-8 text-xs w-[180px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
                   <SelectValue placeholder="All employees" />
@@ -1675,10 +1731,22 @@ const OwnerView = () => {
               </Select>
             </div>
 
-            <div className="flex flex-col gap-0.5">
-              <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                <Briefcase className="h-2.5 w-2.5" /> Client
-              </label>
+            {/* Client Filter */}
+            <div className="flex flex-col gap-0.5 relative">
+              <div className="flex items-center gap-1.5">
+                <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                  <Briefcase className="h-2.5 w-2.5" /> Client
+                </label>
+                {isClientFilterActive && (
+                  <button
+                    onClick={clearClientFilter}
+                    className="text-[10px] text-rose-500 hover:text-rose-600 hover:underline transition-colors"
+                    title="Clear client filter"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
               <Select value={filterClient} onValueChange={handleClientFilterChange}>
                 <SelectTrigger className="h-8 text-xs w-[160px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
                   <SelectValue placeholder="All clients" />
@@ -1692,10 +1760,22 @@ const OwnerView = () => {
               </Select>
             </div>
 
-            <div className="flex flex-col gap-0.5">
-              <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                <Tag className="h-2.5 w-2.5" /> Project
-              </label>
+            {/* Project Filter */}
+            <div className="flex flex-col gap-0.5 relative">
+              <div className="flex items-center gap-1.5">
+                <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                  <Tag className="h-2.5 w-2.5" /> Project
+                </label>
+                {isProjectFilterActive && (
+                  <button
+                    onClick={clearProjectFilter}
+                    className="text-[10px] text-rose-500 hover:text-rose-600 hover:underline transition-colors"
+                    title="Clear project filter"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
               <Select value={filterProject} onValueChange={setFilterProject}>
                 <SelectTrigger className="h-8 text-xs w-[180px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
                   <SelectValue placeholder="All projects" />
@@ -1709,45 +1789,77 @@ const OwnerView = () => {
               </Select>
             </div>
 
+            {/* Clear All Filters Button */}
             {hasFilter && (
               <button
                 onClick={clearFilters}
                 className="self-end flex items-center gap-1 h-8 px-2.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-rose-600 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-rose-200 dark:hover:border-rose-800 rounded-lg transition-all duration-150 btn-hover-scale animate-fade-in-up"
               >
-                <XCircle className="h-3.5 w-3.5" /> Clear
+                <XCircle className="h-3.5 w-3.5" /> Clear all
               </button>
             )}
 
+            {/* Active filter badges */}
             {hasFilter && (
               <div className="flex flex-wrap gap-1.5 self-end">
                 {dateFilterMode === "single" && filterDate !== "all" && (
                   <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
                     <Calendar className="h-2.5 w-2.5" />
                     {fmt(filterDate)}
+                    <button
+                      onClick={clearDateFilter}
+                      className="ml-0.5 hover:text-rose-600 transition-colors"
+                    >
+                      ✕
+                    </button>
                   </span>
                 )}
                 {dateFilterMode === "range" && (filterDateFrom || filterDateTo) && (
                   <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
                     <Calendar className="h-2.5 w-2.5" />
                     {filterDateFrom ? fmt(filterDateFrom) : "…"} – {filterDateTo ? fmt(filterDateTo) : "…"}
+                    <button
+                      onClick={clearDateFilter}
+                      className="ml-0.5 hover:text-rose-600 transition-colors"
+                    >
+                      ✕
+                    </button>
                   </span>
                 )}
                 {filterEmployee !== "all" && (
                   <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
                     <User className="h-2.5 w-2.5" />
                     {filterEmployee}
+                    <button
+                      onClick={clearEmployeeFilter}
+                      className="ml-0.5 hover:text-rose-600 transition-colors"
+                    >
+                      ✕
+                    </button>
                   </span>
                 )}
                 {filterClient !== "all" && (
                   <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
                     <Briefcase className="h-2.5 w-2.5" />
                     {filterClient}
+                    <button
+                      onClick={clearClientFilter}
+                      className="ml-0.5 hover:text-rose-600 transition-colors"
+                    >
+                      ✕
+                    </button>
                   </span>
                 )}
                 {filterProject !== "all" && (
                   <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
                     <Tag className="h-2.5 w-2.5" />
                     {filterProject}
+                    <button
+                      onClick={clearProjectFilter}
+                      className="ml-0.5 hover:text-rose-600 transition-colors"
+                    >
+                      ✕
+                    </button>
                   </span>
                 )}
               </div>
