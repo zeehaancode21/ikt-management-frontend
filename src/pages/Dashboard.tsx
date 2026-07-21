@@ -379,6 +379,7 @@ const styles = `
     -moz-appearance: textfield; /* Firefox */
     appearance: textfield;      /* standard */
     padding-right: 36px;        /* make room for custom icon */
+    cursor: pointer;            /* whole field opens the picker now */
   }
 
   /* Custom icon – SVG calendar (gray in light mode) */
@@ -586,6 +587,43 @@ function parseTeam(str) {
   if (!str) return { modeler: "—", editor: "—", checker: "—" };
   const [m, e, c] = str.split("/");
   return { modeler: m || "—", editor: e || "—", checker: c || "—" };
+}
+
+// ─── DATE INPUT (with clickable custom calendar icon) ──────────────────────
+// Native browsers only open the date picker when you click the tiny native
+// calendar icon. Since that icon is hidden via CSS (::-webkit-calendar-picker-indicator)
+// and replaced with our own decorative icon (pointer-events: none), we need to
+// manually trigger the picker via showPicker() so clicking anywhere in the
+// field (including where the icon sits) actually opens the calendar.
+function IfcIfaDateInput({ value, onChange, className = "" }) {
+  const inputRef = useRef(null);
+
+  const openPicker = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    try {
+      if (typeof el.showPicker === "function") {
+        el.showPicker();
+      }
+    } catch (err) {
+      // showPicker() can throw (e.g. unsupported browser, or blocked by a
+      // permission/security error) — fall back to normal input behavior.
+    }
+  };
+
+  return (
+    <div className="date-picker-wrapper">
+      <input
+        ref={inputRef}
+        type="date"
+        className={`form-input date-input-ifc-ifa ${className}`}
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        onClick={openPicker}
+        onFocus={openPicker}
+      />
+    </div>
+  );
 }
 
 // ─── EXCEL EXPORT HELPERS ───────────────────────────────────────────────────
@@ -1597,9 +1635,9 @@ export default function Dashboard() {
                                           </select>
                                         </td>
                                         <td><input type="number" className="co-table-input" style={{ minWidth: 80 }} value={editCoData.amount || 0} onChange={e => setEditCoData(p => ({ ...p, amount: parseFloat(e.target.value) }))} /></td>
-                                        <td><input type="date" className="co-table-input" value={editCoData.ifaDate || ""} onChange={e => setEditCoData(p => ({ ...p, ifaDate: e.target.value }))} /></td>
+                                        <td><input type="date" className="co-table-input" value={editCoData.ifaDate || ""} onChange={e => setEditCoData(p => ({ ...p, ifaDate: e.target.value }))} onClick={(e) => { try { e.target.showPicker && e.target.showPicker(); } catch (_) {} }} /></td>
                                         <td><input className="co-table-input" style={{ minWidth: 55 }} value={editCoData.ifaPer || ""} onChange={e => setEditCoData(p => ({ ...p, ifaPer: e.target.value }))} /></td>
-                                        <td><input type="date" className="co-table-input" value={editCoData.iffDate || ""} onChange={e => setEditCoData(p => ({ ...p, iffDate: e.target.value }))} /></td>
+                                        <td><input type="date" className="co-table-input" value={editCoData.iffDate || ""} onChange={e => setEditCoData(p => ({ ...p, iffDate: e.target.value }))} onClick={(e) => { try { e.target.showPicker && e.target.showPicker(); } catch (_) {} }} /></td>
                                         <td><input className="co-table-input" style={{ minWidth: 55 }} value={editCoData.iffPer || ""} onChange={e => setEditCoData(p => ({ ...p, iffPer: e.target.value }))} /></td>
                                         <td><input className="co-table-input" value={editCoData.remarks || ""} onChange={e => setEditCoData(p => ({ ...p, remarks: e.target.value }))} /></td>
                                         <td style={{ whiteSpace: "nowrap", display: "flex", gap: 6, padding: "10px 8px" }}>
@@ -2044,15 +2082,11 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
       <div className="form-row">
         <div className="form-group">
           <label className="form-label">IFC Date</label>
-          <div className="date-picker-wrapper">
-            <input type="date" className="form-input date-input-ifc-ifa" value={f("ifcDate")} onChange={e => s("ifcDate")(e.target.value)} />
-          </div>
+          <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} />
         </div>
         <div className="form-group">
           <label className="form-label">IFA Date</label>
-          <div className="date-picker-wrapper">
-            <input type="date" className="form-input date-input-ifc-ifa" value={f("ifaDate")} onChange={e => s("ifaDate")(e.target.value)} />
-          </div>
+          <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} />
         </div>
       </div>
       <div className="form-row">
@@ -2237,15 +2271,11 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">IFC Date</label>
-            <div className="date-picker-wrapper">
-              <input type="date" className="form-input date-input-ifc-ifa" value={f("ifcDate")} onChange={e => s("ifcDate")(e.target.value)} />
-            </div>
+            <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} />
           </div>
           <div className="form-group">
             <label className="form-label">IFA Date</label>
-            <div className="date-picker-wrapper">
-              <input type="date" className="form-input date-input-ifc-ifa" value={f("ifaDate")} onChange={e => s("ifaDate")(e.target.value)} />
-            </div>
+            <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} />
           </div>
         </div>
         <div className="form-row">
@@ -2302,16 +2332,12 @@ function CoEditRow({ data, setData, onSave, onCancel, saving }) {
       <div className="form-row" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
         <div className="form-group">
           <label className="form-label">IFA Date</label>
-          <div className="date-picker-wrapper">
-            <input type="date" className="form-input" value={f("ifaDate")} onChange={e => s("ifaDate")(e.target.value)} />
-          </div>
+          <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} />
         </div>
         <div className="form-group"><label className="form-label">IFA %</label><input className="form-input" placeholder="e.g. 100%" value={f("ifaPer")} onChange={e => s("ifaPer")(e.target.value)} /></div>
         <div className="form-group">
           <label className="form-label">IFF Date</label>
-          <div className="date-picker-wrapper">
-            <input type="date" className="form-input" value={f("iffDate")} onChange={e => s("iffDate")(e.target.value)} />
-          </div>
+          <IfcIfaDateInput value={f("iffDate")} onChange={s("iffDate")} />
         </div>
         <div className="form-group"><label className="form-label">IFF %</label><input className="form-input" placeholder="e.g. 100%" value={f("iffPer")} onChange={e => s("iffPer")(e.target.value)} /></div>
       </div>
