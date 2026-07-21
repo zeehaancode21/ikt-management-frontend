@@ -129,6 +129,7 @@ const EMPTY_PROJECT = {
   client: "", projectName: "", jobNumber: "",
   year: "", projectManager: "",
   approvalStatus: "", fabStatus: "", remarks: "", team: "",
+  ifcDate: "", ifaDate: "",
 };
 const EMPTY_CO = {
   co: "", description: "", status: "APPROVAL PENDING",
@@ -358,6 +359,59 @@ const styles = `
   .form-textarea { resize: vertical; min-height: 80px; }
   .form-select option { background: var(--surface); color: var(--text); }
 
+  /* ─── Custom date picker icon ─────────────────────────── */
+
+  .date-picker-wrapper {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+  }
+
+  /* Hide native icon in all browsers */
+  .date-input-ifc-ifa::-webkit-calendar-picker-indicator {
+    display: none !important;
+    -webkit-appearance: none;
+  }
+  .date-input-ifc-ifa::-moz-calendar-picker-indicator {
+    display: none !important;
+  }
+  .date-input-ifc-ifa {
+    -moz-appearance: textfield; /* Firefox */
+    appearance: textfield;      /* standard */
+    padding-right: 36px;        /* make room for custom icon */
+  }
+
+  /* Custom icon – SVG calendar (gray in light mode) */
+  .date-picker-wrapper::after {
+    content: '';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'%3E%3C/rect%3E%3Cline x1='16' y1='2' x2='16' y2='6'%3E%3C/line%3E%3Cline x1='8' y1='2' x2='8' y2='6'%3E%3C/line%3E%3Cline x1='3' y1='10' x2='21' y2='10'%3E%3C/line%3E%3C/svg%3E");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    pointer-events: none;  /* allow click to pass through to input */
+    transition: opacity 0.2s;
+  }
+
+  /* In dark mode, make the icon white */
+  :root.dark .date-picker-wrapper::after,
+  .dark .date-picker-wrapper::after,
+  @media (prefers-color-scheme: dark) {
+    .date-picker-wrapper::after {
+      filter: invert(1) brightness(200%);
+    }
+  }
+
+  /* Hover effect (optional) */
+  .date-picker-wrapper:hover::after {
+    opacity: 0.8;
+  }
+
   .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
 
   .btn { padding: 9px 18px; border-radius: 8px; border: none; font-family: 'Outfit', sans-serif; font-size: 0.82rem; font-weight: 600; letter-spacing: 0.02em; cursor: pointer; transition: all .18s; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; position: relative; }
@@ -551,6 +605,8 @@ function buildProjectWorkbook(project, changeOrders = []) {
     ["Project Manager", project.projectManager || ""],
     ["Approval Status", project.approvalStatus || ""],
     ["FAB Status", project.fabStatus || ""],
+    ["IFC Date", project.ifcDate || ""],
+    ["IFA Date", project.ifaDate || ""],
     ["Modeler", team.modeler === "—" ? "" : team.modeler],
     ["Editor", team.editor === "—" ? "" : team.editor],
     ["Checker", team.checker === "—" ? "" : team.checker],
@@ -625,7 +681,7 @@ function buildClientWorkbook(clientName, projects = [], changeOrdersByProject = 
   // ── Summary sheet: one row per project ──
   const summaryHeader = [
     "Project Name", "Job Number", "Year", "Project Manager",
-    "Approval Status", "FAB Status", "Modeler", "Editor", "Checker",
+    "Approval Status", "FAB Status", "IFC Date", "IFA Date", "Modeler", "Editor", "Checker",
     "Change Orders", "Remarks",
   ];
   const summaryRows = projects.map((p) => {
@@ -638,6 +694,8 @@ function buildClientWorkbook(clientName, projects = [], changeOrdersByProject = 
       p.projectManager || "",
       p.approvalStatus || "",
       p.fabStatus || "",
+      p.ifcDate || "",
+      p.ifaDate || "",
       team.modeler === "—" ? "" : team.modeler,
       team.editor === "—" ? "" : team.editor,
       team.checker === "—" ? "" : team.checker,
@@ -664,6 +722,8 @@ function buildClientWorkbook(clientName, projects = [], changeOrdersByProject = 
       ["Project Manager", p.projectManager || ""],
       ["Approval Status", p.approvalStatus || ""],
       ["FAB Status", p.fabStatus || ""],
+      ["IFC Date", p.ifcDate || ""],
+      ["IFA Date", p.ifaDate || ""],
       ["Modeler", team.modeler === "—" ? "" : team.modeler],
       ["Editor", team.editor === "—" ? "" : team.editor],
       ["Checker", team.checker === "—" ? "" : team.checker],
@@ -1633,6 +1693,8 @@ export default function Dashboard() {
                                 ["Project Manager", viewData.project.projectManager || "—"],
                                 ["Approval Status", viewData.project.approvalStatus || "—"],
                                 ["FAB Status", viewData.project.fabStatus || "—"],
+                                ["IFC Date", viewData.project.ifcDate || "—"],
+                                ["IFA Date", viewData.project.ifaDate || "—"],
                                 ["Modeler", team.modeler],
                                 ["Editor", team.editor],
                                 ["Checker", team.checker],
@@ -1755,6 +1817,8 @@ export default function Dashboard() {
                                     ["Project Manager", project.projectManager || "—"],
                                     ["Approval Status", project.approvalStatus || "—"],
                                     ["FAB Status", project.fabStatus || "—"],
+                                    ["IFC Date", project.ifcDate || "—"],
+                                    ["IFA Date", project.ifaDate || "—"],
                                     ["Modeler", team.modeler],
                                     ["Editor", team.editor],
                                     ["Checker", team.checker],
@@ -1914,6 +1978,20 @@ function ProjectDetailsView({ project }) {
       </div>
 
       <div className="detail-section">
+        <p className="detail-section-heading">Key Dates</p>
+        <div className="detail-grid detail-grid-status">
+          <div className="detail-card">
+            <p className="detail-label">IFC Date</p>
+            <p className="detail-value">{project.ifcDate || "—"}</p>
+          </div>
+          <div className="detail-card">
+            <p className="detail-label">IFA Date</p>
+            <p className="detail-value">{project.ifaDate || "—"}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="detail-section">
         <p className="detail-section-heading">Team</p>
         <div className="detail-grid detail-grid-team">
           <div className="detail-card">
@@ -1962,6 +2040,20 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
         <div className="form-group"><label className="form-label">Approval Status</label><input className="form-input" placeholder="e.g. 100%" value={f("approvalStatus")} onChange={e => s("approvalStatus")(e.target.value)} /></div>
         <div className="form-group"><label className="form-label">FAB Status</label><input className="form-input" placeholder="e.g. 90%" value={f("fabStatus")} onChange={e => s("fabStatus")(e.target.value)} /></div>
         <div className="form-group"></div>
+      </div>
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">IFC Date</label>
+          <div className="date-picker-wrapper">
+            <input type="date" className="form-input date-input-ifc-ifa" value={f("ifcDate")} onChange={e => s("ifcDate")(e.target.value)} />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">IFA Date</label>
+          <div className="date-picker-wrapper">
+            <input type="date" className="form-input date-input-ifc-ifa" value={f("ifaDate")} onChange={e => s("ifaDate")(e.target.value)} />
+          </div>
+        </div>
       </div>
       <div className="form-row">
         <div className="form-group"><label className="form-label">Team (Modeler/Editor/Checker)</label><input className="form-input" placeholder="e.g. Modeler/Editor/Checker" value={f("team")} onChange={e => s("team")(e.target.value)} /></div>
@@ -2055,8 +2147,13 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
   const s = (k) => (v) => setData(p => ({ ...p, [k]: v }));
   const [showAddClient, setShowAddClient] = useState(false);
 
-  const uniqueClients = [...new Set(allProjects.map(p => p.client).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  // Base list of clients from existing projects, plus the currently selected
+  // client (covers a brand-new client that isn't in allProjects yet — this is
+  // what keeps a just-added client visible/selected in the dropdown below).
+  const uniqueClients = [...new Set([
+    ...allProjects.map(p => p.client).filter(Boolean),
+    ...(f("client") ? [f("client")] : []),
+  ])].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
   const handleClientChange = (value) => {
     if (value === "__new__") {
@@ -2139,8 +2236,22 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
         </div>
         <div className="form-row">
           <div className="form-group">
+            <label className="form-label">IFC Date</label>
+            <div className="date-picker-wrapper">
+              <input type="date" className="form-input date-input-ifc-ifa" value={f("ifcDate")} onChange={e => s("ifcDate")(e.target.value)} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">IFA Date</label>
+            <div className="date-picker-wrapper">
+              <input type="date" className="form-input date-input-ifc-ifa" value={f("ifaDate")} onChange={e => s("ifaDate")(e.target.value)} />
+            </div>
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
             <label className="form-label">Team (Modeler/Editor/Checker)</label>
-            <input className="form-input" placeholder="e.g. FAKRU/Murthu/Panch" value={f("team")} onChange={e => s("team")(e.target.value)} />
+            <input className="form-input" placeholder="e.g. Modeler/Editor/Checker" value={f("team")} onChange={e => s("team")(e.target.value)} />
           </div>
         </div>
         <div className="form-group">
@@ -2189,9 +2300,19 @@ function CoEditRow({ data, setData, onSave, onCancel, saving }) {
         <div className="form-group"><label className="form-label">Remarks</label><input className="form-input" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} /></div>
       </div>
       <div className="form-row" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
-        <div className="form-group"><label className="form-label">IFA Date</label><input type="date" className="form-input" value={f("ifaDate")} onChange={e => s("ifaDate")(e.target.value)} /></div>
+        <div className="form-group">
+          <label className="form-label">IFA Date</label>
+          <div className="date-picker-wrapper">
+            <input type="date" className="form-input" value={f("ifaDate")} onChange={e => s("ifaDate")(e.target.value)} />
+          </div>
+        </div>
         <div className="form-group"><label className="form-label">IFA %</label><input className="form-input" placeholder="e.g. 100%" value={f("ifaPer")} onChange={e => s("ifaPer")(e.target.value)} /></div>
-        <div className="form-group"><label className="form-label">IFF Date</label><input type="date" className="form-input" value={f("iffDate")} onChange={e => s("iffDate")(e.target.value)} /></div>
+        <div className="form-group">
+          <label className="form-label">IFF Date</label>
+          <div className="date-picker-wrapper">
+            <input type="date" className="form-input" value={f("iffDate")} onChange={e => s("iffDate")(e.target.value)} />
+          </div>
+        </div>
         <div className="form-group"><label className="form-label">IFF %</label><input className="form-input" placeholder="e.g. 100%" value={f("iffPer")} onChange={e => s("iffPer")(e.target.value)} /></div>
       </div>
       <div className="form-actions">

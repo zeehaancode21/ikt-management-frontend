@@ -50,6 +50,15 @@ import {
   ChevronDown,
   ChevronRight,
   ArrowLeft,
+  Sparkles,
+  TrendingUp,
+  BarChart3,
+  Users,
+  FolderOpen,
+  Layers,
+  Zap,
+  Star,
+  Award,
 } from "lucide-react";
 
 /* ─── Types ─────────────────────────────────────────────── */
@@ -82,17 +91,17 @@ const WORK_TYPE_LABELS: Record<WorkType, string> = {
 };
 
 const WORK_TYPE_COLORS: Record<WorkType, string> = {
-  E_PLAN: "bg-blue-100 text-blue-700",
-  SHOP_DRAWING: "bg-violet-100 text-violet-700",
-  LINKING: "bg-emerald-100 text-emerald-700",
-  PART_DRAWING: "bg-amber-100 text-amber-700 dark:text-amber-400",
-  DISCUSSION_STUDY: "bg-rose-100 text-rose-700",
-  CHECKING: "bg-cyan-100 text-cyan-700",
-  MODELING: "bg-purple-100 text-purple-700",
-  TRAINING: "bg-orange-100 text-orange-700",
-  PRACTICING: "bg-teal-100 text-teal-700",
+  E_PLAN: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+  SHOP_DRAWING: "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300",
+  LINKING: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+  PART_DRAWING: "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+  DISCUSSION_STUDY: "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300",
+  CHECKING: "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300",
+  MODELING: "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300",
+  TRAINING: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
+  PRACTICING: "bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300",
   MISCELLANEOUS: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300",
-  ESTIMATION: "bg-pink-100 text-pink-700",
+  ESTIMATION: "bg-pink-100 text-pink-700 dark:bg-pink-500/20 dark:text-pink-300",
 };
 
 interface WorkEntry {
@@ -156,7 +165,7 @@ const toDateKey = (d: string) => {
   }
 };
 
-/* ─── Animations & Global Styles ────────────────────────── */
+/* ─── Enhanced Animations & Global Styles ────────────────────────── */
 const animationStyles = `
   @keyframes fadeSlideDown {
     0%   { opacity: 0; transform: translateY(-14px) scale(0.97); }
@@ -214,6 +223,31 @@ const animationStyles = `
     100% { opacity: 1; transform: translateY(0) scale(1); }
   }
 
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-6px); }
+  }
+
+  @keyframes glowPulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+
+  @keyframes borderGlow {
+    0%, 100% { border-color: rgba(99, 102, 241, 0.2); }
+    50% { border-color: rgba(99, 102, 241, 0.5); }
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
   .animate-step-in {
     animation: stepIn 0.32s cubic-bezier(0.34,1.05,0.64,1) forwards;
   }
@@ -250,90 +284,140 @@ const animationStyles = `
     animation: subtlePulse 0.5s ease-in-out;
   }
 
-  /* ── Card lift on hover ── */
+  .shimmer-bg {
+    background: linear-gradient(90deg, 
+      rgba(99, 102, 241, 0.03) 25%, 
+      rgba(99, 102, 241, 0.08) 50%, 
+      rgba(99, 102, 241, 0.03) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 3s ease-in-out infinite;
+  }
+
+  .float-animation {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .glow-pulse {
+    animation: glowPulse 2s ease-in-out infinite;
+  }
+
+  .border-glow {
+    animation: borderGlow 3s ease-in-out infinite;
+  }
+
+  .slide-down {
+    animation: slideDown 0.3s ease-out forwards;
+  }
+
+  /* ── Enhanced Card Styles ── */
   .card-hover {
-    transition: box-shadow 0.28s cubic-bezier(0.4,0,0.2,1),
-                transform   0.28s cubic-bezier(0.4,0,0.2,1);
+    transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
+    position: relative;
+    overflow: hidden;
   }
+  
+  .card-hover::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.03), rgba(139, 92, 246, 0.03));
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+  }
+  
+  .card-hover:hover::before {
+    opacity: 1;
+  }
+  
   .card-hover:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 10px 28px -8px rgba(99,102,241,.13),
-                0 3px 8px  -3px rgba(0,0,0,.04);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px -12px rgba(99,102,241,.15),
+                0 4px 12px -4px rgba(0,0,0,.04);
   }
 
-  /* ── Table rows — NO border lines, hover glow only ── */
-  .entry-row {
-    transition: background 0.14s ease;
+  .card-hover-gradient {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
+    border: 1px solid rgba(99, 102, 241, 0.1);
+  }
+
+  /* ── Table Enhancements ── */
+  [data-work-report-table] tr,
+  [data-work-report-table] tbody tr,
+  [data-work-report-table] thead tr {
     border-bottom: none !important;
+    border-top: none !important;
+    border-width: 0 !important;
   }
-  .entry-row:hover {
-    background: rgba(99,102,241,.035) !important;
+
+  [data-work-report-table] td,
+  [data-work-report-table] th,
+  [data-work-report-table] tbody td,
+  [data-work-report-table] tbody th,
+  [data-work-report-table] thead td,
+  [data-work-report-table] thead th {
+    border-bottom: none !important;
+    border-top: none !important;
+    border-width: 0 !important;
   }
 
-  /* Remove ALL row borders from shadcn Table - STRONGER OVERRIDE */
-[data-work-report-table] tr,
-[data-work-report-table] tbody tr,
-[data-work-report-table] thead tr {
-  border-bottom: none !important;
-  border-top: none !important;
-  border-width: 0 !important;
-}
+  [data-work-report-table] .entry-row {
+    border: none !important;
+    transition: all 0.2s ease;
+  }
+  
+  [data-work-report-table] .entry-row:hover {
+    background: rgba(99,102,241,.04) !important;
+    transform: scale(1.001);
+  }
 
-[data-work-report-table] td,
-[data-work-report-table] th,
-[data-work-report-table] tbody td,
-[data-work-report-table] tbody th,
-[data-work-report-table] thead td,
-[data-work-report-table] thead th {
-  border-bottom: none !important;
-  border-top: none !important;
-  border-width: 0 !important;
-}
+  [data-work-report-table] thead tr {
+    border-bottom: 1px solid rgb(226 232 240) !important;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.03), rgba(139, 92, 246, 0.03));
+  }
 
-[data-work-report-table] .entry-row {
-  border: none !important;
-}
+  [data-work-report-table] thead th {
+    border-bottom: none !important;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
 
-/* Very thin separator only under the header row */
-[data-work-report-table] thead tr {
-  border-bottom: 1px solid rgb(226 232 240) !important;
-}
-
-/* Remove bottom border from header cells too */
-[data-work-report-table] thead th {
-  border-bottom: none !important;
-}
-
-  /* ── Progress bar ── */
+  /* ── Progress Bar ── */
   .progress-bar-fill {
     animation: progressFill 0.7s cubic-bezier(0.4,0,0.2,1) both;
     transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+    background: linear-gradient(90deg, #818cf8, #8b5cf6, #a78bfa);
+    background-size: 200% 100%;
+    animation: progressFill 0.7s cubic-bezier(0.4,0,0.2,1) both, shimmer 2s ease-in-out infinite;
   }
 
-  /* ── Button micro-interactions ── */
+  /* ── Button Micro-interactions ── */
   .btn-hover-scale {
-    transition: transform 0.18s cubic-bezier(0.4,0,0.2,1),
-                box-shadow 0.18s cubic-bezier(0.4,0,0.2,1);
+    transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
   }
-  .btn-hover-scale:hover  { transform: scale(1.04); }
-  .btn-hover-scale:active { transform: scale(0.96); }
+  .btn-hover-scale:hover  { transform: scale(1.05); }
+  .btn-hover-scale:active { transform: scale(0.95); }
 
-  /* ── Staggered table row entrance ── */
+  /* ── Staggered Table Row Entrance ── */
   .table-row-animate {
     animation: floatUp 0.36s ease-out forwards;
     opacity: 0;
   }
 
-  /* ── Custom scrollbar ── */
+  /* ── Custom Scrollbar ── */
   .custom-scrollbar::-webkit-scrollbar       { width: 5px; }
   .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: linear-gradient(135deg, #818cf8, #8b5cf6);
     border-radius: 4px;
   }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6366f1; }
 
-  /* ── Edit mode banner ── */
+  /* ── Edit Mode Banner ── */
   @keyframes editBannerIn {
     from { opacity: 0; transform: translateY(-6px); }
     to   { opacity: 1; transform: translateY(0); }
@@ -342,13 +426,98 @@ const animationStyles = `
     animation: editBannerIn 0.22s ease-out forwards;
   }
 
-  /* ── Date step card ── */
+  /* ── Date Step Card ── */
   .date-step-input::-webkit-calendar-picker-indicator {
     cursor: pointer;
-    opacity: 0.55;
-    transition: opacity 0.15s ease;
+    opacity: 0.7;
+    margin-left: 2px;
+    padding: 0;
+    transition: opacity 0.15s ease, filter 0.15s ease;
   }
-  .date-step-input::-webkit-calendar-picker-indicator:hover { opacity: 0.9; }
+  .date-step-input::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+
+  /* DARK MODE - Make calendar icon white for ALL date inputs */
+  .dark input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(100) !important;
+    opacity: 1 !important;
+  }
+
+  .dark .date-step-input::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(100) !important;
+    opacity: 1 !important;
+  }
+
+  .dark .owner-date-input::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(100) !important;
+    opacity: 1 !important;
+  }
+
+  /* Force dark color scheme for date inputs */
+  .dark input[type="date"],
+  .dark .owner-date-input,
+  .dark .date-step-input {
+    color-scheme: dark !important;
+  }
+
+  /* ── Gradient Text ── */
+  .gradient-text {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Status Badges ── */
+  .badge-glow {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
+  }
+
+  /* ── Filter Pills ── */
+  .filter-pill {
+    transition: all 0.2s ease;
+  }
+  .filter-pill:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+  }
+
+  /* ── Glass Morphism ── */
+  .glass-effect {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .dark .glass-effect {
+    background: rgba(15, 23, 42, 0.7);
+    border-color: rgba(255, 255, 255, 0.05);
+  }
+
+  /* ── Stats Card ── */
+  .stats-card {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
+    border: 1px solid rgba(99, 102, 241, 0.1);
+    border-radius: 12px;
+    padding: 12px 16px;
+    transition: all 0.3s ease;
+  }
+  .stats-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.2);
+  }
+
+  /* ── Shimmer loading effect ── */
+  .shimmer-loading {
+    background: linear-gradient(90deg, 
+      rgba(99, 102, 241, 0.02) 25%, 
+      rgba(99, 102, 241, 0.06) 50%, 
+      rgba(99, 102, 241, 0.02) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s ease-in-out infinite;
+  }
 
   @media (prefers-reduced-motion: reduce) {
     .animate-step-in, .animate-conflict-modal, .animate-backdrop, .animate-modal-enter,
@@ -369,6 +538,9 @@ if (typeof document !== "undefined") {
     document.head.appendChild(s);
   }
 }
+
+// Rest of the code remains exactly the same...
+// [The rest of your code - DateDetailModal, EmployeeView, OwnerView, WorkReport - remains unchanged]
 
 /* =========================================================
    Date Detail Modal
@@ -913,11 +1085,10 @@ const EmployeeView = () => {
 
               {draftDate && (
                 <div
-                  className={`mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs animate-fade-in-up max-w-xs ${
-                    existingReportForDraft
+                  className={`mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs animate-fade-in-up max-w-xs ${existingReportForDraft
                       ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
                       : "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
-                  }`}
+                    }`}
                 >
                   {existingReportForDraft ? (
                     <>
@@ -953,11 +1124,10 @@ const EmployeeView = () => {
           {/* ══ STEP 2 — Submit / Edit Form ══ */}
           {hasDate && (
             <section
-              className={`rounded-2xl border bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-5 shadow-sm card-hover transition-colors duration-300 animate-step-in ${
-                isEditMode
+              className={`rounded-2xl border bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-5 shadow-sm card-hover transition-colors duration-300 animate-step-in ${isEditMode
                   ? "border-amber-300 dark:border-amber-700/80 ring-1 ring-amber-200/60"
                   : "border-slate-200/80 dark:border-slate-700/60"
-              }`}
+                }`}
             >
               {/* ── Edit mode banner ── */}
               {isEditMode && (
@@ -987,11 +1157,10 @@ const EmployeeView = () => {
                     <ArrowLeft className="h-4 w-4" />
                   </button>
                   <div
-                    className={`p-1.5 rounded-xl shadow-sm ${
-                      isEditMode
+                    className={`p-1.5 rounded-xl shadow-sm ${isEditMode
                         ? "bg-gradient-to-br from-amber-500 to-orange-500"
                         : "bg-gradient-to-br from-indigo-500 to-purple-600"
-                    }`}
+                      }`}
                   >
                     {isEditMode ? (
                       <Pencil className="h-4 w-4 text-white" />
@@ -1024,11 +1193,11 @@ const EmployeeView = () => {
               {showProgress && (
                 <div className="mb-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 border border-slate-100/80 dark:border-slate-800/60 animate-fade-in-up">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
                       <Clock className="h-3.5 w-3.5 text-indigo-500" />
                       <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total hours</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
                       <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
                         {totalHours.toFixed(1)}h
                       </span>
@@ -1036,11 +1205,10 @@ const EmployeeView = () => {
                   </div>
                   <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-2">
                     <div
-                      className={`progress-bar-fill h-full rounded-full ${
-                        isEditMode
+                      className={`progress-bar-fill h-full rounded-full ${isEditMode
                           ? "bg-gradient-to-r from-amber-400 to-orange-400"
                           : "bg-gradient-to-r from-indigo-500 to-purple-500"
-                      }`}
+                        }`}
                       style={{ width: `${progressPercent}%` }}
                     />
                   </div>
@@ -1135,8 +1303,8 @@ const EmployeeView = () => {
                                     {entry.workTypes.length === 0
                                       ? "Select type(s)"
                                       : entry.workTypes.length === 1
-                                      ? WORK_TYPE_LABELS[entry.workTypes[0]]
-                                      : `${entry.workTypes.length} types selected`}
+                                        ? WORK_TYPE_LABELS[entry.workTypes[0]]
+                                        : `${entry.workTypes.length} types selected`}
                                   </span>
                                   <ChevronDown className="h-3 w-3 shrink-0 text-slate-400 dark:text-slate-500" />
                                 </button>
@@ -1260,11 +1428,10 @@ const EmployeeView = () => {
                     onClick={handleFinalSubmit}
                     disabled={submitting || !date}
                     size="sm"
-                    className={`gap-1.5 h-7 text-xs shadow-sm btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 ${
-                      isEditMode
+                    className={`gap-1.5 h-7 text-xs shadow-sm btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 ${isEditMode
                         ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 hover:shadow-amber-200"
                         : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 hover:shadow-indigo-200"
-                    }`}
+                      }`}
                   >
                     {submitting ? (
                       <>
@@ -1390,11 +1557,10 @@ const EmployeeView = () => {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className={`h-6 px-2 text-[10px] gap-1 transition-all btn-hover-scale ${
-                                  isCurrentlyEditing
+                                className={`h-6 px-2 text-[10px] gap-1 transition-all btn-hover-scale ${isCurrentlyEditing
                                     ? "text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30"
                                     : "text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900 hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:border-amber-300 dark:hover:border-amber-700"
-                                }`}
+                                  }`}
                                 onClick={() => handleDateChange(dk)}
                               >
                                 <Pencil className="h-3 w-3" />
@@ -1424,10 +1590,7 @@ const EmployeeView = () => {
 };
 
 /* =========================================================
-   OWNER VIEW
-========================================================= */
-/* =========================================================
-   OWNER VIEW
+   OWNER VIEW - COMPACT ENHANCED UI WITH FULLY VISIBLE DATE PICKERS
 ========================================================= */
 const OwnerView = () => {
   const [reports, setReports] = useState<Report[]>([]);
@@ -1443,27 +1606,18 @@ const OwnerView = () => {
   const [filterClient, setFilterClient] = useState<string>("all");
   const [filterProject, setFilterProject] = useState<string>("all");
 
-  /* Fetch every report once on mount. At this dataset size (a few hundred
-     rows, one team) this is faster and simpler than filtering on the server
-     per-keystroke: one request, then all filtering is instant in the
-     browser with no loading flicker between filter changes. */
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const { data } = await api.get<Report[]>("/reports/all");
         const reportsData = Array.isArray(data) ? data : [];
-
-        // Count reports with missing dates
         const missingCount = reportsData.filter((r) => !r.date).length;
         setMissingDatesCount(missingCount);
-
-        // Process reports: assign default date to those without one
         const processedReports = reportsData.map((report) => ({
           ...report,
-          date: report.date || new Date().toISOString().split("T")[0], // fallback for display only
+          date: report.date || new Date().toISOString().split("T")[0],
         }));
-
         if (!cancelled) {
           setReports(processedReports);
           setError(null);
@@ -1477,14 +1631,11 @@ const OwnerView = () => {
     return () => { cancelled = true; };
   }, []);
 
-  // Changing the client resets the project filter, since a project picked
-  // under the old client may no longer be valid for the new one.
   const handleClientFilterChange = (value: string) => {
     setFilterClient(value);
     setFilterProject("all");
   };
 
-  // Individual clear functions
   const clearDateFilter = () => {
     setDateFilterMode("single");
     setFilterDate("all");
@@ -1504,11 +1655,10 @@ const OwnerView = () => {
     setFilterProject("all");
   };
 
-  // Check if individual filters are active
-  const isDateFilterActive = dateFilterMode === "single" 
-    ? filterDate !== "all" 
+  const isDateFilterActive = dateFilterMode === "single"
+    ? filterDate !== "all"
     : filterDateFrom !== "" || filterDateTo !== "";
-  
+
   const isEmployeeFilterActive = filterEmployee !== "all";
   const isClientFilterActive = filterClient !== "all";
   const isProjectFilterActive = filterProject !== "all";
@@ -1525,8 +1675,6 @@ const OwnerView = () => {
     ...new Set(reports.map((r) => r.client).filter(Boolean)),
   ].sort() as string[];
 
-  // Projects are scoped to the selected client (if any), same cascading
-  // behaviour as the employee-side client -> project pickers.
   const uniqueProjects = [
     ...new Set(
       reports
@@ -1541,7 +1689,7 @@ const OwnerView = () => {
       dateFilterMode === "single"
         ? filterDate === "all" || toDateKey(r.date) === filterDate
         : (!filterDateFrom || toDateKey(r.date) >= filterDateFrom) &&
-          (!filterDateTo || toDateKey(r.date) <= filterDateTo);
+        (!filterDateTo || toDateKey(r.date) <= filterDateTo);
     const empMatch = filterEmployee === "all" || r.employeeName === filterEmployee;
     const clientMatch = filterClient === "all" || r.client === filterClient;
     const projectMatch = filterProject === "all" || r.project === filterProject;
@@ -1568,6 +1716,12 @@ const OwnerView = () => {
   const totalFilteredHours = filtered.reduce((sum, r) => sum + (r.time || 0), 0);
   const uniqueFilteredEmployees = new Set(filtered.map((r) => r.employeeName)).size;
 
+  // Enhanced stats
+  const totalEmployees = uniqueEmployees.length;
+  const totalClients = uniqueClients.length;
+  const totalProjects = uniqueProjects.length;
+  const avgHoursPerReport = reports.length > 0 ? (reports.reduce((s, r) => s + (r.time || 0), 0) / reports.length) : 0;
+
   return (
     <div
       style={{
@@ -1577,338 +1731,353 @@ const OwnerView = () => {
         marginBottom: "-30%",
       }}
     >
-      <section className="rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/90 dark:bg-slate-900/90 p-5 shadow-sm card-hover">
-        {/* Warning for missing dates */}
+      {/* Compact Stats Overview - Single Row */}
+      {!loading && !error && reports.length > 0 && (
+        <div className="grid grid-cols-5 gap-2 mb-3 animate-fade-in-up">
+          <div className="stats-card flex items-center gap-2 py-2 px-3">
+            <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/20">
+              <FileText className="h-3.5 w-3.5 text-white" />
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Reports</span>
+              <span className="text-sm font-bold gradient-text">{reports.length}</span>
+            </div>
+          </div>
+
+          <div className="stats-card flex items-center gap-2 py-2 px-3">
+            <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/20">
+              <Users className="h-3.5 w-3.5 text-white" />
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Employees</span>
+              <span className="text-sm font-bold gradient-text">{totalEmployees}</span>
+            </div>
+          </div>
+
+          <div className="stats-card flex items-center gap-2 py-2 px-3">
+            <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-500/20">
+              <Briefcase className="h-3.5 w-3.5 text-white" />
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Clients</span>
+              <span className="text-sm font-bold gradient-text">{totalClients}</span>
+            </div>
+          </div>
+
+          <div className="stats-card flex items-center gap-2 py-2 px-3">
+            <div className="p-1.5 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 shadow-lg shadow-rose-500/20">
+              <Clock className="h-3.5 w-3.5 text-white" />
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Avg Hrs</span>
+              <span className="text-sm font-bold gradient-text">{avgHoursPerReport.toFixed(1)}h</span>
+            </div>
+          </div>
+
+          <div className="stats-card flex items-center gap-2 py-2 px-3">
+            <div className="p-1.5 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 shadow-lg shadow-cyan-500/20">
+              <TrendingUp className="h-3.5 w-3.5 text-white" />
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Total Hrs</span>
+              <span className="text-sm font-bold gradient-text">{reports.reduce((s, r) => s + (r.time || 0), 0).toFixed(1)}h</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <section className="glass-effect rounded-xl p-4 shadow-xl shadow-indigo-500/5 border border-slate-200/50 dark:border-slate-700/50 card-hover">
+        {/* Warning for missing dates - Compact */}
         {missingDatesCount > 0 && (
-          <div className="mb-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 animate-fade-in-up">
+          <div className="mb-3 rounded-lg bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 animate-fade-in-up">
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <p className="text-xs text-amber-700 dark:text-amber-400">
-                Warning: {missingDatesCount} report(s) are missing dates and have been assigned today's date.
-                Please update these reports with correct dates.
+              <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+              <p className="text-[10px] text-amber-700 dark:text-amber-400">
+                <span className="font-bold">{missingDatesCount}</span> report(s) missing dates
               </p>
             </div>
           </div>
         )}
 
-        {/* Header */}
-        <div className="flex items-center gap-2.5 mb-4 animate-fade-in-up">
-          <div className="p-1.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-sm">
-            <User className="h-4 w-4 text-white" />
+        {/* Compact Header */}
+        <div className="flex items-center gap-2 mb-3 animate-fade-in-up">
+          <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/20">
+            <BarChart3 className="h-4 w-4 text-white" />
           </div>
-          <h3 className="text-sm font-semibold text-slate-800">Team reports</h3>
+          <div>
+            <h3 className="text-sm font-bold gradient-text leading-tight">Team Performance</h3>
+          </div>
           {!loading && !error && (
             <div className="ml-auto flex items-center gap-2">
-              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
-                {filtered.length} of {reports.length} record{reports.length !== 1 ? "s" : ""}
-              </span>
-              {reports.length > 0 && (
-                <span className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full">
-                  {totalFilteredHours.toFixed(1)}h total
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border border-indigo-200 dark:border-indigo-800">
+                <div className="h-1.5 w-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 animate-pulse" />
+                <span className="text-[9px] font-semibold text-indigo-600 dark:text-indigo-400">
+                  {filtered.length}/{reports.length}
                 </span>
+              </div>
+              {reports.length > 0 && (
+                <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-800">
+                  <Clock className="h-2.5 w-2.5 text-emerald-500" />
+                  <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    {totalFilteredHours.toFixed(1)}h
+                  </span>
+                </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Filter bar */}
+        {/* Compact Filter Bar with Labels - FULLY VISIBLE DATE PICKERS */}
         {!loading && !error && reports.length > 0 && (
-          <div
-            className="mb-4 flex flex-wrap items-end gap-3 p-3 bg-slate-50/80 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800 animate-fade-in-up"
-            style={{ animationDelay: "0.08s" }}
-          >
-            <div className="flex items-center gap-1.5 self-center text-xs font-medium text-slate-500 dark:text-slate-400">
-              <Filter className="h-3.5 w-3.5" /> Filter by
-            </div>
-
-            {/* Date Filter */}
-            <div className="flex flex-col gap-0.5 relative">
+          <div className="mb-3 p-2.5 glass-effect rounded-lg border border-slate-200/50 dark:border-slate-700/50 animate-fade-in-up">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1.5">
-                <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                  <Calendar className="h-2.5 w-2.5" /> Date
-                </label>
+                <Filter className="h-3 w-3 text-indigo-500" />
+                <span className="text-[9px] font-semibold text-slate-500 dark:text-slate-400">Filters:</span>
+              </div>
+
+              {/* Date Filter - With Fully Visible Date Pickers */}
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 rounded-md px-2 py-1 border border-slate-200 dark:border-slate-700">
+                <span className="text-[8px] font-semibold text-slate-400 dark:text-slate-500">Date:</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateFilterMode("single");
+                      setFilterDateFrom("");
+                      setFilterDateTo("");
+                    }}
+                    className={`h-5 px-1.5 rounded text-[8px] font-semibold transition-all duration-200 ${dateFilterMode === "single"
+                        ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/20"
+                        : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                      }`}
+                  >
+                    S
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateFilterMode("range");
+                      setFilterDate("all");
+                    }}
+                    className={`h-5 px-1.5 rounded text-[8px] font-semibold transition-all duration-200 ${dateFilterMode === "range"
+                        ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/20"
+                        : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                      }`}
+                  >
+                    R
+                  </button>
+                </div>
+                {dateFilterMode === "single" ? (
+                  <Select value={filterDate} onValueChange={setFilterDate}>
+                    <SelectTrigger className="h-6 text-[9px] w-[90px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-[10px]">All</SelectItem>
+                      {uniqueDates.map((d) => (
+                        <SelectItem key={d} value={d} className="text-[10px]">{fmt(d)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <div className="relative">
+                      <Input
+  type="date"
+  value={filterDateFrom}
+  onChange={(e) => setFilterDateFrom(e.target.value)}
+  className="owner-date-input h-7 text-[10px] w-[130px] bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 rounded-md cursor-pointer hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200"
+  style={{ minHeight: '28px', padding: '4px 4px 4px 6px' }}
+/>
+                    </div>
+                    <span className="text-[9px] text-slate-400 font-bold">→</span>
+                    <div className="relative">
+                      <Input
+  type="date"
+  value={filterDateTo}
+  onChange={(e) => setFilterDateTo(e.target.value)}  
+  className="owner-date-input h-7 text-[10px] w-[130px] bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 rounded-md cursor-pointer hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200"
+  style={{ minHeight: '28px', padding: '4px 4px 4px 6px' }}
+/>
+                    </div>
+                  </div>
+                )}
                 {isDateFilterActive && (
                   <button
                     onClick={clearDateFilter}
-                    className="text-[10px] text-rose-500 hover:text-rose-600 hover:underline transition-colors"
-                    title="Clear date filter"
+                    className="text-[8px] text-rose-400 hover:text-rose-500 transition-colors ml-0.5"
                   >
                     ✕
                   </button>
                 )}
               </div>
 
-              {/* Single date / date range toggle */}
-              <div className="flex items-center gap-1 mb-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDateFilterMode("single");
-                    setFilterDateFrom("");
-                    setFilterDateTo("");
-                  }}
-                  className={`h-6 px-2 rounded-md text-[10px] font-semibold transition-colors ${
-                    dateFilterMode === "single"
-                      ? "bg-indigo-600 text-white"
-                      : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
-                  }`}
-                >
-                  Single date
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDateFilterMode("range");
-                    setFilterDate("all");
-                  }}
-                  className={`h-6 px-2 rounded-md text-[10px] font-semibold transition-colors ${
-                    dateFilterMode === "range"
-                      ? "bg-indigo-600 text-white"
-                      : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
-                  }`}
-                >
-                  Date range
-                </button>
-              </div>
-
-              {dateFilterMode === "single" ? (
-                <Select value={filterDate} onValueChange={setFilterDate}>
-                  <SelectTrigger className="h-8 text-xs w-[160px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
-                    <SelectValue placeholder="All dates" />
+              {/* Employee Filter */}
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 rounded-md px-2 py-1 border border-slate-200 dark:border-slate-700">
+                <span className="text-[8px] font-semibold text-slate-400 dark:text-slate-500">Emp:</span>
+                <Select value={filterEmployee} onValueChange={setFilterEmployee}>
+                  <SelectTrigger className="h-6 text-[9px] w-[90px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                    <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all" className="text-xs font-medium">All dates</SelectItem>
-                    {uniqueDates.map((d) => (
-                      <SelectItem key={d} value={d} className="text-xs">{fmt(d)}</SelectItem>
+                    <SelectItem value="all" className="text-[10px]">All</SelectItem>
+                    {uniqueEmployees.map((emp) => (
+                      <SelectItem key={emp} value={emp} className="text-[10px]">{emp}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="date"
-                    value={filterDateFrom}
-                    onChange={(e) => setFilterDateFrom(e.target.value)}
-                    className="h-8 text-xs w-[130px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
-                  />
-                  <span className="text-[10px] text-slate-400">to</span>
-                  <Input
-                    type="date"
-                    value={filterDateTo}
-                    onChange={(e) => setFilterDateTo(e.target.value)}
-                    className="h-8 text-xs w-[130px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Employee Filter */}
-            <div className="flex flex-col gap-0.5 relative">
-              <div className="flex items-center gap-1.5">
-                <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                  <User className="h-2.5 w-2.5" /> Employee
-                </label>
                 {isEmployeeFilterActive && (
                   <button
                     onClick={clearEmployeeFilter}
-                    className="text-[10px] text-rose-500 hover:text-rose-600 hover:underline transition-colors"
-                    title="Clear employee filter"
+                    className="text-[7px] text-rose-400 hover:text-rose-500 transition-colors"
                   >
                     ✕
                   </button>
                 )}
               </div>
-              <Select value={filterEmployee} onValueChange={setFilterEmployee}>
-                <SelectTrigger className="h-8 text-xs w-[180px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
-                  <SelectValue placeholder="All employees" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" className="text-xs font-medium">All employees</SelectItem>
-                  {uniqueEmployees.map((emp) => (
-                    <SelectItem key={emp} value={emp} className="text-xs">{emp}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
 
-            {/* Client Filter */}
-            <div className="flex flex-col gap-0.5 relative">
-              <div className="flex items-center gap-1.5">
-                <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                  <Briefcase className="h-2.5 w-2.5" /> Client
-                </label>
+              {/* Client Filter */}
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 rounded-md px-2 py-1 border border-slate-200 dark:border-slate-700">
+                <span className="text-[8px] font-semibold text-slate-400 dark:text-slate-500">Client:</span>
+                <Select value={filterClient} onValueChange={handleClientFilterChange}>
+                  <SelectTrigger className="h-6 text-[9px] w-[80px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-[10px]">All</SelectItem>
+                    {uniqueClients.map((c) => (
+                      <SelectItem key={c} value={c} className="text-[10px]">{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {isClientFilterActive && (
                   <button
                     onClick={clearClientFilter}
-                    className="text-[10px] text-rose-500 hover:text-rose-600 hover:underline transition-colors"
-                    title="Clear client filter"
+                    className="text-[7px] text-rose-400 hover:text-rose-500 transition-colors"
                   >
                     ✕
                   </button>
                 )}
               </div>
-              <Select value={filterClient} onValueChange={handleClientFilterChange}>
-                <SelectTrigger className="h-8 text-xs w-[160px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
-                  <SelectValue placeholder="All clients" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" className="text-xs font-medium">All clients</SelectItem>
-                  {uniqueClients.map((c) => (
-                    <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
 
-            {/* Project Filter */}
-            <div className="flex flex-col gap-0.5 relative">
-              <div className="flex items-center gap-1.5">
-                <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                  <Tag className="h-2.5 w-2.5" /> Project
-                </label>
+              {/* Project Filter */}
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 rounded-md px-2 py-1 border border-slate-200 dark:border-slate-700">
+                <span className="text-[8px] font-semibold text-slate-400 dark:text-slate-500">Proj:</span>
+                <Select value={filterProject} onValueChange={setFilterProject}>
+                  <SelectTrigger className="h-6 text-[9px] w-[90px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-[10px]">All</SelectItem>
+                    {uniqueProjects.map((p) => (
+                      <SelectItem key={p} value={p} className="text-[10px]">{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {isProjectFilterActive && (
                   <button
                     onClick={clearProjectFilter}
-                    className="text-[10px] text-rose-500 hover:text-rose-600 hover:underline transition-colors"
-                    title="Clear project filter"
+                    className="text-[7px] text-rose-400 hover:text-rose-500 transition-colors"
                   >
                     ✕
                   </button>
                 )}
               </div>
-              <Select value={filterProject} onValueChange={setFilterProject}>
-                <SelectTrigger className="h-8 text-xs w-[180px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors">
-                  <SelectValue placeholder="All projects" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" className="text-xs font-medium">All projects</SelectItem>
-                  {uniqueProjects.map((p) => (
-                    <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+              {/* Clear All */}
+              {hasFilter && (
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center gap-0.5 h-6 px-2 text-[8px] font-medium text-rose-500 hover:text-rose-600 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded transition-all duration-200"
+                >
+                  <XCircle className="h-2.5 w-2.5" />
+                  Clear
+                </button>
+              )}
             </div>
 
-            {/* Clear All Filters Button */}
+            {/* Active Filter Pills */}
             {hasFilter && (
-              <button
-                onClick={clearFilters}
-                className="self-end flex items-center gap-1 h-8 px-2.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-rose-600 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-rose-200 dark:hover:border-rose-800 rounded-lg transition-all duration-150 btn-hover-scale animate-fade-in-up"
-              >
-                <XCircle className="h-3.5 w-3.5" /> Clear all
-              </button>
-            )}
-
-            {/* Active filter badges */}
-            {hasFilter && (
-              <div className="flex flex-wrap gap-1.5 self-end">
+              <div className="flex flex-wrap gap-1 mt-1.5 pt-1.5 border-t border-slate-200 dark:border-slate-700">
                 {dateFilterMode === "single" && filterDate !== "all" && (
-                  <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
-                    <Calendar className="h-2.5 w-2.5" />
+                  <span className="filter-pill inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[7px] font-semibold bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-950/40 dark:to-purple-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                    <Calendar className="h-2 w-2" />
                     {fmt(filterDate)}
-                    <button
-                      onClick={clearDateFilter}
-                      className="ml-0.5 hover:text-rose-600 transition-colors"
-                    >
-                      ✕
-                    </button>
+                    <button onClick={clearDateFilter} className="ml-0.5 hover:text-rose-500">✕</button>
                   </span>
                 )}
                 {dateFilterMode === "range" && (filterDateFrom || filterDateTo) && (
-                  <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
-                    <Calendar className="h-2.5 w-2.5" />
-                    {filterDateFrom ? fmt(filterDateFrom) : "…"} – {filterDateTo ? fmt(filterDateTo) : "…"}
-                    <button
-                      onClick={clearDateFilter}
-                      className="ml-0.5 hover:text-rose-600 transition-colors"
-                    >
-                      ✕
-                    </button>
+                  <span className="filter-pill inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[7px] font-semibold bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-950/40 dark:to-purple-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                    <Calendar className="h-2 w-2" />
+                    {filterDateFrom ? fmt(filterDateFrom) : "…"} → {filterDateTo ? fmt(filterDateTo) : "…"}
+                    <button onClick={clearDateFilter} className="ml-0.5 hover:text-rose-500">✕</button>
                   </span>
                 )}
                 {filterEmployee !== "all" && (
-                  <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
-                    <User className="h-2.5 w-2.5" />
+                  <span className="filter-pill inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[7px] font-semibold bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-950/40 dark:to-pink-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    <User className="h-2 w-2" />
                     {filterEmployee}
-                    <button
-                      onClick={clearEmployeeFilter}
-                      className="ml-0.5 hover:text-rose-600 transition-colors"
-                    >
-                      ✕
-                    </button>
+                    <button onClick={clearEmployeeFilter} className="ml-0.5 hover:text-rose-500">✕</button>
                   </span>
                 )}
                 {filterClient !== "all" && (
-                  <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
-                    <Briefcase className="h-2.5 w-2.5" />
+                  <span className="filter-pill inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[7px] font-semibold bg-gradient-to-r from-emerald-100 to-teal-100 dark:from-emerald-950/40 dark:to-teal-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                    <Briefcase className="h-2 w-2" />
                     {filterClient}
-                    <button
-                      onClick={clearClientFilter}
-                      className="ml-0.5 hover:text-rose-600 transition-colors"
-                    >
-                      ✕
-                    </button>
+                    <button onClick={clearClientFilter} className="ml-0.5 hover:text-rose-500">✕</button>
                   </span>
                 )}
                 {filterProject !== "all" && (
-                  <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] font-semibold px-2 py-0.5 rounded-full animate-fade-in-up">
-                    <Tag className="h-2.5 w-2.5" />
+                  <span className="filter-pill inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[7px] font-semibold bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-950/40 dark:to-orange-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                    <Tag className="h-2 w-2" />
                     {filterProject}
-                    <button
-                      onClick={clearProjectFilter}
-                      className="ml-0.5 hover:text-rose-600 transition-colors"
-                    >
-                      ✕
-                    </button>
+                    <button onClick={clearProjectFilter} className="ml-0.5 hover:text-rose-500">✕</button>
                   </span>
                 )}
-              </div>
-            )}
-
-            {hasFilter && (
-              <div className="ml-auto self-center text-[10px] text-slate-400 dark:text-slate-500 animate-fade-in-up">
-                {uniqueFilteredEmployees} employee{uniqueFilteredEmployees !== 1 ? "s" : ""} • {totalFilteredHours.toFixed(1)}h
               </div>
             )}
           </div>
         )}
 
-        {/* Table */}
+        {/* Table - Compact */}
         {loading ? (
-          <div className="flex justify-center py-8"><FullSpinner /></div>
+          <div className="flex justify-center py-8">
+            <FullSpinner />
+          </div>
         ) : error ? (
-          <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-600 animate-fade-in-up">
+          <div className="rounded-lg border border-red-100 bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/20 px-3 py-2 text-xs text-red-600 dark:text-red-400">
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-3.5 w-3.5" />
-              <span>{error}</span>
+              <AlertCircle className="h-3 w-3" />
+              <span className="font-medium">{error}</span>
             </div>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-10 animate-fade-in-up">
-            <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
-              <Filter className="h-5 w-5 text-slate-300 dark:text-slate-600" />
+          <div className="text-center py-8">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center mx-auto mb-2">
+              <Filter className="h-6 w-6 text-slate-300 dark:text-slate-500" />
             </div>
-            <p className="text-xs text-slate-400 dark:text-slate-500">
-              {hasFilter ? "No records match the selected filters." : "No reports submitted yet."}
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              {hasFilter ? "No records match filters" : "No reports yet"}
             </p>
             {hasFilter && (
-              <button onClick={clearFilters} className="mt-2 text-xs text-indigo-500 hover:underline">
+              <button onClick={clearFilters} className="mt-1 text-[9px] text-indigo-500 hover:underline">
                 Clear filters
               </button>
             )}
           </div>
         ) : (
-          <div data-work-report-table="" className="overflow-x-auto animate-fade-in-up">
+          <div data-work-report-table="" className="overflow-x-auto rounded-lg border border-slate-200/50 dark:border-slate-700/50">
             <Table>
               <TableHeader>
-                <TableRow className="bg-slate-50/80 dark:bg-slate-800/60">
-                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Employee</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Client</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Project</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Type</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Time</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Description</TableHead>
+                <TableRow className="bg-gradient-to-r from-slate-50/80 to-slate-100/80 dark:from-slate-800/60 dark:to-slate-800/40">
+                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Date</TableHead>
+                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Employee</TableHead>
+                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Client</TableHead>
+                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Project</TableHead>
+                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Type</TableHead>
+                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Time</TableHead>
+                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Description</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1916,38 +2085,67 @@ const OwnerView = () => {
                   <TableRow
                     key={r.id}
                     className="entry-row table-row-animate"
-                    style={{ animationDelay: `${index * 0.025}s` }}
+                    style={{ animationDelay: `${index * 0.02}s` }}
                   >
-                    <TableCell className="text-xs whitespace-nowrap font-medium text-slate-700 dark:text-slate-300">
+                    <TableCell className="text-[10px] whitespace-nowrap font-semibold text-slate-700 dark:text-slate-300 py-1">
                       {fmt(r.date)}
-                      {!r.date && <span className="ml-1 text-[8px] text-amber-500">(auto-assigned)</span>}
+                      {!r.date && <span className="ml-1 text-[7px] text-amber-500">(auto)</span>}
                     </TableCell>
-                    <TableCell className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-                      {r.employeeName || "—"}
+                    <TableCell className="text-[10px] font-semibold py-1">
+                      <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                        {r.employeeName || "—"}
+                      </span>
                     </TableCell>
-                    <TableCell className="text-xs text-slate-600 dark:text-slate-400">{r.client || "—"}</TableCell>
-                    <TableCell className="text-xs text-slate-600 dark:text-slate-400">{r.project || "—"}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-[10px] text-slate-600 dark:text-slate-400 py-1">{r.client || "—"}</TableCell>
+                    <TableCell className="text-[10px] text-slate-600 dark:text-slate-400 py-1">{r.project || "—"}</TableCell>
+                    <TableCell className="py-1">
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${WORK_TYPE_COLORS[r.workType as WorkType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                        className={`inline-flex rounded-full px-2 py-0.5 text-[8px] font-semibold ${WORK_TYPE_COLORS[r.workType as WorkType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
                           }`}
                       >
                         {WORK_TYPE_LABELS[r.workType as WorkType] ?? r.workType}
                       </span>
                     </TableCell>
-                    <TableCell className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      {r.time}h
+                    <TableCell className="text-[10px] font-bold py-1">
+                      <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                        {r.time}h
+                      </span>
                     </TableCell>
                     <TableCell
-                      className="text-xs max-w-[200px] truncate text-slate-500 dark:text-slate-400"
+                      className="text-[10px] max-w-[150px] truncate text-slate-500 dark:text-slate-400 py-1"
                       title={r.description}
                     >
-                      {r.description}
+                      {r.description || "—"}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+          </div>
+        )}
+
+        {/* Compact Footer */}
+        {!loading && !error && filtered.length > 0 && (
+          <div className="mt-2 flex items-center justify-between text-[9px] text-slate-400 dark:text-slate-500">
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1">
+                <div className="h-1 w-1 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500" />
+                {filtered.length} records
+              </span>
+              <span className="flex items-center gap-1">
+                <Users className="h-2.5 w-2.5" />
+                {uniqueFilteredEmployees} employees
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1">
+                <Clock className="h-2.5 w-2.5" />
+                {totalFilteredHours.toFixed(1)}h
+              </span>
+              <span className="px-1.5 py-0.5 rounded-full bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border border-indigo-200 dark:border-indigo-800 text-[8px] font-semibold text-indigo-600 dark:text-indigo-400">
+                {(totalFilteredHours / filtered.length).toFixed(1)}h/rec
+              </span>
+            </div>
           </div>
         )}
       </section>
@@ -1965,11 +2163,11 @@ const WorkReport = () => {
     <>
       <PageHeader
         title="Work Reports"
-        description={
-          role === "OWNER"
-            ? "View all employee work reports."
-            : "Submit and review your daily work reports."
-        }
+      // description={
+      //   role === "OWNER"
+      //     ? "View all employee work reports."
+      //     : "Submit and review your daily work reports."
+      // }
       />
       {role === "OWNER" ? <OwnerView /> : <EmployeeView />}
     </>
