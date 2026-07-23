@@ -1635,7 +1635,7 @@ export default function Dashboard() {
                                             {CO_STATUSES.map(s => <option key={s}>{s}</option>)}
                                           </select>
                                         </td>
-                                        <td><input type="number" className="co-table-input" style={{ minWidth: 80 }} value={editCoData.amount || 0} onChange={e => setEditCoData(p => ({ ...p, amount: parseFloat(e.target.value) }))} /></td>
+                                       <td><input type="number" className="co-table-input" style={{ minWidth: 80 }} value={editCoData.amount === 0 || editCoData.amount === "" ? "" : editCoData.amount} onChange={e => { const val = e.target.value; setEditCoData(p => ({ ...p, amount: val === "" ? "" : parseFloat(val) || 0 })); }} placeholder="0" /></td>
                                         <td><input type="date" className="co-table-input" value={editCoData.ifaDate || ""} onChange={e => setEditCoData(p => ({ ...p, ifaDate: e.target.value }))} onClick={(e) => { try { e.target.showPicker && e.target.showPicker(); } catch (_) {} }} /></td>
                                         <td><input className="co-table-input" style={{ minWidth: 55 }} value={editCoData.ifaPer || ""} onChange={e => setEditCoData(p => ({ ...p, ifaPer: e.target.value }))} /></td>
                                         <td><input type="date" className="co-table-input" value={editCoData.iffDate || ""} onChange={e => setEditCoData(p => ({ ...p, iffDate: e.target.value }))} onClick={(e) => { try { e.target.showPicker && e.target.showPicker(); } catch (_) {} }} /></td>
@@ -2323,7 +2323,7 @@ function CoEditRow({ data, setData, onSave, onCancel, saving }) {
         </div>
       </div>
       <div className="form-row">
-        <div className="form-group"><label className="form-label">Amount ($)</label><input type="number" className="form-input" value={f("amount")} onChange={e => s("amount")(parseFloat(e.target.value) || 0)} /></div>
+        <div className="form-group"><label className="form-label">Amount ($)</label><input type="number" className="form-input" value={f("amount") === 0 || f("amount") === "" ? "" : f("amount")} onChange={e => { const val = e.target.value; s("amount")(val === "" ? "" : parseFloat(val) || 0); }} placeholder="0" /></div>
         <div className="form-group"><label className="form-label">Remarks</label><input className="form-input" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} /></div>
       </div>
       <div className="form-row" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>

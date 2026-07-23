@@ -125,6 +125,10 @@ interface Report {
   workType: WorkType;
   client: string;
   project: string;
+  // Timestamp the record was created on the server (ISO string).
+  // NOTE: rename this if your backend's field/JSON key is different
+  // (e.g. "submittedAt") — used to gate the 10-minute delete window.
+  createdAt?: string;
 }
 
 /* ─── Helpers ────────────────────────────────────────────── */
@@ -163,6 +167,24 @@ const toDateKey = (d: string) => {
   } catch {
     return "invalid-date";
   }
+};
+
+// A record can only be deleted within this many minutes of its creation.
+// Keep this in sync with whatever window the backend enforces.
+const DELETE_WINDOW_MINUTES = 10;
+
+/**
+ * Returns true if the record was created within the last DELETE_WINDOW_MINUTES.
+ * If createdAt is missing (e.g. backend hasn't been updated to send it yet),
+ * this fails open (returns true) so the button doesn't just silently vanish
+ * for everyone — remove that fallback once createdAt is reliably present.
+ */
+const isWithinDeleteWindow = (createdAt?: string) => {
+  if (!createdAt) return true;
+  const createdMs = new Date(createdAt).getTime();
+  if (Number.isNaN(createdMs)) return true;
+  const diffMinutes = (Date.now() - createdMs) / 60000;
+  return diffMinutes <= DELETE_WINDOW_MINUTES;
 };
 
 /* ─── Enhanced Animations & Global Styles ────────────────────────── */
@@ -539,22 +561,130 @@ if (typeof document !== "undefined") {
   }
 }
 
-// Rest of the code remains exactly the same...
-// [The rest of your code - DateDetailModal, EmployeeView, OwnerView, WorkReport - remains unchanged]
+/* =========================================================
+   Confirm Dialog
+   A small, reusable, aesthetically-consistent replacement for the
+   native window.confirm() browser popup (which renders as an ugly
+   generic "localhost says…" box). Used anywhere a destructive action
+   (like deleting a report entry) needs explicit confirmation.
+========================================================= */
+const ConfirmDialog = ({
+  open,
+  onClose,
+  onConfirm,
+  title,
+  description,
+  confirmLabel = "Delete",
+  loading = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  description: string;
+  confirmLabel?: string;
+  loading?: boolean;
+}) => {
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [open]);
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && open && !loading) onClose();
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [open, onClose, loading]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-backdrop"
+        onClick={() => !loading && onClose()}
+        role="presentation"
+      />
+      <div
+        className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm mx-auto animate-modal-enter overflow-hidden border border-slate-100 dark:border-slate-800"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-description"
+      >
+        <div className="p-5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-950/40">
+              <Trash2 className="h-4 w-4 text-rose-500" />
+            </div>
+            <div className="flex-1 pt-0.5">
+              <h3
+                id="confirm-dialog-title"
+                className="text-sm font-bold text-slate-800 dark:text-slate-100"
+              >
+                {title}
+              </h3>
+              <p
+                id="confirm-dialog-description"
+                className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed"
+              >
+                {description}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-5 py-3 flex justify-end gap-2 bg-slate-50/60 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading}
+            className="px-3.5 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all duration-150 btn-hover-scale disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
+          >
+            {loading && (
+              <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            )}
+            {loading ? "Deleting…" : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 /* =========================================================
    Date Detail Modal
+   NOTE: now takes onDeleteEntry + deletingId so each entry card can be
+   deleted directly from the modal. Deletion is enforced server-side to
+   the current user's own records — the button below is simply hidden
+   whenever the entry isn't the current user's (see EmployeeView usage;
+   in EmployeeView "my reports" every entry already belongs to the
+   viewer, so the button always applies there).
 ========================================================= */
 const DateDetailModal = ({
   open,
   onClose,
   date,
   entries,
+  onDeleteEntry,
+  deletingId,
 }: {
   open: boolean;
   onClose: () => void;
   date: string;
   entries: Report[];
+  onDeleteEntry: (id: string | number) => void;
+  deletingId: string | number | null;
 }) => {
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -648,9 +778,27 @@ const DateDetailModal = ({
                   <Tag className="h-2.5 w-2.5" />
                   {WORK_TYPE_LABELS[r.workType] ?? r.workType}
                 </span>
-                <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-1 rounded-full border border-indigo-100 dark:border-indigo-900">
-                  {r.time}h
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-1 rounded-full border border-indigo-100 dark:border-indigo-900">
+                    {r.time}h
+                  </span>
+                  {isWithinDeleteWindow(r.createdAt) && (
+                    <button
+                      type="button"
+                      onClick={() => onDeleteEntry(r.id)}
+                      disabled={deletingId === r.id}
+                      aria-label="Delete entry"
+                      title="Delete this entry"
+                      className="p-1.5 rounded-lg text-slate-300 dark:text-slate-600 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {deletingId === r.id ? (
+                        <div className="h-3 w-3 border-2 border-rose-300 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 mb-3">
@@ -716,6 +864,9 @@ const EmployeeView = () => {
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailDate, setDetailDate] = useState("");
+  const [deletingEntryId, setDeletingEntryId] = useState<string | number | null>(null);
+  // Entry pending confirmation before it's actually deleted (replaces window.confirm)
+  const [pendingDeleteEntryId, setPendingDeleteEntryId] = useState<string | number | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(false);
@@ -796,6 +947,44 @@ const EmployeeView = () => {
   }, []);
 
   useEffect(() => { loadReports(); }, [loadReports]);
+
+  /** Open the confirm dialog for a single already-submitted work report entry. */
+  const handleDeleteEntry = (id: string | number) => {
+    if (deletingEntryId) return;
+    setPendingDeleteEntryId(id);
+  };
+
+  /** Actually deletes the entry once the user confirms in the dialog. Own records only — enforced server-side. */
+  const confirmDeleteEntry = async () => {
+    const id = pendingDeleteEntryId;
+    if (!id) return;
+    setPendingDeleteEntryId(null);
+
+    setDeletingEntryId(id);
+    const previousReports = reports;
+    setReports((prev) => prev.filter((r) => r.id !== id));
+
+    try {
+      await api.delete(`/reports/${id}`);
+      toast({ title: "Entry deleted", className: "bg-emerald-500 text-white border-none text-xs", duration: 1500 });
+    } catch (err) {
+      setReports(previousReports);
+      toast({
+        title: "Delete failed",
+        description: getErrorMessage(err) || "You can only delete entries you created.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingEntryId(null);
+    }
+  };
+
+  // Auto-close the detail modal once its date group has no entries left.
+  useEffect(() => {
+    if (detailOpen && detailDate && !(reportsByDate[detailDate]?.length)) {
+      setDetailOpen(false);
+    }
+  }, [detailOpen, detailDate, reportsByDate]);
 
   /* Fetch projects for a client */
   const fetchProjects = useCallback(
@@ -937,7 +1126,7 @@ const EmployeeView = () => {
           // Just deselecting — simple removal.
           updatedTypes = e.workTypes.filter((t) => t !== workType);
         } else if (OPTIONAL_WORK_TYPES.has(workType)) {
-          // Selecting an exclusive type (Training/Practicing/Miscellaneous/Estimation) — clear all other types so
+          // Selecting an exclusive type (Training/Practicing/Misc/Estimation) — clear all other types so
           // it becomes the ONLY selected type.
           updatedTypes = [workType];
         } else {
@@ -1584,6 +1773,17 @@ const EmployeeView = () => {
         onClose={() => setDetailOpen(false)}
         date={detailDate}
         entries={detailDate ? (reportsByDate[detailDate] ?? []) : []}
+        onDeleteEntry={handleDeleteEntry}
+        deletingId={deletingEntryId}
+      />
+
+      <ConfirmDialog
+        open={pendingDeleteEntryId !== null}
+        onClose={() => setPendingDeleteEntryId(null)}
+        onConfirm={confirmDeleteEntry}
+        title="Delete this entry?"
+        description="This will permanently remove this work report entry. This action cannot be undone."
+        loading={deletingEntryId !== null && deletingEntryId === pendingDeleteEntryId}
       />
     </>
   );
@@ -1593,10 +1793,21 @@ const EmployeeView = () => {
    OWNER VIEW - COMPACT ENHANCED UI WITH FULLY VISIBLE DATE PICKERS
 ========================================================= */
 const OwnerView = () => {
+  // NOTE: adjust this destructure if your AuthContext exposes the username
+  // differently (e.g. `user.username` instead of a top-level `username`).
+  // If none of these resolve, the delete button falls back to showing on
+  // every row and lets the backend's 403 own-records-only check protect it.
+  const auth = useAuth() as any;
+  const currentUsername: string | undefined =
+    auth?.username ?? auth?.user?.username ?? auth?.user?.name;
+
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [missingDatesCount, setMissingDatesCount] = useState(0);
+  const [deletingId, setDeletingId] = useState<string | number | null>(null);
+  // Record pending confirmation before it's actually deleted (replaces window.confirm)
+  const [pendingDelete, setPendingDelete] = useState<Report | null>(null);
 
   const [dateFilterMode, setDateFilterMode] = useState<"single" | "range">("single");
   const [filterDate, setFilterDate] = useState<string>("all");
@@ -1630,6 +1841,37 @@ const OwnerView = () => {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  /** Open the confirm dialog for a single record from the org-wide table. */
+  const handleDelete = (r: Report) => {
+    if (deletingId) return;
+    setPendingDelete(r);
+  };
+
+  /** Actually deletes the record once the user confirms in the dialog. Own records only — enforced server-side. */
+  const confirmDelete = async () => {
+    const r = pendingDelete;
+    if (!r) return;
+    setPendingDelete(null);
+
+    setDeletingId(r.id);
+    const previousReports = reports;
+    setReports((prev) => prev.filter((x) => x.id !== r.id));
+
+    try {
+      await api.delete(`/reports/${r.id}`);
+      toast({ title: "Record deleted", className: "bg-emerald-500 text-white border-none text-xs", duration: 1500 });
+    } catch (err) {
+      setReports(previousReports);
+      toast({
+        title: "Delete failed",
+        description: getErrorMessage(err) || "You can only delete records you created.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const handleClientFilterChange = (value: string) => {
     setFilterClient(value);
@@ -2078,6 +2320,7 @@ const OwnerView = () => {
                   <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Type</TableHead>
                   <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Time</TableHead>
                   <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Description</TableHead>
+                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -2117,6 +2360,27 @@ const OwnerView = () => {
                     >
                       {r.description || "—"}
                     </TableCell>
+                    <TableCell className="py-1">
+                      {(!currentUsername || r.employeeName === currentUsername) &&
+                        isWithinDeleteWindow(r.createdAt) && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-slate-300 dark:text-slate-600 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all duration-150"
+                            disabled={deletingId === r.id}
+                            onClick={() => handleDelete(r)}
+                            aria-label="Delete record"
+                            title="Delete this record"
+                          >
+                            {deletingId === r.id ? (
+                              <div className="h-3 w-3 border-2 border-rose-300 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3 w-3" />
+                            )}
+                          </Button>
+                        )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -2149,6 +2413,19 @@ const OwnerView = () => {
           </div>
         )}
       </section>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        title="Delete this record?"
+        description={
+          pendingDelete
+            ? `This will permanently delete the ${WORK_TYPE_LABELS[pendingDelete.workType as WorkType] ?? pendingDelete.workType} record (${pendingDelete.time}h, ${fmt(pendingDelete.date)}). This action cannot be undone.`
+            : ""
+        }
+        loading={deletingId !== null && pendingDelete !== null && deletingId === pendingDelete.id}
+      />
     </div>
   );
 };
