@@ -943,6 +943,15 @@ const EmployeeView = () => {
     setReportsError(null);
     try {
       const { data } = await api.get<Report[]>("/reports/my");
+      // ── ADD THIS BLOCK HERE ──
+      console.log("RAW reports from API:", data);
+      if (Array.isArray(data) && data.length > 0) {
+        const sample = data[0];
+        console.log("createdAt raw:", sample.createdAt);
+        console.log("parsed as Date:", new Date(sample.createdAt as string));
+        console.log("browser 'now':", new Date());
+      }
+      // ── END BLOCK ──
       const reportsData = Array.isArray(data)
         ? data.filter(report => report.date && report.date.trim() !== '') // Filter out reports without date
         : [];
