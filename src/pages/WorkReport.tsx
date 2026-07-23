@@ -449,14 +449,30 @@ const animationStyles = `
   }
 
   /* ── Date Step Card ── */
-  .date-step-input::-webkit-calendar-picker-indicator {
-    cursor: pointer;
-    opacity: 0.7;
-    margin-left: 2px;
-    padding: 0;
-    transition: opacity 0.15s ease, filter 0.15s ease;
+  /* Anchor the input as a positioning context so the calendar icon can be
+     pinned to a fixed spot in the right corner, instead of sitting flush
+     against the typed date text (which looked cramped). */
+  .date-step-input {
+    position: relative;
+    padding-right: 44px !important;
   }
-  .date-step-input::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+
+  .date-step-input::-webkit-calendar-picker-indicator {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    opacity: 0.6;
+    margin: 0;
+    padding: 4px;
+    border-radius: 6px;
+    transition: opacity 0.15s ease, filter 0.15s ease, background-color 0.15s ease;
+  }
+  .date-step-input::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    background-color: rgba(99, 102, 241, 0.08);
+  }
 
   /* DARK MODE - Make calendar icon white for ALL date inputs */
   .dark input[type="date"]::-webkit-calendar-picker-indicator {
@@ -472,13 +488,6 @@ const animationStyles = `
   .dark .owner-date-input::-webkit-calendar-picker-indicator {
     filter: invert(1) brightness(100) !important;
     opacity: 1 !important;
-  }
-
-  /* Force dark color scheme for date inputs */
-  .dark input[type="date"],
-  .dark .owner-date-input,
-  .dark .date-step-input {
-    color-scheme: dark !important;
   }
 
   /* ── Gradient Text ── */

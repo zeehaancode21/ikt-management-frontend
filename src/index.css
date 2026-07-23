@@ -110,3 +110,8 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
   border-radius: 4px;
 }
+
+.dark .date-step-input,
+.dark .owner-date-input {
+  color-scheme: light;
+}
