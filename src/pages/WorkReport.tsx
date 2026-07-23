@@ -181,7 +181,16 @@ const DELETE_WINDOW_MINUTES = 10;
  */
 const isWithinDeleteWindow = (createdAt?: string) => {
   if (!createdAt) return true;
-  const createdMs = new Date(createdAt).getTime();
+
+  // Backend sends naive timestamps like "2026-07-23T07:03:06.307732"
+  // with no timezone info, which the backend actually generates in UTC.
+  // Without a timezone suffix, JS's Date parser wrongly assumes local time,
+  // so we normalize by appending "Z" when one isn't already present.
+  const normalized = /[Zz]|[+-]\d{2}:\d{2}$/.test(createdAt)
+    ? createdAt
+    : `${createdAt}Z`;
+
+  const createdMs = new Date(normalized).getTime();
   if (Number.isNaN(createdMs)) return true;
   const diffMinutes = (Date.now() - createdMs) / 60000;
   return diffMinutes <= DELETE_WINDOW_MINUTES;
