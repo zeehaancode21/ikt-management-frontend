@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import api, { getErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import {
@@ -20,6 +20,10 @@ import {
   Clock,
   Filter,
   RotateCcw,
+  Star,
+  Plus,
+  Search,
+  X,
 } from "lucide-react";
 import "./WorkHoursDashboard.css";
 
@@ -33,6 +37,12 @@ interface WorkHoursSummary {
   checkingHours: number;
   drawingGroupHours: number; // E_PLAN + SHOP_DRAWING + LINKING + PART_DRAWING
   totalHours: number;
+}
+
+interface ApiListResponse {
+  success: boolean;
+  data: string[];
+  error?: string;
 }
 
 const ALL_VALUE = "__ALL__";
@@ -60,6 +70,50 @@ const DRAWING_COMPONENTS: { key: string; label: string; icon: typeof Zap; accent
 ];
 
 const fmtHours = (n: number) => n.toFixed(2);
+
+/* ─── Favorite-client accent hashing ─────────────────────────
+   Picks one of the ACCENT hues deterministically per client name,
+   so each favorite chip gets a stable, distinguishable color that
+   still belongs to the same palette used for work-type badges.   ── */
+
+const ACCENT_KEYS = Object.keys(ACCENT) as (keyof typeof ACCENT)[];
+
+function hashString(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (h << 5) - h + str.charCodeAt(i);
+    h |= 0;
+  }
+  return Math.abs(h);
+}
+
+function accentForClient(name: string) {
+  return ACCENT[ACCENT_KEYS[hashString(name) % ACCENT_KEYS.length]];
+}
+
+/* ─── Favorite clients API ─────────────────────────────────────
+   Small persistence layer for the "pin this client to my Hours
+   dashboard" feature. Mirrors the ApiResponse<T> contract already
+   used elsewhere in this app (success / data / error).            ── */
+
+const favoritesApi = {
+  async list(): Promise<string[]> {
+    const { data } = await api.get<ApiListResponse>("/favorite-clients");
+    return data?.success && Array.isArray(data.data) ? data.data : [];
+  },
+  async add(client: string): Promise<string[]> {
+    const { data } = await api.post<ApiListResponse>("/favorite-clients", { client });
+    if (!data?.success) throw new Error(data?.error || "Failed to add favorite client");
+    return data.data;
+  },
+  async remove(client: string): Promise<string[]> {
+    const { data } = await api.delete<ApiListResponse>(
+      `/favorite-clients/${encodeURIComponent(client)}`
+    );
+    if (!data?.success) throw new Error(data?.error || "Failed to remove favorite client");
+    return data.data;
+  },
+};
 
 /* ─── Count-up hook ─────────────────────────────────────────
    Animates a number from its previous value up to the new target
@@ -246,6 +300,52 @@ const TitleBlock = ({
   );
 };
 
+/* ─── Favorite client chip ─────────────────────────────────────
+   Small clickable, drafting-accented chip. Hovering reveals a
+   quick "×" to unfavorite without opening the manage popup.       ── */
+
+const FavoriteChip = ({
+  client,
+  active,
+  busy,
+  onSelect,
+  onRemove,
+}: {
+  client: string;
+  active: boolean;
+  busy: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+}) => {
+  const accent = accentForClient(client);
+  return (
+    <div className="whd-fav-chip-wrap">
+      <button
+        type="button"
+        className={`whd-fav-chip ${active ? "whd-fav-chip--active" : ""}`}
+        style={{ ["--whd-fav-accent" as string]: accent.hex }}
+        onClick={onSelect}
+        title={client}
+      >
+        <Star className="whd-fav-chip-star h-3 w-3" fill="currentColor" />
+        <span className="whd-fav-chip-label">{client}</span>
+      </button>
+      <button
+        type="button"
+        className="whd-fav-chip-remove"
+        title={`Remove ${client} from favorites`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        disabled={busy}
+      >
+        {busy ? <span className="whd-fav-spinner whd-fav-spinner--sm" /> : <X className="h-3 w-3" />}
+      </button>
+    </div>
+  );
+};
+
 /* ─── Main page ─────────────────────────────────────────────── */
 
 const WorkHoursDashboard = () => {
@@ -263,6 +363,14 @@ const WorkHoursDashboard = () => {
   const [error, setError] = useState<string | null>(null);
   const [spinning, setSpinning] = useState(false);
 
+  /* ── Favorite clients state ────────────────────────────────── */
+  const [favoriteClients, setFavoriteClients] = useState<string[]>([]);
+  const [loadingFavorites, setLoadingFavorites] = useState(true);
+  const [togglingClient, setTogglingClient] = useState<string | null>(null);
+  const [favError, setFavError] = useState("");
+  const [manageOpen, setManageOpen] = useState(false);
+  const [favSearch, setFavSearch] = useState("");
+
   /* Fetch client list once */
   useEffect(() => {
     api
@@ -275,6 +383,15 @@ const WorkHoursDashboard = () => {
         setClients([]);
       })
       .finally(() => setLoadingClients(false));
+  }, []);
+
+  /* Fetch favorite clients once */
+  useEffect(() => {
+    favoritesApi
+      .list()
+      .then(setFavoriteClients)
+      .catch(() => setFavoriteClients([]))
+      .finally(() => setLoadingFavorites(false));
   }, []);
 
   /* Fetch projects whenever the selected client changes */
@@ -339,6 +456,40 @@ const WorkHoursDashboard = () => {
     window.setTimeout(() => setSpinning(false), 550);
   };
 
+  /* ── Favorite clients: toggle add/remove, persisted to the DB ── */
+  const toggleFavorite = useCallback(
+    async (client: string) => {
+      if (togglingClient) return;
+      const isFav = favoriteClients.includes(client);
+      const previous = favoriteClients;
+
+      setTogglingClient(client);
+      setFavError("");
+      setFavoriteClients((prev) => (isFav ? prev.filter((c) => c !== client) : [...prev, client]));
+
+      try {
+        const updated = isFav ? await favoritesApi.remove(client) : await favoritesApi.add(client);
+        setFavoriteClients(updated);
+        // If we just unfavorited the client currently selected, fall back to All.
+        if (isFav && selectedClient === client) {
+          setSelectedClient(ALL_VALUE);
+        }
+      } catch (err) {
+        setFavoriteClients(previous);
+        setFavError(getErrorMessage(err));
+      } finally {
+        setTogglingClient(null);
+      }
+    },
+    [favoriteClients, togglingClient, selectedClient]
+  );
+
+  const filteredAllClients = useMemo(() => {
+    const q = favSearch.trim().toLowerCase();
+    if (!q) return clients;
+    return clients.filter((c) => c.toLowerCase().includes(q));
+  }, [clients, favSearch]);
+
   const projectOptions = selectedClient !== ALL_VALUE ? projectsCache[selectedClient] ?? [] : [];
 
   const total = summary?.totalHours ?? 0;
@@ -358,25 +509,50 @@ const WorkHoursDashboard = () => {
             <div className="grid flex-1 gap-3 md:grid-cols-2">
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5 text-xs">
-                  <Filter className="h-3.5 w-3.5" /> Client
+                  <Star className="h-3.5 w-3.5" /> Client (Favorites)
                 </Label>
-                <Select
-                  value={selectedClient}
-                  onValueChange={setSelectedClient}
-                  disabled={loadingClients}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All clients" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL_VALUE}>All Clients</SelectItem>
-                    {clients.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+                <div className="whd-fav-strip">
+                  <button
+                    type="button"
+                    className={`whd-fav-chip whd-fav-chip--all ${
+                      selectedClient === ALL_VALUE ? "whd-fav-chip--active" : ""
+                    }`}
+                    onClick={() => setSelectedClient(ALL_VALUE)}
+                  >
+                    All Clients
+                  </button>
+
+                  {loadingFavorites ? (
+                    <>
+                      <span className="whd-fav-chip whd-fav-chip--skeleton" />
+                      <span className="whd-fav-chip whd-fav-chip--skeleton" />
+                    </>
+                  ) : favoriteClients.length === 0 ? (
+                    <span className="whd-fav-empty-hint">No favorites pinned yet</span>
+                  ) : (
+                    favoriteClients.map((c) => (
+                      <FavoriteChip
+                        key={c}
+                        client={c}
+                        active={selectedClient === c}
+                        busy={togglingClient === c}
+                        onSelect={() => setSelectedClient(c)}
+                        onRemove={() => toggleFavorite(c)}
+                      />
+                    ))
+                  )}
+
+                  <button
+                    type="button"
+                    className="whd-fav-manage-btn"
+                    onClick={() => setManageOpen(true)}
+                    title="Manage favorite clients"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Manage
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-1.5">
@@ -517,6 +693,86 @@ const WorkHoursDashboard = () => {
           </>
         )}
       </div>
+
+      {/* ═══════════ MANAGE FAVORITE CLIENTS POPUP ═══════════ */}
+      {manageOpen && (
+        <div
+          className="whd-fav-overlay"
+          onClick={() => setManageOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="whd-fav-modal whd-mono"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Manage favorite clients"
+          >
+            <span className="whd-corner tl" />
+            <span className="whd-corner tr" />
+            <span className="whd-corner bl" />
+            <span className="whd-corner br" />
+
+            <button
+              type="button"
+              className="whd-fav-modal-close"
+              onClick={() => setManageOpen(false)}
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <h3 className="whd-fav-modal-title">Favorite Clients</h3>
+            <p className="whd-fav-modal-subtitle">
+              Star the clients you want pinned to this dashboard's filter bar.
+            </p>
+
+            <div className="whd-fav-search">
+              <Search className="h-3.5 w-3.5" />
+              <input
+                value={favSearch}
+                onChange={(e) => setFavSearch(e.target.value)}
+                placeholder="Search clients…"
+                autoFocus
+              />
+            </div>
+
+            {favError && <div className="whd-fav-error">⚠ {favError}</div>}
+
+            <div className="whd-fav-list">
+              {loadingClients ? (
+                <div className="whd-fav-loading">Loading clients…</div>
+              ) : filteredAllClients.length === 0 ? (
+                <div className="whd-fav-loading">No clients match “{favSearch}”.</div>
+              ) : (
+                filteredAllClients.map((c) => {
+                  const isFav = favoriteClients.includes(c);
+                  const busy = togglingClient === c;
+                  return (
+                    <button
+                      type="button"
+                      key={c}
+                      className={`whd-fav-row ${isFav ? "whd-fav-row--active" : ""}`}
+                      onClick={() => toggleFavorite(c)}
+                      disabled={busy}
+                    >
+                      <span className="whd-fav-row-name">{c}</span>
+                      {busy ? (
+                        <span className="whd-fav-spinner" />
+                      ) : (
+                        <Star
+                          className={`h-4 w-4 ${isFav ? "whd-fav-star--on" : "whd-fav-star--off"}`}
+                          fill={isFav ? "currentColor" : "none"}
+                        />
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

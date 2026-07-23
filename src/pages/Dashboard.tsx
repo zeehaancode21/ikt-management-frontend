@@ -642,9 +642,9 @@ function buildProjectWorkbook(project, changeOrders = []) {
     ["Year", project.year || ""],
     ["Project Manager", project.projectManager || ""],
     ["Approval Status", project.approvalStatus || ""],
-    ["FAB Status", project.fabStatus || ""],
-    ["IFC Date", project.ifcDate || ""],
-    ["IFA Date", project.ifaDate || ""],
+    ["IFA Date", project.ifaDate || ""],          // swapped
+    ["FAB Status", project.fabStatus || ""],      // swapped
+    ["IFC Date", project.ifcDate || ""],          // swapped
     ["Modeler", team.modeler === "—" ? "" : team.modeler],
     ["Editor", team.editor === "—" ? "" : team.editor],
     ["Checker", team.checker === "—" ? "" : team.checker],
@@ -719,7 +719,8 @@ function buildClientWorkbook(clientName, projects = [], changeOrdersByProject = 
   // ── Summary sheet: one row per project ──
   const summaryHeader = [
     "Project Name", "Job Number", "Year", "Project Manager",
-    "Approval Status", "FAB Status", "IFC Date", "IFA Date", "Modeler", "Editor", "Checker",
+    "Approval Status", "IFA Date", "FAB Status", "IFC Date",   // swapped order
+    "Modeler", "Editor", "Checker",
     "Change Orders", "Remarks",
   ];
   const summaryRows = projects.map((p) => {
@@ -731,9 +732,9 @@ function buildClientWorkbook(clientName, projects = [], changeOrdersByProject = 
       p.year || "",
       p.projectManager || "",
       p.approvalStatus || "",
-      p.fabStatus || "",
-      p.ifcDate || "",
-      p.ifaDate || "",
+      p.ifaDate || "",          // swapped
+      p.fabStatus || "",        // swapped
+      p.ifcDate || "",          // swapped
       team.modeler === "—" ? "" : team.modeler,
       team.editor === "—" ? "" : team.editor,
       team.checker === "—" ? "" : team.checker,
@@ -759,9 +760,9 @@ function buildClientWorkbook(clientName, projects = [], changeOrdersByProject = 
       ["Year", p.year || ""],
       ["Project Manager", p.projectManager || ""],
       ["Approval Status", p.approvalStatus || ""],
-      ["FAB Status", p.fabStatus || ""],
-      ["IFC Date", p.ifcDate || ""],
-      ["IFA Date", p.ifaDate || ""],
+      ["IFA Date", p.ifaDate || ""],          // swapped
+      ["FAB Status", p.fabStatus || ""],      // swapped
+      ["IFC Date", p.ifcDate || ""],          // swapped
       ["Modeler", team.modeler === "—" ? "" : team.modeler],
       ["Editor", team.editor === "—" ? "" : team.editor],
       ["Checker", team.checker === "—" ? "" : team.checker],
@@ -1723,6 +1724,7 @@ export default function Dashboard() {
                           <tbody>
                             {(() => {
                               const team = parseTeam(viewData.project.team);
+                              // Swapped order: IFA Date, FAB Status, IFC Date
                               const rows = [
                                 ["Client", viewData.project.client || "—"],
                                 ["Project Name", viewData.project.projectName || "—"],
@@ -1730,9 +1732,9 @@ export default function Dashboard() {
                                 ["Year", viewData.project.year || "—"],
                                 ["Project Manager", viewData.project.projectManager || "—"],
                                 ["Approval Status", viewData.project.approvalStatus || "—"],
-                                ["FAB Status", viewData.project.fabStatus || "—"],
-                                ["IFC Date", viewData.project.ifcDate || "—"],
-                                ["IFA Date", viewData.project.ifaDate || "—"],
+                                ["IFA Date", viewData.project.ifaDate || "—"],          // swapped
+                                ["FAB Status", viewData.project.fabStatus || "—"],      // swapped
+                                ["IFC Date", viewData.project.ifcDate || "—"],          // swapped
                                 ["Modeler", team.modeler],
                                 ["Editor", team.editor],
                                 ["Checker", team.checker],
@@ -1854,9 +1856,9 @@ export default function Dashboard() {
                                     ["Year", project.year || "—"],
                                     ["Project Manager", project.projectManager || "—"],
                                     ["Approval Status", project.approvalStatus || "—"],
-                                    ["FAB Status", project.fabStatus || "—"],
-                                    ["IFC Date", project.ifcDate || "—"],
-                                    ["IFA Date", project.ifaDate || "—"],
+                                    ["IFA Date", project.ifaDate || "—"],          // swapped
+                                    ["FAB Status", project.fabStatus || "—"],      // swapped
+                                    ["IFC Date", project.ifcDate || "—"],          // swapped
                                     ["Modeler", team.modeler],
                                     ["Editor", team.editor],
                                     ["Checker", team.checker],
@@ -1987,8 +1989,9 @@ function ProjectDetailsView({ project }) {
         </div>
       </div>
 
+      {/* ── Status section ── now shows Approval Status + IFA Date ── */}
       <div className="detail-section">
-        <p className="detail-section-heading">Status</p>
+        <p className="detail-section-heading">APPROVAL</p>
         <div className="detail-grid detail-grid-status">
           <div className="detail-card">
             <p className="detail-label">Approval Status</p>
@@ -2002,29 +2005,23 @@ function ProjectDetailsView({ project }) {
             </p>
           </div>
           <div className="detail-card">
-            <p className="detail-label">FAB Status</p>
-            <p className="detail-value">
-              {project.fabStatus ? (
-                <span className="status-pill" style={{ color: "var(--copper)" }}>
-                  <span className="status-dot" style={{ background: "var(--copper)" }} />
-                  {project.fabStatus}
-                </span>
-              ) : "—"}
-            </p>
+            <p className="detail-label">IFA Date</p>               {/* changed from FAB Status */}
+            <p className="detail-value">{project.ifaDate || "—"}</p> {/* changed */}
           </div>
         </div>
       </div>
 
+      {/* ── Key Dates section ── now shows FAB Status + IFC Date ── */}
       <div className="detail-section">
-        <p className="detail-section-heading">Key Dates</p>
+        <p className="detail-section-heading">FAB</p>
         <div className="detail-grid detail-grid-status">
           <div className="detail-card">
-            <p className="detail-label">IFC Date</p>
-            <p className="detail-value">{project.ifcDate || "—"}</p>
+            <p className="detail-label">FAB Status</p>              {/* changed from IFC Date */}
+            <p className="detail-value">{project.fabStatus || "—"}</p> {/* changed */}
           </div>
           <div className="detail-card">
-            <p className="detail-label">IFA Date</p>
-            <p className="detail-value">{project.ifaDate || "—"}</p>
+            <p className="detail-label">IFC Date</p>                {/* changed from IFA Date */}
+            <p className="detail-value">{project.ifcDate || "—"}</p> {/* changed */}
           </div>
         </div>
       </div>
@@ -2076,17 +2073,17 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
       </div>
       <div className="form-row three">
         <div className="form-group"><label className="form-label">Approval Status</label><input className="form-input" placeholder="e.g. 100%" value={f("approvalStatus")} onChange={e => s("approvalStatus")(e.target.value)} /></div>
-        <div className="form-group"><label className="form-label">FAB Status</label><input className="form-input" placeholder="e.g. 90%" value={f("fabStatus")} onChange={e => s("fabStatus")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label">IFA Date</label>               {/* changed from FAB Status */} <input className="form-input" placeholder="e.g. 100%" value={f("ifaDate")} onChange={e => s("ifaDate")(e.target.value)} /> {/* changed */}</div>
         <div className="form-group"></div>
       </div>
       <div className="form-row">
         <div className="form-group">
-          <label className="form-label">IFC Date</label>
-          <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} />
+          <label className="form-label">FAB Status</label>               {/* changed from IFC Date */}
+          <IfcIfaDateInput value={f("fabStatus")} onChange={s("fabStatus")} /> {/* changed */}
         </div>
         <div className="form-group">
-          <label className="form-label">IFA Date</label>
-          <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} />
+          <label className="form-label">IFC Date</label>                 {/* changed from IFA Date */}
+          <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} /> {/* changed */}
         </div>
       </div>
       <div className="form-row">
@@ -2263,19 +2260,19 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
             <input className="form-input" placeholder="e.g. 100%" value={f("approvalStatus")} onChange={e => s("approvalStatus")(e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">FAB Status</label>
-            <input className="form-input" placeholder="e.g. 90%" value={f("fabStatus")} onChange={e => s("fabStatus")(e.target.value)} />
+            <label className="form-label">IFA Date</label>              {/* changed from FAB Status */}
+            <input className="form-input" placeholder="e.g. 100%" value={f("ifaDate")} onChange={e => s("ifaDate")(e.target.value)} /> {/* changed */}
           </div>
           <div className="form-group"></div>
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">IFC Date</label>
-            <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} />
+            <label className="form-label">FAB Status</label>             {/* changed from IFC Date */}
+            <IfcIfaDateInput value={f("fabStatus")} onChange={s("fabStatus")} /> {/* changed */}
           </div>
           <div className="form-group">
-            <label className="form-label">IFA Date</label>
-            <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} />
+            <label className="form-label">IFC Date</label>               {/* changed from IFA Date */}
+            <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} /> {/* changed */}
           </div>
         </div>
         <div className="form-row">

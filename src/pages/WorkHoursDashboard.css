@@ -401,3 +401,438 @@
     text-align: center;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   FAVORITE CLIENTS — chips + manage popup
+   Same blueprint language as the rest of the page: faint grid texture,
+   corner registration marks on the popup, mono type for the persisted
+   "pinned" data, dashed drafting rules instead of plain solid borders.
+───────────────────────────────────────────────────────────────────────── */
+
+/* ── chip strip (sits where the old client <Select> used to live) ──── */
+
+.whd-fav-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 6px 8px;
+  border: 1px dashed hsl(var(--border));
+  border-radius: 0.6rem;
+  background: hsl(var(--muted) / 0.25);
+}
+
+.whd-fav-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  padding: 5px 11px 5px 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  background: hsl(var(--card));
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.12s ease, color 0.18s ease;
+}
+
+.whd-fav-chip:hover {
+  transform: translateY(-1px);
+  border-color: hsl(var(--whd-fav-accent, var(--primary)) / 0.6);
+  box-shadow: 0 4px 10px -6px hsl(var(--whd-fav-accent, var(--primary)) / 0.5);
+}
+
+.whd-fav-chip:active {
+  transform: translateY(0);
+}
+
+.whd-fav-chip-star {
+  color: hsl(var(--whd-fav-accent, var(--primary)));
+  flex-shrink: 0;
+}
+
+.whd-fav-chip-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.whd-fav-chip--active {
+  border-color: hsl(var(--whd-fav-accent, var(--primary)));
+  background: hsl(var(--whd-fav-accent, var(--primary)) / 0.1);
+  box-shadow: 0 0 0 2px hsl(var(--whd-fav-accent, var(--primary)) / 0.18);
+}
+
+.whd-fav-chip--all {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.whd-fav-chip--all.whd-fav-chip--active {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.08);
+  color: hsl(var(--primary));
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.16);
+}
+
+.whd-fav-chip--skeleton {
+  width: 84px;
+  height: 26px;
+  border-style: solid;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted) / 0.5) 37%,
+    hsl(var(--muted)) 63%
+  );
+  background-size: 400% 100%;
+  animation: whd-shimmer 1.6s ease infinite;
+  cursor: default;
+}
+
+.whd-fav-empty-hint {
+  font-size: 11.5px;
+  color: hsl(var(--muted-foreground));
+  padding: 5px 2px;
+}
+
+.whd-fav-chip-wrap {
+  position: relative;
+  display: inline-flex;
+  animation: whd-fav-chip-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes whd-fav-chip-in {
+  from { opacity: 0; transform: scale(0.9) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.whd-fav-chip-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.whd-fav-chip-wrap:hover .whd-fav-chip-remove,
+.whd-fav-chip-wrap:focus-within .whd-fav-chip-remove {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.whd-fav-chip-remove:hover {
+  background: hsl(var(--destructive) / 0.12);
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive) / 0.4);
+}
+
+.whd-fav-chip-remove:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.whd-fav-manage-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px dashed hsl(var(--border));
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+  margin-left: auto;
+}
+
+.whd-fav-manage-btn:hover {
+  border-color: hsl(var(--primary) / 0.5);
+  border-style: solid;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.06);
+}
+
+/* ── overlay + popup ─────────────────────────────────────────────────── */
+
+.whd-fav-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: hsl(var(--background) / 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: whd-fav-overlay-in 0.18s ease-out;
+}
+
+@keyframes whd-fav-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.whd-fav-modal {
+  position: relative;
+  width: min(420px, 100%);
+  max-height: min(78vh, 620px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 1rem;
+  box-shadow: 0 24px 60px -20px hsl(var(--foreground) / 0.35);
+  padding: 22px 22px 18px;
+  animation: whd-fav-modal-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes whd-fav-modal-in {
+  from { opacity: 0; transform: scale(0.94) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* faint blueprint grid texture, same as .whd-card */
+.whd-fav-modal::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(hsl(var(--foreground) / 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--foreground) / 0.03) 1px, transparent 1px);
+  background-size: 14px 14px;
+  pointer-events: none;
+}
+
+/* reuse the drafting corner marks, always-on (not hover-gated) inside the modal */
+.whd-fav-modal .whd-corner {
+  opacity: 0.6;
+  transform: translate(0, 0);
+  border-color: hsl(var(--primary));
+}
+
+.whd-fav-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  z-index: 2;
+}
+
+.whd-fav-modal-close:hover {
+  background: hsl(var(--destructive) / 0.12);
+  color: hsl(var(--destructive));
+  transform: rotate(90deg);
+}
+
+.whd-fav-modal-title {
+  position: relative;
+  z-index: 1;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: hsl(var(--foreground));
+  margin: 0 26px 2px 0;
+}
+
+.whd-fav-modal-subtitle {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  margin: 0 0 14px;
+  line-height: 1.4;
+}
+
+.whd-fav-search {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.6rem;
+  padding: 8px 12px;
+  background: hsl(var(--muted) / 0.3);
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 10px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.whd-fav-search:focus-within {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.12);
+}
+
+.whd-fav-search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: hsl(var(--foreground));
+}
+
+.whd-fav-error {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.1);
+  border: 1px solid hsl(var(--destructive) / 0.25);
+  border-radius: 0.5rem;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+}
+
+.whd-fav-list {
+  position: relative;
+  z-index: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 2px;
+}
+
+.whd-fav-list::-webkit-scrollbar {
+  width: 6px;
+}
+.whd-fav-list::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+}
+
+.whd-fav-loading {
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+  text-align: center;
+  padding: 24px 0;
+}
+
+.whd-fav-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  padding: 8px 10px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: hsl(var(--foreground));
+  transition: background 0.15s ease, border-color 0.15s ease;
+  text-align: left;
+}
+
+.whd-fav-row:hover:not(:disabled) {
+  background: hsl(var(--muted) / 0.5);
+}
+
+.whd-fav-row--active {
+  border-color: hsl(var(--primary) / 0.35);
+  background: hsl(var(--primary) / 0.06);
+}
+
+.whd-fav-row:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.whd-fav-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.whd-fav-star--on {
+  color: hsl(var(--primary));
+}
+
+.whd-fav-star--off {
+  color: hsl(var(--muted-foreground));
+}
+
+.whd-fav-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid hsl(var(--border));
+  border-top-color: hsl(var(--primary));
+  animation: whd-fav-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.whd-fav-spinner--sm {
+  width: 10px;
+  height: 10px;
+  border-width: 1.5px;
+}
+
+@keyframes whd-fav-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── responsive ─────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .whd-fav-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .whd-fav-modal {
+    width: 100%;
+    max-height: 85vh;
+    border-radius: 1rem 1rem 0 0;
+  }
+  .whd-fav-chip-label {
+    max-width: 100px;
+  }
+}
+
+/* ── motion-safety ─────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .whd-fav-chip-wrap,
+  .whd-fav-overlay,
+  .whd-fav-modal,
+  .whd-fav-chip--skeleton,
+  .whd-fav-spinner {
+    animation: none !important;
+    transition: none !important;
+  }
+}
