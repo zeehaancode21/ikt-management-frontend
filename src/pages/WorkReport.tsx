@@ -1820,14 +1820,6 @@ const EmployeeView = () => {
    OWNER VIEW - COMPACT ENHANCED UI WITH FULLY VISIBLE DATE PICKERS
 ========================================================= */
 const OwnerView = () => {
-  // NOTE: adjust this destructure if your AuthContext exposes the username
-  // differently (e.g. `user.username` instead of a top-level `username`).
-  // If none of these resolve, the delete button falls back to showing on
-  // every row and lets the backend's 403 own-records-only check protect it.
-  const auth = useAuth() as any;
-  const currentUsername: string | undefined =
-    auth?.username ?? auth?.user?.username ?? auth?.user?.name;
-
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2347,7 +2339,6 @@ const OwnerView = () => {
                   <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Type</TableHead>
                   <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Time</TableHead>
                   <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Description</TableHead>
-                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -2386,27 +2377,6 @@ const OwnerView = () => {
                       title={r.description}
                     >
                       {r.description || "—"}
-                    </TableCell>
-                    <TableCell className="py-1">
-                      {(!currentUsername || r.employeeName === currentUsername) &&
-                        isWithinDeleteWindow(r.createdAt) && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-slate-300 dark:text-slate-600 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all duration-150"
-                            disabled={deletingId === r.id}
-                            onClick={() => handleDelete(r)}
-                            aria-label="Delete record"
-                            title="Delete this record"
-                          >
-                            {deletingId === r.id ? (
-                              <div className="h-3 w-3 border-2 border-rose-300 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <Trash2 className="h-3 w-3" />
-                            )}
-                          </Button>
-                        )}
                     </TableCell>
                   </TableRow>
                 ))}
