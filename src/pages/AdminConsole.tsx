@@ -171,6 +171,7 @@ function ProjectEditModal({ project, onClose, onSaved }: {
   project: Project; onClose: () => void; onSaved: () => void;
 }) {
   const [form, setForm] = useState({
+    projectName: project.projectName || "",
     shipmentDate: project.shipmentDate || "",
     editor: project.editor || "",
     checker: project.checker || "",
@@ -178,11 +179,24 @@ function ProjectEditModal({ project, onClose, onSaved }: {
   });
   const [saving, setSaving] = useState(false);
 
+  const nameChanged = form.projectName.trim() !== "" && form.projectName.trim() !== project.projectName;
+
   const handleSave = async () => {
+    const trimmedName = form.projectName.trim();
+    if (!trimmedName) {
+      toast({ title: "Project name can't be empty", variant: "destructive" });
+      return;
+    }
+    if (nameChanged) {
+      const confirmed = window.confirm(
+        `Rename "${project.projectName}" to "${trimmedName}"?\n\nThis will also update this name on every existing work report, change order, document and status record that references it.`
+      );
+      if (!confirmed) return;
+    }
     setSaving(true);
     try {
-      await api.put(`/projects/${project.id}`, { ...project, ...form });
-      toast({ title: "✅ Project updated" });
+      await api.put(`/projects/${project.id}`, { ...project, ...form, projectName: trimmedName });
+      toast({ title: nameChanged ? "✅ Project renamed everywhere" : "✅ Project updated" });
       onSaved();
       onClose();
     } catch (err) {
@@ -252,6 +266,15 @@ function ProjectEditModal({ project, onClose, onSaved }: {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.25 }}
         >
+          <div className="ac-field" style={{ gridColumn: "1 / -1" }}>
+            <label className="ac-label">Project Name</label>
+            <input className="ac-input" placeholder="e.g. Project Name.." value={form.projectName} onChange={(e) => setForm(f => ({ ...f, projectName: e.target.value }))} />
+            {nameChanged && (
+              <p className="ac-modal-note" style={{ color: "#d97706", marginTop: 6 }}>
+                ⚠ Renaming updates this project everywhere: work reports, change orders, documents, and status records.
+              </p>
+            )}
+          </div>
           <div className="ac-field">
             <label className="ac-label">Shipment Date</label>
             <input className="ac-input" type="date" value={form.shipmentDate} onChange={(e) => setForm(f => ({ ...f, shipmentDate: e.target.value }))} />
