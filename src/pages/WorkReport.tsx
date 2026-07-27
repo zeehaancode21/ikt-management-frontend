@@ -669,26 +669,16 @@ const animationStyles = `
     background-color: rgba(99, 102, 241, 0.08);
   }
 
+  /* DARK MODE - Make calendar icon white for ALL date inputs */
   .dark input[type="date"]::-webkit-calendar-picker-indicator {
     filter: invert(1) brightness(100) !important;
     opacity: 1 !important;
   }
 
-  .dark .date-step-input {
-    margin-left: auto !important;
-    margin-right: 0 !important;
-  }
-
-  .dark .date-filter-group {
-    margin-left: auto !important;
-  }
-
+  /* DARK MODE - Make date text and placeholder visible without changing background */
   .dark .date-step-input,
   .dark .owner-date-input {
-    background-color: #ffffff !important;
-    color: #0f172a !important;
-    border-color: #cbd5e1 !important;
-    color-scheme: light;
+    color: #e2e8f0 !important;
   }
 
   .dark .date-step-input::placeholder,
@@ -696,14 +686,14 @@ const animationStyles = `
     color: #94a3b8 !important;
   }
 
-  .dark .date-step-input::-webkit-calendar-picker-indicator,
-  .dark .owner-date-input::-webkit-calendar-picker-indicator {
-    filter: none !important;
-    opacity: 0.65 !important;
+  .dark .date-step-input::-webkit-datetime-edit,
+  .dark .owner-date-input::-webkit-datetime-edit {
+    color: #e2e8f0 !important;
   }
-  .dark .date-step-input:hover::-webkit-calendar-picker-indicator,
-  .dark .owner-date-input:hover::-webkit-calendar-picker-indicator {
-    opacity: 1 !important;
+
+  .dark .date-step-input::-webkit-datetime-edit-fields-wrapper,
+  .dark .owner-date-input::-webkit-datetime-edit-fields-wrapper {
+    color: #e2e8f0 !important;
   }
 
   .gradient-text {
