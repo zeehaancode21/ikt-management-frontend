@@ -169,6 +169,110 @@ const toDateKey = (d: string) => {
   }
 };
 
+// True for Saturday/Sunday. Used to visually flag weekend rows in report tables.
+const isWeekend = (d: string) => {
+  if (!d) return false;
+  try {
+    const day = new Date(d).getDay(); // 0 = Sunday, 6 = Saturday
+    return day === 0 || day === 6;
+  } catch {
+    return false;
+  }
+};
+
+// "Saturday" / "Sunday" — used for the small weekend label in tables.
+const weekendLabel = (d: string) => {
+  if (!d) return "";
+  try {
+    return format(new Date(d), "EEEE");
+  } catch {
+    return "";
+  }
+};
+
+/**
+ * Every calendar date-key (yyyy-MM-dd) from startKey to endKey, inclusive.
+ * Used to walk day-by-day through a reporting period so weekend days with
+ * zero submitted records can still get a divider line instead of just
+ * silently disappearing from the list.
+ */
+const getDatesInRange = (startKey: string, endKey: string): string[] => {
+  const dates: string[] = [];
+  const current = new Date(`${startKey}T00:00:00`);
+  const end = new Date(`${endKey}T00:00:00`);
+  if (Number.isNaN(current.getTime()) || Number.isNaN(end.getTime())) return dates;
+  while (current <= end) {
+    dates.push(format(current, "yyyy-MM-dd"));
+    current.setDate(current.getDate() + 1);
+  }
+  return dates;
+};
+
+/**
+ * Builds a latest-first (descending) ordering of calendar dates between
+ * startKey and endKey, treating Saturday+Sunday as ONE weekend unit rather
+ * than two separate days:
+ *   - Weekdays with no data are dropped (same as before).
+ *   - A weekend pair with NO data at all collapses into a single
+ *     "weekend-empty" segment (one line, not two).
+ *   - A weekend pair that DOES have data keeps its individual day(s) as
+ *     normal 'date' segments — Saturday and Sunday just sit next to each
+ *     other with nothing splitting them apart.
+ *   - Exactly one divider is inserted at the boundary where the weekend
+ *     ends and the (older) Friday begins.
+ */
+type DateSegment =
+  | { type: "date"; dateKey: string }
+  | { type: "weekend-empty"; dateKeys: string[] }
+  | { type: "divider" };
+
+const buildDescendingDateSegments = (
+  startKey: string,
+  endKey: string,
+  hasData: (dateKey: string) => boolean
+): DateSegment[] => {
+  const descending = getDatesInRange(startKey, endKey).reverse();
+  type RawSegment = { type: "date"; dateKey: string } | { type: "weekend-empty"; dateKeys: string[] };
+  const raw: RawSegment[] = [];
+
+  let i = 0;
+  while (i < descending.length) {
+    const dk = descending[i];
+    if (isWeekend(dk)) {
+      const pair = [dk];
+      if (i + 1 < descending.length && isWeekend(descending[i + 1])) {
+        pair.push(descending[i + 1]);
+        i++;
+      }
+      const anyData = pair.some((d) => hasData(d));
+      if (anyData) {
+        pair.forEach((d) => {
+          if (hasData(d)) raw.push({ type: "date", dateKey: d });
+        });
+      } else {
+        raw.push({ type: "weekend-empty", dateKeys: pair });
+      }
+    } else if (hasData(dk)) {
+      raw.push({ type: "date", dateKey: dk });
+    }
+    i++;
+  }
+
+  const isWeekendSegment = (seg: RawSegment) =>
+    seg.type === "weekend-empty" || isWeekend(seg.dateKey);
+
+  const withDividers: DateSegment[] = [];
+  raw.forEach((seg, idx) => {
+    const prev = raw[idx - 1];
+    if (prev && isWeekendSegment(prev) && !isWeekendSegment(seg)) {
+      withDividers.push({ type: "divider" });
+    }
+    withDividers.push(seg);
+  });
+
+  return withDividers;
+};
+
 // A record can only be deleted within this many minutes of its creation.
 // Keep this in sync with whatever window the backend enforces.
 const DELETE_WINDOW_MINUTES = 10;
@@ -448,6 +552,101 @@ const animationStyles = `
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6366f1; }
 
+  /* ── Weekend Row Separation ── */
+  @keyframes weekendDotPulse {
+    0%, 100% { opacity: 0.55; transform: scale(1); }
+    50%      { opacity: 1;    transform: scale(1.15); }
+  }
+
+  [data-work-report-table] .weekend-row {
+    position: relative;
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(251, 146, 60, 0.05),
+      rgba(251, 146, 60, 0.05) 8px,
+      rgba(251, 146, 60, 0.09) 8px,
+      rgba(251, 146, 60, 0.09) 16px
+    ) !important;
+    box-shadow: inset 3px 0 0 0 rgba(251, 146, 60, 0.55);
+  }
+
+  .dark [data-work-report-table] .weekend-row {
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(251, 146, 60, 0.06),
+      rgba(251, 146, 60, 0.06) 8px,
+      rgba(251, 146, 60, 0.11) 8px,
+      rgba(251, 146, 60, 0.11) 16px
+    ) !important;
+    box-shadow: inset 3px 0 0 0 rgba(251, 146, 60, 0.6);
+  }
+
+  [data-work-report-table] .weekend-row:hover {
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(251, 146, 60, 0.08),
+      rgba(251, 146, 60, 0.08) 8px,
+      rgba(251, 146, 60, 0.13) 8px,
+      rgba(251, 146, 60, 0.13) 16px
+    ) !important;
+  }
+
+  .weekend-dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 9999px;
+    background: #fb923c;
+    animation: weekendDotPulse 1.8s ease-in-out infinite;
+  }
+
+  .weekend-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #c2410c;
+    background: rgba(251, 146, 60, 0.14);
+    border: 1px solid rgba(251, 146, 60, 0.3);
+    border-radius: 9999px;
+    padding: 1px 6px;
+    margin-left: 6px;
+  }
+
+  .dark .weekend-badge {
+    color: #fdba74;
+    background: rgba(251, 146, 60, 0.16);
+    border-color: rgba(251, 146, 60, 0.35);
+  }
+
+  /* ── Weekend Divider (no-data weekend gap line) ── */
+  [data-work-report-table] .weekend-divider-row td {
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+  }
+
+  .weekend-divider-row {
+    animation: floatUp 0.3s ease-out forwards;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .weekend-divider-line {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(251, 146, 60, 0.5), transparent);
+  }
+
+  .dark .weekend-divider-line {
+    background: linear-gradient(90deg, transparent, rgba(251, 146, 60, 0.4), transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .weekend-divider-row { animation: none !important; opacity: 1 !important; }
+  }
+
   /* ── Edit Mode Banner ── */
   @keyframes editBannerIn {
     from { opacity: 0; transform: translateY(-6px); }
@@ -562,7 +761,7 @@ const animationStyles = `
   @media (prefers-reduced-motion: reduce) {
     .animate-step-in, .animate-conflict-modal, .animate-backdrop, .animate-modal-enter,
     .animate-slide-right, .animate-fade-in-up, .animate-float-up, .animate-success-bounce,
-    .subtle-pulse, .table-row-animate, .edit-mode-banner {
+    .subtle-pulse, .table-row-animate, .edit-mode-banner, .weekend-dot {
       animation: none !important;
       opacity: 1 !important;
     }
@@ -911,6 +1110,20 @@ const EmployeeView = () => {
     return acc;
   }, {});
   const groupedDates = Object.keys(reportsByDate).sort((a, b) => a.localeCompare(b));
+
+  // Latest-first order. Saturday+Sunday are treated as one weekend unit —
+  // a weekend with zero entries collapses into a single divider line
+  // instead of two, and exactly one divider marks the boundary where the
+  // weekend ends and Friday begins. Weekdays with no data are still simply
+  // omitted, same as before.
+  const reportDateSegments: DateSegment[] =
+    groupedDates.length === 0
+      ? []
+      : buildDescendingDateSegments(
+          groupedDates[0],
+          groupedDates[groupedDates.length - 1],
+          (dk) => Boolean(reportsByDate[dk])
+        );
 
   const existingReportForDraft = draftDate
     ? reports.some((r) => toDateKey(r.date) === draftDate)
@@ -1718,19 +1931,62 @@ const EmployeeView = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {groupedDates.map((dk, index) => {
+                    {reportDateSegments.map((item, index) => {
+                      // Plain divider — marks the boundary between the
+                      // weekend block (above) and Friday's row (below).
+                      if (item.type === "divider") {
+                        return (
+                          <TableRow key={`divider-${index}`} className="weekend-divider-row">
+                            <TableCell colSpan={5} className="py-0">
+                              <div className="weekend-divider-line" />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
+
+                      // Weekend pair with zero submitted entries — one
+                      // combined divider line for both days, not two.
+                      if (item.type === "weekend-empty") {
+                        const [first, second] = item.dateKeys;
+                        const label = second
+                          ? `Weekend · ${fmt(second)} – ${fmt(first)} · no entries`
+                          : `Weekend · ${fmt(first)} · no entries`;
+                        return (
+                          <TableRow key={`weekend-empty-${first}`} className="weekend-divider-row">
+                            <TableCell colSpan={5} className="py-0">
+                              <div className="flex items-center gap-3 px-1">
+                                <div className="weekend-divider-line flex-1" />
+                                <span className="weekend-badge whitespace-nowrap">
+                                  <span className="weekend-dot" />
+                                  {label}
+                                </span>
+                                <div className="weekend-divider-line flex-1" />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
+
+                      const dk = item.dateKey;
                       const dayReports = reportsByDate[dk] || [];
                       const totalTime = dayReports.reduce((s, r) => s + (r.time || 0), 0);
                       const uniqueTypes = [...new Set(dayReports.map((r) => r.workType))];
                       const isCurrentlyEditing = isEditMode && date === dk;
+                      const weekend = isWeekend(dk);
                       return (
                         <TableRow
                           key={dk}
-                          className={`entry-row table-row-animate ${isCurrentlyEditing ? "bg-amber-50/60 dark:bg-amber-950/30" : ""}`}
+                          className={`entry-row table-row-animate ${weekend ? "weekend-row" : ""} ${isCurrentlyEditing ? "bg-amber-50/60 dark:bg-amber-950/30" : ""}`}
                           style={{ animationDelay: `${index * 0.04}s` }}
                         >
                           <TableCell className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                             {fmt(dk)}
+                            {weekend && (
+                              <span className="weekend-badge">
+                                <span className="weekend-dot" />
+                                {weekendLabel(dk)}
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700">
@@ -1963,6 +2219,37 @@ const OwnerView = () => {
     filterEmployee !== "all" ||
     filterClient !== "all" ||
     filterProject !== "all";
+
+  // Latest-first order. Saturday+Sunday are treated as one weekend unit —
+  // a weekend with zero records collapses into a single divider line
+  // instead of two, and exactly one divider marks the boundary where the
+  // weekend ends and Friday begins.
+  type OwnerRowItem =
+    | { type: "record"; record: Report }
+    | { type: "weekend-empty"; dateKeys: string[] }
+    | { type: "divider" };
+
+  const filteredByDate = filtered.reduce<Record<string, Report[]>>((acc, r) => {
+    const k = toDateKey(r.date);
+    if (!acc[k]) acc[k] = [];
+    acc[k].push(r);
+    return acc;
+  }, {});
+  const filteredDateKeys = Object.keys(filteredByDate).sort((a, b) => a.localeCompare(b));
+
+  const ownerRowItems: OwnerRowItem[] =
+    filteredDateKeys.length === 0
+      ? []
+      : buildDescendingDateSegments(
+          filteredDateKeys[0],
+          filteredDateKeys[filteredDateKeys.length - 1],
+          (dk) => Boolean(filteredByDate[dk])
+        ).flatMap((seg): OwnerRowItem[] => {
+          if (seg.type === "date") {
+            return filteredByDate[seg.dateKey].map((record) => ({ type: "record", record }));
+          }
+          return [seg];
+        });
 
   const clearFilters = () => {
     setDateFilterMode("single");
@@ -2342,15 +2629,59 @@ const OwnerView = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((r, index) => (
+                {ownerRowItems.map((item, index) => {
+                  // Plain divider — marks the boundary between the weekend
+                  // block (above) and Friday's records (below).
+                  if (item.type === "divider") {
+                    return (
+                      <TableRow key={`divider-${index}`} className="weekend-divider-row">
+                        <TableCell colSpan={7} className="py-0">
+                          <div className="weekend-divider-line" />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+
+                  // Weekend pair with zero matching records — one combined
+                  // divider line for both days, not two.
+                  if (item.type === "weekend-empty") {
+                    const [first, second] = item.dateKeys;
+                    const label = second
+                      ? `Weekend · ${fmt(second)} – ${fmt(first)} · no records`
+                      : `Weekend · ${fmt(first)} · no records`;
+                    return (
+                      <TableRow key={`weekend-empty-${first}`} className="weekend-divider-row">
+                        <TableCell colSpan={7} className="py-0">
+                          <div className="flex items-center gap-3 px-1">
+                            <div className="weekend-divider-line flex-1" />
+                            <span className="weekend-badge whitespace-nowrap">
+                              <span className="weekend-dot" />
+                              {label}
+                            </span>
+                            <div className="weekend-divider-line flex-1" />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+
+                  const r = item.record;
+                  const weekend = isWeekend(r.date);
+                  return (
                   <TableRow
                     key={r.id}
-                    className="entry-row table-row-animate"
+                    className={`entry-row table-row-animate ${weekend ? "weekend-row" : ""}`}
                     style={{ animationDelay: `${index * 0.02}s` }}
                   >
                     <TableCell className="text-[10px] whitespace-nowrap font-semibold text-slate-700 dark:text-slate-300 py-1">
                       {fmt(r.date)}
                       {!r.date && <span className="ml-1 text-[7px] text-amber-500">(auto)</span>}
+                      {weekend && (
+                        <span className="weekend-badge">
+                          <span className="weekend-dot" />
+                          {weekendLabel(r.date)}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-[10px] font-semibold py-1">
                       <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
@@ -2379,7 +2710,8 @@ const OwnerView = () => {
                       {r.description || "—"}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
