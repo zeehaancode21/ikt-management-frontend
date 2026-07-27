@@ -445,7 +445,6 @@ const animationStyles = `
     animation: slideDown 0.3s ease-out forwards;
   }
 
-  /* ── Enhanced Card Styles ── */
   .card-hover {
     transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
     position: relative;
@@ -480,7 +479,6 @@ const animationStyles = `
     border: 1px solid rgba(99, 102, 241, 0.1);
   }
 
-  /* ── Table Enhancements ── */
   [data-work-report-table] tr,
   [data-work-report-table] tbody tr,
   [data-work-report-table] thead tr {
@@ -521,7 +519,6 @@ const animationStyles = `
     letter-spacing: 0.05em;
   }
 
-  /* ── Progress Bar ── */
   .progress-bar-fill {
     animation: progressFill 0.7s cubic-bezier(0.4,0,0.2,1) both;
     transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
@@ -530,20 +527,17 @@ const animationStyles = `
     animation: progressFill 0.7s cubic-bezier(0.4,0,0.2,1) both, shimmer 2s ease-in-out infinite;
   }
 
-  /* ── Button Micro-interactions ── */
   .btn-hover-scale {
     transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
   }
   .btn-hover-scale:hover  { transform: scale(1.05); }
   .btn-hover-scale:active { transform: scale(0.95); }
 
-  /* ── Staggered Table Row Entrance ── */
   .table-row-animate {
     animation: floatUp 0.36s ease-out forwards;
     opacity: 0;
   }
 
-  /* ── Custom Scrollbar ── */
   .custom-scrollbar::-webkit-scrollbar       { width: 5px; }
   .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
   .custom-scrollbar::-webkit-scrollbar-thumb {
@@ -552,7 +546,6 @@ const animationStyles = `
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6366f1; }
 
-  /* ── Weekend Row Separation ── */
   @keyframes weekendDotPulse {
     0%, 100% { opacity: 0.55; transform: scale(1); }
     50%      { opacity: 1;    transform: scale(1.15); }
@@ -622,7 +615,6 @@ const animationStyles = `
     border-color: rgba(251, 146, 60, 0.35);
   }
 
-  /* ── Weekend Divider (no-data weekend gap line) ── */
   [data-work-report-table] .weekend-divider-row td {
     padding-top: 6px !important;
     padding-bottom: 6px !important;
@@ -647,7 +639,6 @@ const animationStyles = `
     .weekend-divider-row { animation: none !important; opacity: 1 !important; }
   }
 
-  /* ── Edit Mode Banner ── */
   @keyframes editBannerIn {
     from { opacity: 0; transform: translateY(-6px); }
     to   { opacity: 1; transform: translateY(0); }
@@ -656,10 +647,6 @@ const animationStyles = `
     animation: editBannerIn 0.22s ease-out forwards;
   }
 
-  /* ── Date Step Card ── */
-  /* Anchor the input as a positioning context so the calendar icon can be
-     pinned to a fixed spot in the right corner, instead of sitting flush
-     against the typed date text (which looked cramped). */
   .date-step-input {
     position: relative;
     padding-right: 44px !important;
@@ -682,65 +669,43 @@ const animationStyles = `
     background-color: rgba(99, 102, 241, 0.08);
   }
 
-  /* DARK MODE - Make calendar icon white for ALL date inputs */
   .dark input[type="date"]::-webkit-calendar-picker-indicator {
     filter: invert(1) brightness(100) !important;
     opacity: 1 !important;
   }
 
-  /* ══════════════════════════════════════════════════════════════
-   DARK MODE — CALENDAR REPOSITION + WHITE THEME
-   In Dark/Night Mode the report calendars (Step-1 date picker in
-   the Employee/User view and the range date pickers in the Lead
-   "Filters" bar) are:
-     1. Pinned to the far right of their row/column, and
-     2. Forced onto a white surface with a light native popup so
-        both the input and the calendar it opens stay fully
-        readable against the dark page background.
-   Scoped entirely under `.dark` so light mode is untouched and
-   the rest of the report layout is unaffected. ══════════════════ */
+  .dark .date-step-input {
+    margin-left: auto !important;
+    margin-right: 0 !important;
+  }
 
-/* 1) Push the calendar controls to the far right of their layout. */
-.dark .date-step-input {
-  margin-left: auto !important;
-  margin-right: 0 !important;
-}
+  .dark .date-filter-group {
+    margin-left: auto !important;
+  }
 
-.dark .date-filter-group {
-  margin-left: auto !important;
-}
+  .dark .date-step-input,
+  .dark .owner-date-input {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+    color-scheme: light;
+  }
 
-/* 2) Force a white "calendar" surface (input + native popup) so it
-      reads clearly on top of the dark theme. Author backgrounds are
-      overridden here on purpose — this is the one control in the
-      page that intentionally stays light in Dark Mode. */
-.dark .date-step-input,
-.dark .owner-date-input {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
-  border-color: #cbd5e1 !important;
-  color-scheme: light; /* keeps the native calendar pop-up light/white too */
-}
+  .dark .date-step-input::placeholder,
+  .dark .owner-date-input::placeholder {
+    color: #94a3b8 !important;
+  }
 
-.dark .date-step-input::placeholder,
-.dark .owner-date-input::placeholder {
-  color: #94a3b8 !important;
-}
+  .dark .date-step-input::-webkit-calendar-picker-indicator,
+  .dark .owner-date-input::-webkit-calendar-picker-indicator {
+    filter: none !important;
+    opacity: 0.65 !important;
+  }
+  .dark .date-step-input:hover::-webkit-calendar-picker-indicator,
+  .dark .owner-date-input:hover::-webkit-calendar-picker-indicator {
+    opacity: 1 !important;
+  }
 
-/* Because the control is white now (not dark), the calendar icon
-   must stay in its normal dark tone instead of being inverted to
-   white, or it would disappear against the white surface. */
-.dark .date-step-input::-webkit-calendar-picker-indicator,
-.dark .owner-date-input::-webkit-calendar-picker-indicator {
-  filter: none !important;
-  opacity: 0.65 !important;
-}
-.dark .date-step-input:hover::-webkit-calendar-picker-indicator,
-.dark .owner-date-input:hover::-webkit-calendar-picker-indicator {
-  opacity: 1 !important;
-}
-
-  /* ── Gradient Text ── */
   .gradient-text {
     background: linear-gradient(135deg, #6366f1, #8b5cf6, #a78bfa);
     -webkit-background-clip: text;
@@ -748,12 +713,10 @@ const animationStyles = `
     background-clip: text;
   }
 
-  /* ── Status Badges ── */
   .badge-glow {
     box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
   }
 
-  /* ── Filter Pills ── */
   .filter-pill {
     transition: all 0.2s ease;
   }
@@ -762,7 +725,6 @@ const animationStyles = `
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
   }
 
-  /* ── Glass Morphism ── */
   .glass-effect {
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(12px);
@@ -775,7 +737,6 @@ const animationStyles = `
     border-color: rgba(255, 255, 255, 0.05);
   }
 
-  /* ── Stats Card ── */
   .stats-card {
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
     border: 1px solid rgba(99, 102, 241, 0.1);
@@ -789,7 +750,6 @@ const animationStyles = `
     border-color: rgba(99, 102, 241, 0.2);
   }
 
-  /* ── Shimmer loading effect ── */
   .shimmer-loading {
     background: linear-gradient(90deg, 
       rgba(99, 102, 241, 0.02) 25%, 
