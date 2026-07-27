@@ -2347,6 +2347,8 @@
 //     </div>
 //   );
 // }
+
+//CORRCETED
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import * as XLSX from "xlsx";
@@ -3002,8 +3004,9 @@ const styles = `
 function getBadgeClass(status = "") {
   const s = status.toUpperCase();
   if (s === "APPROVED" || s === "COMPLETED") return "badge badge-approved";
-  if (s.includes("PENDING")) return "badge badge-pending";
+  if (s === "PENDING" || s.includes("PENDING")) return "badge badge-pending";
   if (s === "REJECTED" || s === "CANCELLED") return "badge badge-rejected";
+  if (s === "REAPPROVAL_PENDING") return "badge badge-review";
   if (s.includes("REVIEW")) return "badge badge-review";
   return "badge badge-default";
 }
@@ -3011,19 +3014,19 @@ function getBadgeClass(status = "") {
 function getStatusColor(status = "") {
   const s = status.toUpperCase();
   if (s === "APPROVED" || s === "COMPLETED") return "var(--green)";
-  if (s.includes("PENDING")) return "var(--amber)";
+  if (s === "PENDING" || s.includes("PENDING")) return "var(--amber)";
   if (s === "REJECTED" || s === "CANCELLED") return "var(--rose)";
+  if (s === "REAPPROVAL_PENDING") return "var(--teal)";
   if (s.includes("REVIEW")) return "var(--teal)";
   return "var(--text-muted)";
 }
 
-// Soft tinted background to match getStatusColor, reusing the same
-// "-dim" CSS variables already defined for each accent color.
 function getStatusBg(status = "") {
   const s = status.toUpperCase();
   if (s === "APPROVED" || s === "COMPLETED") return "var(--green-dim)";
-  if (s.includes("PENDING")) return "var(--amber-dim)";
+  if (s === "PENDING" || s.includes("PENDING")) return "var(--amber-dim)";
   if (s === "REJECTED" || s === "CANCELLED") return "var(--rose-dim)";
+  if (s === "REAPPROVAL_PENDING") return "var(--teal-dim)";
   if (s.includes("REVIEW")) return "var(--teal-dim)";
   return "var(--surface-2)";
 }
@@ -4737,19 +4740,37 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
         <div className="form-group"><label className="form-label">Project Manager</label><input className="form-input" value={f("projectManager")} onChange={e => s("projectManager")(e.target.value)} /></div>
       </div>
       <div className="form-row three">
-        <div className="form-group"><label className="form-label">Approval Status</label><input className="form-input" placeholder="e.g. 100%" value={f("approvalStatus")} onChange={e => s("approvalStatus")(e.target.value)} /></div>
-        <div className="form-group"><label className="form-label">IFA Date</label>               {/* changed from FAB Status */} <input className="form-input" placeholder="e.g. 100%" value={f("ifaDate")} onChange={e => s("ifaDate")(e.target.value)} /> {/* changed */}</div>
-        <div className="form-group"></div>
-      </div>
-      <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">FAB Status</label>               {/* changed from IFC Date */}
-          <IfcIfaDateInput value={f("fabStatus")} onChange={s("fabStatus")} /> {/* changed */}
-        </div>
-        <div className="form-group">
-          <label className="form-label">IFC Date</label>                 {/* changed from IFA Date */}
-          <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} /> {/* changed */}
-        </div>
+  <div className="form-group">
+    <label className="form-label">Approval Status</label>
+    <select className="form-select" value={f("approvalStatus")} onChange={e => s("approvalStatus")(e.target.value)}>
+      <option value="">Select Status...</option>
+      <option value="PENDING">PENDING</option>
+      <option value="APPROVED">APPROVED</option>
+      <option value="REJECTED">REJECTED</option>
+      <option value="REAPPROVAL_PENDING">REAPPROVAL_PENDING</option>
+    </select>
+  </div>
+  <div className="form-group">
+    <label className="form-label">IFA Date</label>
+    <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} />
+  </div>
+  <div className="form-group"></div>
+</div>
+<div className="form-row">
+  <div className="form-group">
+    <label className="form-label">FAB Status</label>
+    <select className="form-select" value={f("fabStatus")} onChange={e => s("fabStatus")(e.target.value)}>
+      <option value="">Select Status...</option>
+      <option value="PENDING">PENDING</option>
+      <option value="APPROVED">APPROVED</option>
+      <option value="REJECTED">REJECTED</option>
+      <option value="REAPPROVAL_PENDING">REAPPROVAL_PENDING</option>
+    </select>
+  </div>
+  <div className="form-group">
+    <label className="form-label">IFC Date</label>
+    <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} />
+  </div>
       </div>
       <div className="form-row">
         <div className="form-group"><label className="form-label">Team (Modeler/Editor/Checker)</label><input className="form-input" placeholder="e.g. Modeler/Editor/Checker" value={f("team")} onChange={e => s("team")(e.target.value)} /></div>
@@ -4920,25 +4941,39 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
           </div>
         </div>
         <div className="form-row three">
-          <div className="form-group">
-            <label className="form-label">Approval Status</label>
-            <input className="form-input" placeholder="e.g. 100%" value={f("approvalStatus")} onChange={e => s("approvalStatus")(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">IFA Date</label>              {/* changed from FAB Status */}
-            <input className="form-input" placeholder="e.g. 100%" value={f("ifaDate")} onChange={e => s("ifaDate")(e.target.value)} /> {/* changed */}
-          </div>
-          <div className="form-group"></div>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">FAB Status</label>             {/* changed from IFC Date */}
-            <IfcIfaDateInput value={f("fabStatus")} onChange={s("fabStatus")} /> {/* changed */}
-          </div>
-          <div className="form-group">
-            <label className="form-label">IFC Date</label>               {/* changed from IFA Date */}
-            <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} /> {/* changed */}
-          </div>
+  <div className="form-row three">
+  <div className="form-group">
+    <label className="form-label">Approval Status</label>
+    <select className="form-select" value={f("approvalStatus")} onChange={e => s("approvalStatus")(e.target.value)}>
+      <option value="">Select Status...</option>
+      <option value="PENDING">PENDING</option>
+      <option value="APPROVED">APPROVED</option>
+      <option value="REJECTED">REJECTED</option>
+      <option value="REAPPROVAL_PENDING">REAPPROVAL_PENDING</option>
+    </select>
+  </div>
+  <div className="form-group">
+    <label className="form-label">IFA Date</label>
+    <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} />
+  </div>
+  <div className="form-group"></div>
+</div>
+<div className="form-row">
+  <div className="form-group">
+    <label className="form-label">FAB Status</label>
+    <select className="form-select" value={f("fabStatus")} onChange={e => s("fabStatus")(e.target.value)}>
+      <option value="">Select Status...</option>
+      <option value="PENDING">PENDING</option>
+      <option value="APPROVED">APPROVED</option>
+      <option value="REJECTED">REJECTED</option>
+      <option value="REAPPROVAL_PENDING">REAPPROVAL_PENDING</option>
+    </select>
+  </div>
+  <div className="form-group">
+    <label className="form-label">IFC Date</label>
+    <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} />
+  </div>
+</div>
         </div>
         <div className="form-row">
           <div className="form-group">
