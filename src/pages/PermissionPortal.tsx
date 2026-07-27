@@ -55,10 +55,24 @@ interface Quota {
   maxHoursPerDay: number;
   maxHoursPerMonth: number;
   maxRequestsPerMonth: number;
+  // Hours requested this month (PENDING + APPROVED + REAPPROVAL_PENDING).
+  // Informational only — does NOT drive the Half-Day/Full-Day Permission
+  // classification, which is based on approvedHoursThisMonth instead.
   hoursUsedThisMonth: number;
   hoursRemainingThisMonth: number;
   requestsUsedThisMonth: number;
   requestsRemainingThisMonth: number;
+  // Cumulative APPROVED permission hours this month — the exact figure the
+  // 4h "Half-Day Permission" / 9h "Full-Day Permission" thresholds are
+  // measured against. Only approved requests count.
+  approvedHoursThisMonth: number;
+  // Approved hours logged past maxHoursPerMonth this month (0 if under the
+  // free allowance), and the leave (in days) that's been/will be
+  // auto-opened on the Leave portal for it — 0.5 once surplusHoursThisMonth
+  // > 0, 1.0 once approved monthly hours reach fullDayThresholdHours.
+  surplusHoursThisMonth: number;
+  surplusLeaveDays: number;
+  fullDayThresholdHours: number;
 }
 
 // One row of the owner's "All Employees" overview — every employee's
@@ -73,11 +87,15 @@ interface EmployeeQuotaSummary {
 const DEFAULT_QUOTA: Quota = {
   maxHoursPerDay: 2,
   maxHoursPerMonth: 4,
-  maxRequestsPerMonth: 4,
+  maxRequestsPerMonth: 12,
   hoursUsedThisMonth: 0,
   hoursRemainingThisMonth: 4,
   requestsUsedThisMonth: 0,
-  requestsRemainingThisMonth: 4,
+  requestsRemainingThisMonth: 12,
+  approvedHoursThisMonth: 0,
+  surplusHoursThisMonth: 0,
+  surplusLeaveDays: 0,
+  fullDayThresholdHours: 9,
 };
 
 const PERMISSION_TYPE_LABELS: Record<string, string> = {
@@ -157,32 +175,42 @@ const canRequestChange = (p: Permission) => {
 
 const QuotaSummary = ({ quota, label }: { quota: Quota; label?: string }) => {
   const monthPct = Math.min((quota.hoursUsedThisMonth / (quota.maxHoursPerMonth || 1)) * 100, 100);
-  const isTight = quota.hoursRemainingThisMonth <= 0 || quota.requestsRemainingThisMonth <= 0;
+  const hasSurplus = quota.surplusHoursThisMonth > 0;
 
   return (
     <div
-      className={`rounded-lg border px-4 py-3 ${isTight ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30" : "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30"}`}
+      className={`rounded-lg border px-4 py-3 ${hasSurplus ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30" : "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30"}`}
     >
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <p className={`text-sm font-bold ${isTight ? "text-amber-700 dark:text-amber-400" : "text-green-700 dark:text-green-400"}`}>
-            {isTight ? "⚠ Monthly permission quota nearly used up" : `✓ ${label || "Permission quota"} on track`}
+          <p className={`text-sm font-bold ${hasSurplus ? "text-amber-700 dark:text-amber-400" : "text-green-700 dark:text-green-400"}`}>
+            {hasSurplus ? "⚠ Free monthly permission hours used up" : `✓ ${label || "Permission quota"} on track`}
           </p>
-          <p className={`mt-0.5 text-xs ${isTight ? "text-amber-600 dark:text-amber-400/80" : "text-green-600 dark:text-green-400/80"}`}>
-            {formatHours(quota.hoursUsedThisMonth)} / {formatHours(quota.maxHoursPerMonth)} hrs used this month ·{" "}
+          <p className={`mt-0.5 text-xs ${hasSurplus ? "text-amber-600 dark:text-amber-400/80" : "text-green-600 dark:text-green-400/80"}`}>
+            {formatHours(quota.hoursUsedThisMonth)} / {formatHours(quota.maxHoursPerMonth)} free hrs used this month ·{" "}
             {quota.requestsUsedThisMonth} / {quota.maxRequestsPerMonth} requests used
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Max {formatHours(quota.maxHoursPerDay)}h/day · {formatHours(quota.maxHoursPerMonth)}h/month · {quota.maxRequestsPerMonth} requests/month
+            Max {formatHours(quota.maxHoursPerDay)}h/day · {formatHours(quota.maxHoursPerMonth)}h free/month · {quota.maxRequestsPerMonth} requests/month
           </p>
+          {hasSurplus && (
+            <p className="mt-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+              {quota.surplusLeaveDays >= 1 ? "Full-Day Permission" : "Half-Day Permission"}:{" "}
+              {formatHours(quota.approvedHoursThisMonth)}h of approved permission this month has been auto-recorded as{" "}
+              {quota.surplusLeaveDays >= 1 ? "1 day" : "half a day"} of leave (see Leave Portal)
+              {quota.surplusLeaveDays < 1
+                ? ` — it becomes Full-Day Permission at ${formatHours(quota.fullDayThresholdHours)}h/month of approved hours.`
+                : "."}
+            </p>
+          )}
         </div>
         <div className="flex flex-col items-end gap-1 w-full sm:w-auto">
-          <span className={`text-xs font-semibold ${isTight ? "text-amber-700 dark:text-amber-400" : "text-green-700 dark:text-green-400"}`}>
-            {formatHours(quota.hoursRemainingThisMonth)}h remaining
+          <span className={`text-xs font-semibold ${hasSurplus ? "text-amber-700 dark:text-amber-400" : "text-green-700 dark:text-green-400"}`}>
+            {quota.hoursRemainingThisMonth > 0 ? `${formatHours(quota.hoursRemainingThisMonth)}h free remaining` : "Free hours used up"}
           </span>
           <div className="h-2 w-full sm:w-28 rounded-full bg-white/60 dark:bg-black/30 overflow-hidden border border-white/40 dark:border-white/10">
             <div
-              className={`h-full rounded-full transition-all duration-700 ${isTight ? "bg-amber-500" : "bg-green-500"}`}
+              className={`h-full rounded-full transition-all duration-700 ${hasSurplus ? "bg-amber-500" : "bg-green-500"}`}
               style={{ width: `${monthPct}%` }}
             />
           </div>
@@ -215,6 +243,7 @@ const EmployeeSummaryTable = ({
             <th className="px-4 py-2.5">Hours Used</th>
             <th className="px-4 py-2.5">Hours Remaining</th>
             <th className="px-4 py-2.5">Requests Used</th>
+            <th className="px-4 py-2.5">Half/Full-Day Permission</th>
             <th className="px-4 py-2.5"></th>
           </tr>
         </thead>
@@ -254,6 +283,15 @@ const EmployeeSummaryTable = ({
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">
                   {quota.requestsUsedThisMonth} / {quota.maxRequestsPerMonth}
+                </td>
+                <td className="px-4 py-3">
+                  {quota.surplusLeaveDays > 0 ? (
+                    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
+                      {quota.surplusLeaveDays >= 1 ? "1 day" : "½ day"} ({formatHours(quota.surplusHoursThisMonth)}h)
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onView(employeeName)}>
@@ -469,9 +507,6 @@ const EmployeeView = () => {
     if (startTime >= endTime) return "End time must be after start time.";
     const hrs = previewHours(startTime, endTime);
     if (hrs === null || hrs <= 0) return "Please select a valid time window.";
-    if (hrs > quota.maxHoursPerDay) {
-      return `Permission is capped at ${quota.maxHoursPerDay} hours a day. Please select a shorter window or apply for leave instead.`;
-    }
     if (!reason.trim()) return "Please provide a reason for your permission request.";
     if (reason.trim().length < 10) return "Reason must be at least 10 characters.";
     return null;
@@ -915,6 +950,14 @@ const OwnerView = () => {
   const [empError, setEmpError] = useState<string | null>(null);
   const [empQuota, setEmpQuota] = useState<Quota>(DEFAULT_QUOTA);
 
+  // ── Month filter for the Employee History tab ──────────────────────────
+  // "yyyy-MM", defaults to the current month. Powers /permissions/employee-monthly
+  // so an owner can see how many requests were approved/rejected/pending for
+  // this employee in a specific month.
+  const [empMonth, setEmpMonth] = useState<string>(() => format(new Date(), "yyyy-MM"));
+  const [empMonthCounts, setEmpMonthCounts] = useState<{ approved: number; rejected: number; pending: number; approvedHours: number } | null>(null);
+  const [empMonthLoading, setEmpMonthLoading] = useState(false);
+
   // ── All-employees summary tab ─────────────────────────────────────────
   const [summaries, setSummaries] = useState<EmployeeQuotaSummary[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -1044,6 +1087,27 @@ const OwnerView = () => {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [selectedEmployee, loadEmpPermissions]);
+
+  // ── Month-filtered approved/rejected/pending counts for the selected employee ──
+  const loadEmpMonthCounts = useCallback(async (empName: string, month: string) => {
+    if (!empName || !month) return;
+    setEmpMonthLoading(true);
+    try {
+      const { data } = await api.get<{
+        counts: { approved: number; rejected: number; pending: number; approvedHours: number };
+      }>("/permissions/employee-monthly", { params: { employeeName: empName, month } });
+      setEmpMonthCounts(data.counts);
+    } catch {
+      setEmpMonthCounts(null);
+    } finally {
+      setEmpMonthLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedEmployee) return;
+    loadEmpMonthCounts(selectedEmployee, empMonth);
+  }, [selectedEmployee, empMonth, loadEmpMonthCounts]);
 
   const act = async (id: string | number, action: "APPROVED" | "REJECTED") => {
     setActingId(id);
@@ -1197,18 +1261,29 @@ const OwnerView = () => {
         {/* ══ EMPLOYEE HISTORY TAB ══ */}
         {ownerTab === "employee" && (
           <div className="space-y-5">
-            <div className="w-full max-w-xs space-y-2">
-              <label className="text-sm font-medium text-foreground">Select Employee</label>
-              <Select value={selectedEmployee} onValueChange={handleEmployeeSelect} disabled={namesLoading}>
-                <SelectTrigger>
-                  <SelectValue placeholder={namesLoading ? "Loading..." : "Choose an employee"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {employeeNames.map((n) => (
-                    <SelectItem key={n} value={n}>{n}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="w-full max-w-xs space-y-2">
+                <label className="text-sm font-medium text-foreground">Select Employee</label>
+                <Select value={selectedEmployee} onValueChange={handleEmployeeSelect} disabled={namesLoading}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={namesLoading ? "Loading..." : "Choose an employee"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employeeNames.map((n) => (
+                      <SelectItem key={n} value={n}>{n}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-full max-w-[180px] space-y-2">
+                <label className="text-sm font-medium text-foreground">Month</label>
+                <Input
+                  type="month"
+                  value={empMonth}
+                  onChange={(e) => setEmpMonth(e.target.value)}
+                  className="h-9"
+                />
+              </div>
             </div>
 
             {!selectedEmployee ? (
@@ -1228,23 +1303,55 @@ const OwnerView = () => {
             ) : (
               <div className="space-y-4">
                 <QuotaSummary quota={empQuota} label={`${selectedEmployee}'s permission quota`} />
-                {empPermissions.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
-                    <CalendarSearch className="h-8 w-8 opacity-30" />
-                    <p className="text-sm">No permission records found for {selectedEmployee}.</p>
+
+                {/* Allowed / Rejected / Pending counts for the selected month */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Approved</p>
+                    <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                      {empMonthLoading ? "…" : empMonthCounts?.approved ?? 0}
+                    </p>
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {[...empPermissions]
-                      .sort((a, b) => {
-                        try { return new Date(b.date).getTime() - new Date(a.date).getTime(); }
-                        catch { return 0; }
-                      })
-                      .map((p) => (
-                        <PermissionCard key={p.id} p={p} />
-                      ))}
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Rejected</p>
+                    <p className="text-lg font-bold text-red-600 dark:text-red-400">
+                      {empMonthLoading ? "…" : empMonthCounts?.rejected ?? 0}
+                    </p>
                   </div>
-                )}
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Pending</p>
+                    <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                      {empMonthLoading ? "…" : empMonthCounts?.pending ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Approved Hours</p>
+                    <p className="text-lg font-bold text-foreground">
+                      {empMonthLoading ? "…" : formatHours(empMonthCounts?.approvedHours ?? 0)}h
+                    </p>
+                  </div>
+                </div>
+
+                {(() => {
+                  const monthFiltered = empPermissions.filter((p) => p.date?.slice(0, 7) === empMonth);
+                  return monthFiltered.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
+                      <CalendarSearch className="h-8 w-8 opacity-30" />
+                      <p className="text-sm">No permission records found for {selectedEmployee} in {empMonth}.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {[...monthFiltered]
+                        .sort((a, b) => {
+                          try { return new Date(b.date).getTime() - new Date(a.date).getTime(); }
+                          catch { return 0; }
+                        })
+                        .map((p) => (
+                          <PermissionCard key={p.id} p={p} />
+                        ))}
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
