@@ -688,15 +688,57 @@ const animationStyles = `
     opacity: 1 !important;
   }
 
-  .dark .date-step-input::-webkit-calendar-picker-indicator {
-    filter: invert(1) brightness(100) !important;
-    opacity: 1 !important;
-  }
+  /* ══════════════════════════════════════════════════════════════
+   DARK MODE — CALENDAR REPOSITION + WHITE THEME
+   In Dark/Night Mode the report calendars (Step-1 date picker in
+   the Employee/User view and the range date pickers in the Lead
+   "Filters" bar) are:
+     1. Pinned to the far right of their row/column, and
+     2. Forced onto a white surface with a light native popup so
+        both the input and the calendar it opens stay fully
+        readable against the dark page background.
+   Scoped entirely under `.dark` so light mode is untouched and
+   the rest of the report layout is unaffected. ══════════════════ */
 
-  .dark .owner-date-input::-webkit-calendar-picker-indicator {
-    filter: invert(1) brightness(100) !important;
-    opacity: 1 !important;
-  }
+/* 1) Push the calendar controls to the far right of their layout. */
+.dark .date-step-input {
+  margin-left: auto !important;
+  margin-right: 0 !important;
+}
+
+.dark .date-filter-group {
+  margin-left: auto !important;
+}
+
+/* 2) Force a white "calendar" surface (input + native popup) so it
+      reads clearly on top of the dark theme. Author backgrounds are
+      overridden here on purpose — this is the one control in the
+      page that intentionally stays light in Dark Mode. */
+.dark .date-step-input,
+.dark .owner-date-input {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+  color-scheme: light; /* keeps the native calendar pop-up light/white too */
+}
+
+.dark .date-step-input::placeholder,
+.dark .owner-date-input::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Because the control is white now (not dark), the calendar icon
+   must stay in its normal dark tone instead of being inverted to
+   white, or it would disappear against the white surface. */
+.dark .date-step-input::-webkit-calendar-picker-indicator,
+.dark .owner-date-input::-webkit-calendar-picker-indicator {
+  filter: none !important;
+  opacity: 0.65 !important;
+}
+.dark .date-step-input:hover::-webkit-calendar-picker-indicator,
+.dark .owner-date-input:hover::-webkit-calendar-picker-indicator {
+  opacity: 1 !important;
+}
 
   /* ── Gradient Text ── */
   .gradient-text {
@@ -2385,8 +2427,8 @@ const OwnerView = () => {
               </div>
 
               {/* Date Filter - With Fully Visible Date Pickers */}
-              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 rounded-md px-2 py-1 border border-slate-200 dark:border-slate-700">
-                <span className="text-[8px] font-semibold text-slate-400 dark:text-slate-500">Date:</span>
+              <div className="date-filter-group flex items-center gap-1.5 bg-white dark:bg-slate-900 rounded-md px-2 py-1 border border-slate-200 dark:border-slate-700">
+  <span className="text-[8px] font-semibold text-slate-400 dark:text-slate-500">Date:</span>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
