@@ -19,6 +19,10 @@ export interface ProfileResponse extends ProfileForm {
   // dateOfJoining: 24 once the employee has completed 3 years of service,
   // 18 before that.
   leaveLimit: number;
+  // Custom display title set by an admin via Employee Management (e.g.
+  // "Senior Checker"), distinct from the system role. Null/empty means
+  // there's no custom title set, and the system role should be shown instead.
+  roleName: string | null;
 }
 
 // Get auth token from localStorage

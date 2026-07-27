@@ -100,8 +100,8 @@ export default function Login() {
     setLoading(true);
     try {
       const response = await api.post("/auth/login", { username, password });
-      const { token, role, name } = response.data;
-      login(token, role as Role, name ?? username);
+      const { token, role, name, roleName } = response.data;
+      login(token, role as Role, name ?? username, roleName ?? null);
       // Route based on role
       if (role === "OWNER" || role === "LEAD") {
         navigate("/dashboard");

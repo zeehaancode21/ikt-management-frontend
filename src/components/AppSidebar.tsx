@@ -608,9 +608,19 @@ type LogoParticle = {
 };
 
 export const AppSidebar = () => {
-  const { name, role, logout } = useAuth();
+  const { name, role, displayRole, refreshRoleName, logout } = useAuth();
   const navigate = useNavigate();
   const [showCP, setShowCP] = useState(false);
+
+  // Pick up the latest custom Role Name (e.g. if an admin changed it after
+  // this session's login) whenever the sidebar mounts — i.e. on login and
+  // on every full page/profile refresh — without requiring the user to log
+  // in again. Falls back silently to whatever's already in context/storage
+  // if the request fails.
+  useEffect(() => {
+    refreshRoleName();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Logo click "magic" effect ────────────────────────────────────────
   const [logoBurstKey, setLogoBurstKey] = useState(0);
@@ -847,7 +857,7 @@ export const AppSidebar = () => {
             )}
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-white">{formatDisplayName(name || "User")}</div>
-              <div className="text-xs uppercase tracking-wide text-sidebar-primary">{role}</div>
+              <div className="text-xs uppercase tracking-wide text-sidebar-primary">{displayRole}</div>
             </div>
             <User className="h-4 w-4 text-sidebar-primary shrink-0" />
           </div>

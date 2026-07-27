@@ -62,6 +62,7 @@ api.interceptors.response.use(
       localStorage.removeItem("token");
       localStorage.removeItem("role");
       localStorage.removeItem("name");
+      localStorage.removeItem("roleName");
 
       if (
         !window.location.pathname.includes("/login") &&

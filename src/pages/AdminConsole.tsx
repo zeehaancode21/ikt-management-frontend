@@ -22,6 +22,9 @@ interface Employee {
   username: string;
   email: string;
   role: string;
+  // Custom display title set by an admin (e.g. "Senior Checker"), distinct
+  // from the system `role` above. Null/undefined means none is set.
+  roleName?: string | null;
 }
 
 interface ProjectStatus {
@@ -782,6 +785,132 @@ function ProjectsTab() {
   );
 }
 
+// ─── Employee Edit Modal ───────────────────────────────────────────────────────
+// Lets an OWNER change an employee's system Role (User/Lead) and/or their
+// custom Role Name (display title, e.g. "Senior Checker"). Only rendered
+// for employees whose current system role is USER or LEAD — see the guard
+// at the call site — so this can never accidentally downgrade an
+// OWNER/MANAGER account via the two-option dropdown below.
+function EmployeeEditModal({ employee, onClose, onSaved }: {
+  employee: Employee; onClose: () => void; onSaved: () => void;
+}) {
+  const [role, setRole] = useState(employee.role?.toUpperCase() === "LEAD" ? "LEAD" : "USER");
+  const [roleName, setRoleName] = useState(employee.roleName || "");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (roleName.length > 100) {
+      toast({ title: "Role name is too long", description: "Please keep it under 100 characters.", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.put(`/employees/${employee.id}`, { role, roleName });
+      toast({ title: "✅ Employee updated" });
+      onSaved();
+      onClose();
+    } catch (err) {
+      toast({ title: "Failed to update employee", description: getErrorMessage(err), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <motion.div
+      className="ac-overlay"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <motion.div
+        className="ac-modal"
+        initial={{ scale: 0.9, opacity: 0, y: 30 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 30 }}
+        transition={{ type: "spring", damping: 25, stiffness: 350 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="ac-modal-header">
+          <div>
+            <motion.h3
+              className="ac-card-title"
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.1 }}
+            >
+              Edit Employee Role
+            </motion.h3>
+            <motion.p
+              className="ac-card-sub"
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.15 }}
+            >
+              {employee.username} · {employee.email}
+            </motion.p>
+          </div>
+          <motion.button
+            className="ac-close-btn"
+            onClick={onClose}
+            whileHover={{ rotate: 90, scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </motion.button>
+        </div>
+
+        <motion.div
+          className="ac-modal-grid"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+        >
+          <div className="ac-field">
+            <label className="ac-label">Role</label>
+            <select className="ac-input" value={role} onChange={(e) => setRole(e.target.value)}>
+              <option value="USER">Employee</option>
+              <option value="LEAD">Lead</option>
+            </select>
+          </div>
+          <div className="ac-field" style={{ gridColumn: "1 / -1" }}>
+            <label className="ac-label">Role Name</label>
+            <input
+              className="ac-input"
+              placeholder="e.g. Senior Checker"
+              value={roleName}
+              onChange={(e) => setRoleName(e.target.value)}
+              maxLength={100}
+            />
+            {/* <p className="ac-modal-note" style={{ marginTop: 6 }}>
+              Shown instead of the system role in the sidebar. Leave blank to show "{role === "LEAD" ? "Lead" : "Employee"}" there instead.
+            </p> */}
+          </div>
+        </motion.div>
+
+        <motion.div
+          className="ac-modal-actions"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+        >
+          <button className="ac-btn ac-btn-ghost" onClick={onClose}>Cancel</button>
+          <motion.button
+            className="ac-btn ac-btn-primary"
+            onClick={handleSave}
+            disabled={saving}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            {saving ? <><span className="ac-spinner" /> Saving…</> : "Save Changes"}
+          </motion.button>
+        </motion.div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ─── Employees Tab ────────────────────────────────────────────────────────────
 function EmployeesTab() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -789,11 +918,13 @@ function EmployeesTab() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [newRole, setNewRole] = useState("USER");
+  const [newRoleName, setNewRoleName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [duplicateError, setDuplicateError] = useState<{ open: boolean; message: string }>({ open: false, message: "" });
+  const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -813,11 +944,12 @@ function EmployeesTab() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await api.post("/auth/register", { username, password, role: newRole });
+      await api.post("/auth/register", { username, password, role: newRole, roleName: newRoleName.trim() || undefined });
       toast({ title: "✅ Employee added" });
       setUsername("");
       setPassword("");
       setNewRole("USER");
+      setNewRoleName("");
       load();
     } catch (err: any) {
       const errorMsg = getErrorMessage(err);
@@ -857,7 +989,8 @@ function EmployeesTab() {
     (em) =>
       em.username?.toLowerCase().includes(search.toLowerCase()) ||
       em.email?.toLowerCase().includes(search.toLowerCase()) ||
-      em.role?.toLowerCase().includes(search.toLowerCase())
+      em.role?.toLowerCase().includes(search.toLowerCase()) ||
+      em.roleName?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -875,6 +1008,16 @@ function EmployeesTab() {
         message={duplicateError.message}
         onClose={() => setDuplicateError({ open: false, message: "" })}
       />
+
+      <AnimatePresence>
+        {editEmployee && (
+          <EmployeeEditModal
+            employee={editEmployee}
+            onClose={() => setEditEmployee(null)}
+            onSaved={load}
+          />
+        )}
+      </AnimatePresence>
 
       <motion.div
         className="ac-card"
@@ -914,6 +1057,16 @@ function EmployeesTab() {
               <option value="USER">Employee</option>
               <option value="LEAD">Lead</option>
             </select>
+          </div>
+          <div className="ac-field">
+            <label className="ac-label">Role Name</label>
+            <input
+              className="ac-input"
+              placeholder="e.g. Senior Checker (optional)"
+              value={newRoleName}
+              onChange={(e) => setNewRoleName(e.target.value)}
+              maxLength={100}
+            />
           </div>
           <motion.button
             type="submit"
@@ -999,6 +1152,11 @@ function EmployeesTab() {
                     <div className="ac-emp-info">
                       <span className="ac-emp-name">{em.username}</span>
                       <span className="ac-emp-email">{em.email}</span>
+                      {em.roleName && (
+                        <span style={{ fontSize: 11, color: "hsl(var(--muted-foreground))", marginTop: 2, display: "block" }}>
+                          {em.roleName}
+                        </span>
+                      )}
                     </div>
                     <motion.span
                       className="ac-emp-badge"
@@ -1007,6 +1165,19 @@ function EmployeesTab() {
                     >
                       {em.role}
                     </motion.span>
+                    {(em.role?.toUpperCase() === "USER" || em.role?.toUpperCase() === "LEAD") && (
+                      <motion.button
+                        className="ac-edit-btn"
+                        onClick={() => setEditEmployee(em)}
+                        title="Edit role"
+                        whileHover={{ scale: 1.1, backgroundColor: "#dbeafe" }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      </motion.button>
+                    )}
                     <motion.button
                       className="ac-delete-btn"
                       onClick={() => { if (!deleting && deleteId === null) setDeleteId(em.id); }}
