@@ -722,6 +722,17 @@ export default function Messages() {
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
   const [deletingGroup, setDeletingGroup] = useState(false);
 
+  // Read-only "View Members" modal — open to every member of the group,
+  // unlike the Edit Group modal above which stays restricted to the
+  // group's creator (see canManageGroup).
+  const [viewMembersGroup, setViewMembersGroup] = useState<Group | null>(null);
+
+  const openViewMembers = (g: Group, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setViewMembersGroup(g);
+  };
+
+
   // Single message / whole conversation deletion (DMs)
   const [deleteMessageTarget, setDeleteMessageTarget] = useState<Message | null>(null);
   const [deletingMessage, setDeletingMessage] = useState(false);
@@ -1423,6 +1434,7 @@ export default function Messages() {
   };
 
   useEscapeToClose(showGroupModal, () => setShowGroupModal(false), savingGroup);
+  useEscapeToClose(!!viewMembersGroup, () => setViewMembersGroup(null), false);
   useEscapeToClose(!!deleteGroupTarget, () => setDeleteGroupTarget(null), deletingGroup);
   useEscapeToClose(!!deleteMessageTarget, () => setDeleteMessageTarget(null), deletingMessage);
   useEscapeToClose(!!deleteConversationTarget, () => setDeleteConversationTarget(null), deletingConversation);
@@ -1611,6 +1623,11 @@ export default function Messages() {
         }
         .msg-chat-header-info h3 { font-size:15px; font-weight:700; color:hsl(var(--foreground)); margin:0 0 2px; }
         .msg-chat-header-info p { font-size:12px; color:hsl(var(--muted-foreground)); margin:0; }
+        .msg-header-members-link {
+          font-size:12px; color:hsl(var(--muted-foreground)); margin:0; background:none; border:none; padding:0;
+          cursor:pointer; text-align:left;
+        }
+        .msg-header-members-link:hover { color:hsl(var(--foreground)); text-decoration:underline; }
         .msg-online-dot { width:10px; height:10px; background:#10b981; border-radius:50%; position:absolute; bottom:1px; right:1px; border:2px solid hsl(var(--card)); }
         .msg-messages {
           flex:1; overflow-y:auto; overflow-x:hidden; padding:20px; display:flex; flex-direction:column; gap:2px;
@@ -1624,9 +1641,9 @@ export default function Messages() {
         .msg-bubble-group.broadcast-msg { align-items:flex-start; }
         .msg-sender-label { font-size:11.5px; font-weight:600; color:hsl(var(--muted-foreground)); margin-bottom:4px; padding:0 6px; }
         .msg-bubble {
-         max-width:min(68%, 560px); padding:10px 14px; border-radius:var(--msg-radius-lg); font-size:14px;
-         line-height:1.5; word-break:break-word; overflow-wrap:anywhere; white-space:pre-wrap;
-         }  
+          max-width:min(68%, 560px); padding:10px 14px; border-radius:var(--msg-radius-lg); font-size:14px;
+          line-height:1.5; word-break:break-word; overflow-wrap:anywhere; white-space:pre-wrap;
+        }
         .msg-bubble.mine { background:var(--msg-accent); color:#fff; border-bottom-right-radius:4px; }
         .msg-bubble.theirs { background:hsl(var(--muted)); color:hsl(var(--foreground)); border-bottom-left-radius:4px; }
         .msg-bubble.broadcast { background:linear-gradient(135deg,#fff7ed,#fef3c7); border:1px solid #fcd34d; color:#92400e; border-bottom-left-radius:4px; }
@@ -2080,6 +2097,7 @@ export default function Messages() {
                     <div className={`msg-contact-preview ${isGroupUnread ? "unread" : ""}`}>{memberCount} member{memberCount !== 1 ? "s" : ""}</div>
                   </div>
                   <div className="msg-group-actions">
+                    <button className="msg-icon-btn" title="View members" aria-label={`View members of ${formatDisplayName(g.name)}`} onClick={(e) => openViewMembers(g, e)}><Users size={13} aria-hidden="true" /></button>
                     {g.createdBy === name && (
                       <>
                         <button className="msg-icon-btn" title="Edit group" aria-label={`Edit ${formatDisplayName(g.name)}`} onClick={(e) => openEditGroup(g, e)}><Settings size={13} aria-hidden="true" /></button>
@@ -2249,7 +2267,14 @@ export default function Messages() {
                 </div>
                 <div className="msg-chat-header-info" style={{ flex: 1 }}>
                   <h3>{formatDisplayName(chatTarget.group.name)}</h3>
-                  <p>{chatTarget.group.members ? chatTarget.group.members.split(",").filter(Boolean).length : 0} members</p>
+                  <button
+                    type="button"
+                    className="msg-header-members-link"
+                    onClick={() => openViewMembers(chatTarget.group)}
+                    aria-label="View group members"
+                  >
+                    {chatTarget.group.members ? chatTarget.group.members.split(",").filter(Boolean).length : 0} members
+                  </button>
                 </div>
                 {canManageGroup && (
                   <button className="msg-icon-btn" title="Edit group" aria-label="Edit group" style={{ marginLeft: "auto" }}
@@ -2634,7 +2659,49 @@ export default function Messages() {
         </div>
       )}
 
-      {/* ── Delete Group Confirm Modal ──────────────────────────────────────── */}
+      {/* ── View Members Modal (read-only, open to every group member) ─────── */}
+      {viewMembersGroup && (
+        <div className="modal-overlay" onClick={() => setViewMembersGroup(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="view-members-title">
+            <div className="modal-title" id="view-members-title">
+              <span>{formatDisplayName(viewMembersGroup.name)} · Members</span>
+              <button className="msg-icon-btn" onClick={() => setViewMembersGroup(null)} aria-label="Close dialog"><X size={16} aria-hidden="true" /></button>
+            </div>
+
+            <label className="modal-label" style={{ marginBottom: 8 }} id="view-members-label">
+              Members{" "}
+              <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                ({viewMembersGroup.members ? viewMembersGroup.members.split(",").filter(Boolean).length : 0})
+              </span>
+            </label>
+            <div className="modal-members-list" role="group" aria-labelledby="view-members-label">
+              {(viewMembersGroup.members ? viewMembersGroup.members.split(",").map((m) => m.trim()).filter(Boolean) : []).map((username) => {
+                const u = users.find((usr) => usr.username === username);
+                return (
+                  <div key={username} className="modal-member-item">
+                    <UserAvatar username={username} size={28} />
+                    <span style={{ fontSize: 13, flex: 1 }}>
+                      {formatDisplayName(username)}
+                      {username === viewMembersGroup.createdBy && (
+                        <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, color: "hsl(var(--muted-foreground))" }}>(Creator)</span>
+                      )}
+                    </span>
+                    {u && (
+                      <span className="msg-role-tag" style={{ background: getRoleColor(u.role) + "18", color: getRoleColor(u.role), border: `1px solid ${getRoleColor(u.role)}30`, fontSize: 10 }}>{u.role}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="modal-actions">
+              <button className="modal-btn secondary" onClick={() => setViewMembersGroup(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
       {deleteGroupTarget && (
         <div className="modal-overlay" onClick={() => { if (!deletingGroup) setDeleteGroupTarget(null); }}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }} role="dialog" aria-modal="true" aria-labelledby="delete-group-title">
