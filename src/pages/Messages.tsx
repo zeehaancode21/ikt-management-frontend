@@ -2644,7 +2644,6 @@ export default function Messages() {
                   <input type="checkbox" readOnly checked={groupForm.members.includes(u.username)} aria-label={`Add ${formatDisplayName(u.username)} to group`} />
                   <UserAvatar username={u.username} size={28} />
                   <span style={{ fontSize: 13, flex: 1 }}>{formatDisplayName(u.username)}</span>
-                  <span className="msg-role-tag" style={{ background: getRoleColor(u.role) + "18", color: getRoleColor(u.role), border: `1px solid ${getRoleColor(u.role)}30`, fontSize: 10 }}>{u.role}</span>
                 </div>
               ))}
             </div>
@@ -2676,7 +2675,6 @@ export default function Messages() {
             </label>
             <div className="modal-members-list" role="group" aria-labelledby="view-members-label">
               {(viewMembersGroup.members ? viewMembersGroup.members.split(",").map((m) => m.trim()).filter(Boolean) : []).map((username) => {
-                const u = users.find((usr) => usr.username === username);
                 return (
                   <div key={username} className="modal-member-item">
                     <UserAvatar username={username} size={28} />
@@ -2686,9 +2684,6 @@ export default function Messages() {
                         <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, color: "hsl(var(--muted-foreground))" }}>(Creator)</span>
                       )}
                     </span>
-                    {u && (
-                      <span className="msg-role-tag" style={{ background: getRoleColor(u.role) + "18", color: getRoleColor(u.role), border: `1px solid ${getRoleColor(u.role)}30`, fontSize: 10 }}>{u.role}</span>
-                    )}
                   </div>
                 );
               })}
