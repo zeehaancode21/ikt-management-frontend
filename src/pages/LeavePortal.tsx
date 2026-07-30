@@ -134,7 +134,15 @@ const SurplusBadge = ({ leave }: { leave: Leave }) => {
 
 // A leave can only be changed ("reapproval") while it is APPROVED and its
 // start date hasn't arrived yet — mirrors the same check the backend enforces.
+// Note: this must never apply to the auto-generated "Half-Day Permission" /
+// "Full-Day Permission" leave entries (leave.surplusPermission === true).
+// Those are created automatically for the employee to view once approved
+// permission hours cross the monthly free allowance, aren't tracked on a
+// monthly basis, and don't support a change-request workflow — so they're
+// excluded here regardless of status or date. "Request Change" stays
+// available only for regular leave requests.
 const canRequestChange = (l: Leave) => {
+  if (l.surplusPermission) return false;
   if (l.status?.toUpperCase() !== "APPROVED") return false;
   if (!l.fromDate) return false;
   const from = new Date(l.fromDate);

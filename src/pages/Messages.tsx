@@ -1624,9 +1624,9 @@ export default function Messages() {
         .msg-bubble-group.broadcast-msg { align-items:flex-start; }
         .msg-sender-label { font-size:11.5px; font-weight:600; color:hsl(var(--muted-foreground)); margin-bottom:4px; padding:0 6px; }
         .msg-bubble {
-          max-width:min(68%, 560px); padding:10px 14px; border-radius:var(--msg-radius-lg); font-size:14px;
-          line-height:1.5; word-break:break-word; overflow-wrap:anywhere;
-        }
+         max-width:min(68%, 560px); padding:10px 14px; border-radius:var(--msg-radius-lg); font-size:14px;
+         line-height:1.5; word-break:break-word; overflow-wrap:anywhere; white-space:pre-wrap;
+         }  
         .msg-bubble.mine { background:var(--msg-accent); color:#fff; border-bottom-right-radius:4px; }
         .msg-bubble.theirs { background:hsl(var(--muted)); color:hsl(var(--foreground)); border-bottom-left-radius:4px; }
         .msg-bubble.broadcast { background:linear-gradient(135deg,#fff7ed,#fef3c7); border:1px solid #fcd34d; color:#92400e; border-bottom-left-radius:4px; }
