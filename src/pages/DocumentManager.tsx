@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   FolderPlus,
   Upload,
@@ -50,6 +50,32 @@ interface FolderItem {
 function isLeaf(f: FolderItem) { return (f.documents?.length ?? 0) > 0; }
 function isBranch(f: FolderItem) { return (f.subFolders?.length ?? 0) > 0; }
 
+// ─── Shared style fragments (kept as named constants so every surface that
+// needs "muted text" / "input field" / etc. stays visually consistent and
+// only needs updating in one place). ─────────────────────────────────────
+const TEXT_MUTED = 'text-gray-500 dark:text-slate-400';
+const TEXT_FAINT = 'text-gray-400 dark:text-slate-500';
+const TEXT_HEADING = 'text-gray-800 dark:text-slate-100';
+const ICON_BTN =
+  'inline-flex items-center justify-center p-2 rounded-lg text-gray-500 dark:text-slate-400 ' +
+  'hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 ' +
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-colors';
+const FIELD_INPUT =
+  'w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm ' +
+  'bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 ' +
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-400 dark:focus:border-blue-600 transition-colors';
+const BTN_PRIMARY =
+  'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 ' +
+  'hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ' +
+  'dark:focus-visible:ring-offset-slate-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+const BTN_SUCCESS =
+  'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-green-600 ' +
+  'hover:bg-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 ' +
+  'dark:focus-visible:ring-offset-slate-900 cursor-pointer transition-colors';
+const BTN_SECONDARY =
+  'px-4 py-2 text-sm font-medium text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg ' +
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-colors';
+
 // ─── Delete Confirmation Modal ────────────────────────────────────────────────
 
 interface DeleteConfirmModalProps {
@@ -65,20 +91,34 @@ interface DeleteConfirmModalProps {
 const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   isOpen, onConfirm, onCancel, title, description, itemName, type,
 }) => {
+  const confirmBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    confirmBtnRef.current?.focus();
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [isOpen, onCancel]);
+
   if (!isOpen) return null;
   return (
     <>
       <style>{`
-        @keyframes backdropFadeIn { from{opacity:0} to{opacity:1} }
-        @keyframes modalSlideIn  { from{opacity:0;transform:scale(0.92) translateY(16px)} to{opacity:1;transform:scale(1) translateY(0)} }
-        .delete-backdrop { animation: backdropFadeIn 0.2s ease forwards; }
-        .delete-modal    { animation: modalSlideIn 0.25s cubic-bezier(0.34,1.4,0.64,1) forwards; }
+        @keyframes docmgrBackdropFadeIn { from{opacity:0} to{opacity:1} }
+        @keyframes docmgrModalSlideIn  { from{opacity:0;transform:scale(0.92) translateY(16px)} to{opacity:1;transform:scale(1) translateY(0)} }
+        .delete-backdrop { animation: docmgrBackdropFadeIn 0.2s ease forwards; }
+        .delete-modal    { animation: docmgrModalSlideIn 0.25s cubic-bezier(0.34,1.4,0.64,1) forwards; }
         .delete-btn-confirm { position:relative;overflow:hidden;transition:background 0.2s,box-shadow 0.2s,transform 0.1s; }
         .delete-btn-confirm:hover { transform:translateY(-1px);box-shadow:0 6px 20px rgba(220,38,38,0.35); }
         .delete-btn-confirm:active { transform:translateY(0); }
+        .delete-btn-confirm:focus-visible { outline:2px solid #dc2626; outline-offset:2px; }
         .delete-btn-cancel { transition:background 0.15s,transform 0.1s; }
         .delete-btn-cancel:hover { transform:translateY(-1px); }
         .delete-btn-cancel:active { transform:translateY(0); }
+        .delete-btn-cancel:focus-visible { outline:2px solid #94a3b8; outline-offset:2px; }
 
         .delete-modal-panel { background:#ffffff; border:1px solid rgba(220,38,38,0.12); }
         .dark .delete-modal-panel { background:#0f172a; border:1px solid rgba(248,113,113,0.18); }
@@ -105,42 +145,51 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 
         .delete-btn-cancel { background:#f4f4f5; border:1px solid #e4e4e7; color:#4b5563; }
         .dark .delete-btn-cancel { background:rgba(51,65,85,0.6); border:1px solid rgba(71,85,105,0.8); color:#cbd5e1; }
+
+        @media (prefers-reduced-motion: reduce) {
+          .delete-backdrop, .delete-modal { animation-duration: 0.001ms !important; }
+        }
       `}</style>
       <div
         className="delete-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
         style={{ backgroundColor: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(6px)' }}
         onClick={onCancel}
+        role="presentation"
       >
         <div
           className="delete-modal delete-modal-panel rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
           onClick={e => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-modal-title"
+          aria-describedby="delete-modal-desc"
         >
-          <div style={{ height: 4, background: 'linear-gradient(90deg,#dc2626,#f87171,#fca5a5)' }} />
-          <div className="p-6">
+          <div style={{ height: 4, background: 'linear-gradient(90deg,#dc2626,#f87171,#fca5a5)' }} aria-hidden="true" />
+          <div className="p-5 sm:p-6">
             <div className="flex items-start gap-4 mb-5">
               <div className="delete-modal-icon flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-xl">
-                <AlertTriangle className="delete-modal-icon-glyph w-6 h-6" />
+                <AlertTriangle className="delete-modal-icon-glyph w-6 h-6" aria-hidden="true" />
               </div>
-              <div>
-                <h3 className="delete-modal-title text-lg font-bold leading-tight">{title}</h3>
-                <p className="delete-modal-desc text-sm mt-0.5">{description}</p>
+              <div className="min-w-0">
+                <h3 id="delete-modal-title" className="delete-modal-title text-lg font-bold leading-tight">{title}</h3>
+                <p id="delete-modal-desc" className="delete-modal-desc text-sm mt-0.5">{description}</p>
               </div>
             </div>
             <div className="delete-modal-item flex items-center gap-2.5 px-4 py-3 rounded-xl mb-5">
               {type === 'folder'
-                ? <Folder className="w-4 h-4 text-yellow-500 dark:text-yellow-400 flex-shrink-0" />
-                : <File className="w-4 h-4 text-blue-400 dark:text-blue-500 flex-shrink-0" />}
+                ? <Folder className="w-4 h-4 text-yellow-500 dark:text-yellow-400 flex-shrink-0" aria-hidden="true" />
+                : <File className="w-4 h-4 text-blue-400 dark:text-blue-500 flex-shrink-0" aria-hidden="true" />}
               <span className="delete-modal-item-name text-sm font-semibold truncate">{itemName}</span>
             </div>
             <div className="delete-modal-warning flex items-start gap-2 px-3 py-2.5 rounded-lg mb-6">
-              <span className="text-orange-400 text-sm mt-0.5 flex-shrink-0">⚠</span>
+              <span className="text-orange-400 text-sm mt-0.5 flex-shrink-0" aria-hidden="true">⚠</span>
               <p className="delete-modal-warning-text text-xs leading-relaxed">
                 {type === 'folder'
                   ? 'All sub-folders and documents inside will be permanently removed. This action cannot be undone.'
                   : 'This document will be permanently removed. This action cannot be undone.'}
               </p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-col-reverse sm:flex-row gap-3">
               <button
                 onClick={onCancel}
                 className="delete-btn-cancel flex-1 py-2.5 px-4 rounded-xl text-sm font-semibold"
@@ -148,6 +197,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
                 Keep it
               </button>
               <button
+                ref={confirmBtnRef}
                 onClick={onConfirm}
                 className="delete-btn-confirm flex-1 py-2.5 px-4 rounded-xl text-sm font-bold text-white"
                 style={{ background: 'linear-gradient(135deg,#dc2626,#b91c1c)' }}
@@ -524,10 +574,10 @@ const DocumentManager: React.FC = () => {
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading && folders.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex items-center justify-center h-64" role="status">
         <div className="text-center">
-          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500 dark:text-blue-400" />
-          <p className="text-gray-500 dark:text-slate-400">Loading…</p>
+          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500 dark:text-blue-400" aria-hidden="true" />
+          <p className={TEXT_MUTED}>Loading…</p>
         </div>
       </div>
     );
@@ -535,7 +585,7 @@ const DocumentManager: React.FC = () => {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="container mx-auto p-6 max-w-6xl">
+    <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
 
       {/* Delete modal */}
       {deleteModal && (
@@ -556,77 +606,83 @@ const DocumentManager: React.FC = () => {
 
       {/* Error banner */}
       {error && (
-        <div className="mb-4 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg flex items-center justify-between">
+        <div
+          className="mb-4 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg flex items-start justify-between gap-3"
+          role="alert"
+        >
           <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
-          <button onClick={() => setError(null)} className="text-red-400 dark:text-red-500 hover:text-red-600 dark:hover:text-red-400 ml-4">
-            <X className="w-4 h-4" />
+          <button
+            onClick={() => setError(null)}
+            className="text-red-400 dark:text-red-500 hover:text-red-600 dark:hover:text-red-400 shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+            aria-label="Dismiss error"
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div className="flex items-center gap-3 min-w-0">
           {currentFolder && (
             <button
               onClick={goBack}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-gray-600 dark:text-slate-400"
+              className={ICON_BTN}
+              aria-label="Back to parent folder"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5" aria-hidden="true" />
             </button>
           )}
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-slate-100">
+          <h1 className={`text-xl sm:text-2xl font-bold truncate ${TEXT_HEADING}`}>
             {currentFolder ? currentFolder.name : 'Document Manager'}
           </h1>
           {/* Folder type badge */}
           {currentFolder && isLeaf(currentFolder) && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 font-medium">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 font-medium shrink-0">
               Files folder
             </span>
           )}
           {currentFolder && isBranch(currentFolder) && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 font-medium">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 font-medium shrink-0">
               Sub-folders inside
             </span>
           )}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={loadFolders}
-            className="p-2 text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg"
+            className={ICON_BTN}
             title="Refresh"
+            aria-label="Refresh folder list"
           >
-            <RefreshCw className="w-5 h-5" />
+            <RefreshCw className="w-5 h-5" aria-hidden="true" />
           </button>
 
           {/* New Folder button — shown at root OR inside a branch/empty folder */}
           {canCreateFolder && (
-            <button
-              onClick={() => setShowCreateFolder(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-            >
-              <FolderPlus className="w-4 h-4" />
+            <button onClick={() => setShowCreateFolder(true)} className={BTN_PRIMARY}>
+              <FolderPlus className="w-4 h-4" aria-hidden="true" />
               {currentFolder ? 'New Sub-folder' : 'New Folder'}
             </button>
           )}
 
           {/* Upload button — only inside a leaf/empty folder */}
           {currentFolder && canUpload && (
-            <label className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors cursor-pointer text-sm font-medium">
-              <Upload className="w-4 h-4" />
+            <label className={BTN_SUCCESS}>
+              <Upload className="w-4 h-4" aria-hidden="true" />
               Upload
-              <input type="file" multiple onChange={handleFileUpload} className="hidden" />
+              <input type="file" multiple onChange={handleFileUpload} className="sr-only" />
             </label>
           )}
 
           {/* Locked: branch folder cannot upload */}
           {currentFolder && !canUpload && (
             <div
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 rounded-lg text-sm font-medium cursor-not-allowed"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 rounded-lg text-sm font-medium cursor-not-allowed"
               title="This folder contains sub-folders. Upload into a leaf folder."
             >
-              <Lock className="w-4 h-4" />
+              <Lock className="w-4 h-4" aria-hidden="true" />
               Upload locked
             </div>
           )}
@@ -634,41 +690,41 @@ const DocumentManager: React.FC = () => {
       </div>
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-1 mb-6 text-sm text-gray-500 dark:text-slate-400 flex-wrap">
+      <nav aria-label="Breadcrumb" className={`flex items-center gap-1 mb-6 text-sm ${TEXT_MUTED} flex-wrap`}>
         <button
           onClick={() => goToCrumb(-1)}
-          className="flex items-center gap-1 hover:text-gray-800 dark:hover:text-slate-100 transition-colors"
+          className={`flex items-center gap-1 hover:${TEXT_HEADING} rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-colors`}
         >
-          <Home className="w-4 h-4" />
+          <Home className="w-4 h-4" aria-hidden="true" />
           All Folders
         </button>
         {folderStack.map((f, i) => (
           <React.Fragment key={f.id}>
-            <ChevronRight className="w-4 h-4 text-gray-300 dark:text-slate-600 flex-shrink-0" />
+            <ChevronRight className="w-4 h-4 text-gray-300 dark:text-slate-600 flex-shrink-0" aria-hidden="true" />
             {i === folderStack.length - 1 ? (
-              <span className="text-gray-800 dark:text-slate-100 font-medium">{f.name}</span>
+              <span className={`${TEXT_HEADING} font-medium truncate max-w-[180px]`} aria-current="page">{f.name}</span>
             ) : (
               <button
                 onClick={() => goToCrumb(i)}
-                className="hover:text-gray-800 dark:hover:text-slate-100 transition-colors"
+                className="hover:text-gray-800 dark:hover:text-slate-100 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-colors truncate max-w-[140px]"
               >
                 {f.name}
               </button>
             )}
           </React.Fragment>
         ))}
-      </div>
+      </nav>
 
       {/* Info banner for leaf / branch state */}
       {currentFolder && isBranch(currentFolder) && (
         <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg flex items-center gap-2 text-sm text-blue-700 dark:text-blue-400">
-          <FolderOpen className="w-4 h-4 flex-shrink-0" />
+          <FolderOpen className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
           This folder contains sub-folders. To upload files, open a sub-folder that doesn't have any sub-folders yet.
         </div>
       )}
       {currentFolder && isLeaf(currentFolder) && (
         <div className="mb-4 p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+          <CheckCircle2 className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
           This folder contains files. You can upload more files here but cannot add sub-folders.
         </div>
       )}
@@ -677,7 +733,7 @@ const DocumentManager: React.FC = () => {
       {viewingFolders.length > 0 && (
         <div className="mb-6">
           {currentFolder && (
-            <h2 className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-3">
+            <h2 className={`text-xs font-semibold ${TEXT_FAINT} uppercase tracking-wide mb-3`}>
               Sub-folders
             </h2>
           )}
@@ -685,30 +741,36 @@ const DocumentManager: React.FC = () => {
             {viewingFolders.map(folder => (
               <div
                 key={folder.id}
-                className="group relative bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-4 hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer"
+                className="group relative bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-4 hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 focus-within:ring-2 focus-within:ring-blue-500 transition-all cursor-pointer"
                 onClick={() => openFolder(folder)}
+                onKeyDown={(e) => { if (e.key === 'Enter') openFolder(folder); }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open folder ${folder.name}`}
               >
                 <div className="flex items-start justify-between mb-3">
                   {isLeaf(folder)
-                    ? <FolderOpen className="w-10 h-10 text-green-400 dark:text-green-500" />
-                    : <Folder className="w-10 h-10 text-yellow-400 dark:text-yellow-500" />}
+                    ? <FolderOpen className="w-10 h-10 text-green-400 dark:text-green-500" aria-hidden="true" />
+                    : <Folder className="w-10 h-10 text-yellow-400 dark:text-yellow-500" aria-hidden="true" />}
                   <div
-                    className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="flex gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                     onClick={e => e.stopPropagation()}
                   >
                     <button
                       onClick={() => { setRenamingId(folder.id); setRenameValue(folder.name); }}
-                      className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
+                      className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                       title="Rename"
+                      aria-label={`Rename ${folder.name}`}
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
+                      <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
                     <button
                       onClick={() => handleDeleteFolder(folder.id, folder.name, currentFolder?.id)}
-                      className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded"
+                      className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                       title="Delete"
+                      aria-label={`Delete ${folder.name}`}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -723,18 +785,19 @@ const DocumentManager: React.FC = () => {
                       if (e.key === 'Enter') handleRenameFolder(folder.id, renameValue);
                       if (e.key === 'Escape') setRenamingId(null);
                     }}
-                    className="w-full px-2 py-1 text-sm border border-blue-400 dark:border-blue-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    aria-label={`New name for ${folder.name}`}
+                    className="w-full px-2 py-1 text-sm border border-blue-400 dark:border-blue-600 rounded bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
                     autoFocus
                     onClick={e => e.stopPropagation()}
                   />
                 ) : (
-                  <p className="font-semibold text-gray-800 dark:text-slate-100 truncate">{folder.name}</p>
+                  <p className={`font-semibold truncate ${TEXT_HEADING}`}>{folder.name}</p>
                 )}
 
                 {folder.description && (
-                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 truncate">{folder.description}</p>
+                  <p className={`text-xs mt-1 truncate ${TEXT_FAINT}`}>{folder.description}</p>
                 )}
-                <div className="flex items-center gap-2 mt-2">
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
                   {isLeaf(folder) && (
                     <span className="text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30 px-1.5 py-0.5 rounded">
                       {folder.documents.length} file{folder.documents.length !== 1 ? 's' : ''}
@@ -746,9 +809,9 @@ const DocumentManager: React.FC = () => {
                     </span>
                   )}
                   {!isLeaf(folder) && !isBranch(folder) && (
-                    <span className="text-xs text-gray-400 dark:text-slate-500">Empty</span>
+                    <span className={`text-xs ${TEXT_FAINT}`}>Empty</span>
                   )}
-                  <span className="text-xs text-gray-400 dark:text-slate-500 ml-auto">{formatDate(folder.createdAt)}</span>
+                  <span className={`text-xs ${TEXT_FAINT} ml-auto`}>{formatDate(folder.createdAt)}</span>
                 </div>
               </div>
             ))}
@@ -758,33 +821,27 @@ const DocumentManager: React.FC = () => {
 
       {/* ── Empty state (no folders, no docs) ────────────────────────────── */}
       {viewingFolders.length === 0 && viewingDocs.length === 0 && !loading && (
-        <div className="text-center py-20 border-2 border-dashed border-gray-200 dark:border-slate-700 rounded-xl">
-          <Folder className="w-16 h-16 text-gray-300 dark:text-slate-600 mx-auto mb-4" />
+        <div className="text-center py-16 sm:py-20 px-4 border-2 border-dashed border-gray-200 dark:border-slate-700 rounded-xl">
+          <Folder className="w-16 h-16 text-gray-300 dark:text-slate-600 mx-auto mb-4" aria-hidden="true" />
           {!currentFolder ? (
             <>
-              <p className="text-gray-500 dark:text-slate-400 font-medium">No folders yet</p>
-              <p className="text-gray-400 dark:text-slate-500 text-sm mt-1">Create a folder to start organising your documents</p>
-              <button
-                onClick={() => setShowCreateFolder(true)}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-              >
+              <p className={`font-medium ${TEXT_MUTED}`}>No folders yet</p>
+              <p className={`text-sm mt-1 ${TEXT_FAINT}`}>Create a folder to start organising your documents</p>
+              <button onClick={() => setShowCreateFolder(true)} className={`mt-4 ${BTN_PRIMARY}`}>
                 Create First Folder
               </button>
             </>
           ) : (
             <>
-              <p className="text-gray-500 dark:text-slate-400 font-medium">This folder is empty</p>
-              <p className="text-gray-400 dark:text-slate-500 text-sm mt-1">Add a sub-folder or upload files directly</p>
-              <div className="flex justify-center gap-3 mt-4">
-                <button
-                  onClick={() => setShowCreateFolder(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-                >
+              <p className={`font-medium ${TEXT_MUTED}`}>This folder is empty</p>
+              <p className={`text-sm mt-1 ${TEXT_FAINT}`}>Add a sub-folder or upload files directly</p>
+              <div className="flex flex-wrap justify-center gap-3 mt-4">
+                <button onClick={() => setShowCreateFolder(true)} className={BTN_PRIMARY}>
                   New Sub-folder
                 </button>
-                <label className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium cursor-pointer">
+                <label className={BTN_SUCCESS}>
                   Upload Files
-                  <input type="file" multiple onChange={handleFileUpload} className="hidden" />
+                  <input type="file" multiple onChange={handleFileUpload} className="sr-only" />
                 </label>
               </div>
             </>
@@ -796,145 +853,170 @@ const DocumentManager: React.FC = () => {
       {viewingDocs.length > 0 && (
         <div>
           {(viewingFolders.length > 0) && (
-            <h2 className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-3 mt-6">
+            <h2 className={`text-xs font-semibold ${TEXT_FAINT} uppercase tracking-wide mb-3 mt-6`}>
               Files
             </h2>
           )}
           <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/60">
-                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3">Name</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3 hidden sm:table-cell">Type</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3 hidden md:table-cell">Size</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">Uploaded</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">By</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-4 py-3 hidden sm:table-cell">Status</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {viewingDocs.map((doc, idx) => (
-                  <tr
-                    key={doc.id}
-                    className={`border-b border-gray-50 dark:border-slate-800/60 transition-colors group hover:bg-gray-50 dark:hover:bg-slate-800/60 ${
-                      idx === viewingDocs.length - 1 ? 'border-0' : ''
-                    }`}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <File className="w-5 h-5 flex-shrink-0 text-blue-400 dark:text-blue-500" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-800 dark:text-slate-100 truncate max-w-[200px]">
-                            {doc.originalFileName || doc.fileName}
-                          </p>
-                          {doc.description && (
-                            <p className="text-xs text-gray-400 dark:text-slate-500 truncate max-w-[200px]">{doc.description}</p>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 hidden sm:table-cell">
-                      <span className="text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 px-2 py-0.5 rounded font-mono">
-                        {doc.fileType?.split('/')[1]?.toUpperCase() || doc.fileType || '—'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-slate-400 hidden md:table-cell">
-                      {formatSize(doc.fileSize)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-slate-400 hidden lg:table-cell">
-                      {formatDate(doc.uploadedAt)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-slate-400 hidden lg:table-cell">
-                      {doc.uploadedBy || '—'}
-                    </td>
-                    <td className="px-4 py-3 hidden sm:table-cell">
-                      <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        Ready
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => currentFolder && handleDownload(currentFolder.id, doc)}
-                          className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/30 rounded"
-                          title="Download"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => currentFolder && handleDeleteDocument(currentFolder.id, doc.id, doc.originalFileName || doc.fileName)}
-                          className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/60">
+                    <th scope="col" className={`text-left text-xs font-semibold ${TEXT_MUTED} uppercase tracking-wide px-4 py-3`}>Name</th>
+                    <th scope="col" className={`text-left text-xs font-semibold ${TEXT_MUTED} uppercase tracking-wide px-4 py-3 hidden sm:table-cell`}>Type</th>
+                    <th scope="col" className={`text-left text-xs font-semibold ${TEXT_MUTED} uppercase tracking-wide px-4 py-3 hidden md:table-cell`}>Size</th>
+                    <th scope="col" className={`text-left text-xs font-semibold ${TEXT_MUTED} uppercase tracking-wide px-4 py-3 hidden lg:table-cell`}>Uploaded</th>
+                    <th scope="col" className={`text-left text-xs font-semibold ${TEXT_MUTED} uppercase tracking-wide px-4 py-3 hidden lg:table-cell`}>By</th>
+                    <th scope="col" className={`text-left text-xs font-semibold ${TEXT_MUTED} uppercase tracking-wide px-4 py-3 hidden sm:table-cell`}>Status</th>
+                    <th scope="col" className="px-4 py-3">
+                      <span className="sr-only">Actions</span>
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {viewingDocs.map((doc, idx) => (
+                    <tr
+                      key={doc.id}
+                      className={`border-b border-gray-50 dark:border-slate-800/60 transition-colors group hover:bg-gray-50 dark:hover:bg-slate-800/60 ${
+                        idx === viewingDocs.length - 1 ? 'border-0' : ''
+                      }`}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <File className="w-5 h-5 flex-shrink-0 text-blue-400 dark:text-blue-500" aria-hidden="true" />
+                          <div className="min-w-0">
+                            <p className={`text-sm font-medium truncate max-w-[200px] ${TEXT_HEADING}`}>
+                              {doc.originalFileName || doc.fileName}
+                            </p>
+                            {doc.description && (
+                              <p className={`text-xs truncate max-w-[200px] ${TEXT_FAINT}`}>{doc.description}</p>
+                            )}
+                            {/* Compact metadata shown only on very small screens where columns are hidden */}
+                            <p className={`text-xs mt-0.5 sm:hidden ${TEXT_FAINT}`}>
+                              {formatSize(doc.fileSize)} · {formatDate(doc.uploadedAt)}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        <span className="text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 px-2 py-0.5 rounded font-mono">
+                          {doc.fileType?.split('/')[1]?.toUpperCase() || doc.fileType || '—'}
+                        </span>
+                      </td>
+                      <td className={`px-4 py-3 text-sm hidden md:table-cell ${TEXT_MUTED}`}>
+                        {formatSize(doc.fileSize)}
+                      </td>
+                      <td className={`px-4 py-3 text-sm hidden lg:table-cell ${TEXT_MUTED}`}>
+                        {formatDate(doc.uploadedAt)}
+                      </td>
+                      <td className={`px-4 py-3 text-sm hidden lg:table-cell ${TEXT_MUTED}`}>
+                        {doc.uploadedBy || '—'}
+                      </td>
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                          <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                          Ready
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1 justify-end sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => currentFolder && handleDownload(currentFolder.id, doc)}
+                            className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/30 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
+                            title="Download"
+                            aria-label={`Download ${doc.originalFileName || doc.fileName}`}
+                          >
+                            <Download className="w-4 h-4" aria-hidden="true" />
+                          </button>
+                          <button
+                            onClick={() => currentFolder && handleDeleteDocument(currentFolder.id, doc.id, doc.originalFileName || doc.fileName)}
+                            className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                            title="Delete"
+                            aria-label={`Delete ${doc.originalFileName || doc.fileName}`}
+                          >
+                            <Trash2 className="w-4 h-4" aria-hidden="true" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
       {/* ── Create Folder Modal ───────────────────────────────────────────── */}
       {showCreateFolder && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-6 w-full max-w-md">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100">
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={() => { setShowCreateFolder(false); setNewFolderName(''); setNewFolderDesc(''); }}
+          role="presentation"
+        >
+          <div
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-5 sm:p-6 w-full max-w-md"
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-folder-title"
+          >
+            <div className="flex items-center justify-between mb-5 gap-3">
+              <h3 id="create-folder-title" className={`text-lg font-semibold truncate ${TEXT_HEADING}`}>
                 {currentFolder ? `New Sub-folder in "${currentFolder.name}"` : 'New Folder'}
               </h3>
               <button
                 onClick={() => { setShowCreateFolder(false); setNewFolderName(''); setNewFolderDesc(''); }}
-                className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-400"
+                className={`shrink-0 ${TEXT_FAINT} hover:text-gray-600 dark:hover:text-slate-300 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
+                aria-label="Close dialog"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
 
             <div className="space-y-3 mb-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Folder Name *</label>
+                <label htmlFor="new-folder-name" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Folder Name *
+                </label>
                 <input
+                  id="new-folder-name"
                   type="text"
                   value={newFolderName}
                   onChange={e => setNewFolderName(e.target.value)}
                   placeholder="e.g. Q4 Reports"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100"
+                  className={FIELD_INPUT}
                   autoFocus
                   onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                  Description <span className="text-gray-400 dark:text-slate-500 font-normal">(optional)</span>
+                <label htmlFor="new-folder-desc" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Description <span className={`font-normal ${TEXT_FAINT}`}>(optional)</span>
                 </label>
                 <input
+                  id="new-folder-desc"
                   type="text"
                   value={newFolderDesc}
                   onChange={e => setNewFolderDesc(e.target.value)}
                   placeholder="Short description"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100"
+                  className={FIELD_INPUT}
                   onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
                 />
               </div>
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
               <button
                 onClick={() => { setShowCreateFolder(false); setNewFolderName(''); setNewFolderDesc(''); }}
-                className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg"
+                className={BTN_SECONDARY}
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateFolder}
                 disabled={!newFolderName.trim()}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                className={BTN_PRIMARY}
               >
                 Create
               </button>

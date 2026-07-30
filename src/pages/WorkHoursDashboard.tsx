@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, useId } from "react";
 import api, { getErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import {
@@ -186,6 +186,7 @@ const StatCard = ({
   const animated = useCountUp(value);
   const [barWidth, setBarWidth] = useState(0);
   const [showTooltip, setShowTooltip] = useState(false);
+  const tooltipId = useId();
 
   useEffect(() => {
     // Defer to next tick so the CSS transition actually animates the width.
@@ -193,15 +194,20 @@ const StatCard = ({
     return () => window.clearTimeout(id);
   }, [percent, value]);
 
+  // The visual body below animates and re-renders every frame while the
+  // count-up plays, which would make a screen reader re-announce garbage
+  // mid-animation. Instead we hide that body from assistive tech and give
+  // the card itself a single, stable accessible name with the resting value.
+  const accessibleSummary = `${label}: ${fmtHours(value)} hours, ${percent.toFixed(0)} percent${
+    tooltip ? `. ${tooltip}` : ""
+  }`;
+
   return (
-    // Outer wrapper stays overflow:visible so the tooltip can pop out above
-    // the card; the inner .whd-card is the one that clips its grid texture
-    // and corner marks to its own rounded bounds.
     <div className="whd-card-outer" style={{ ["--whd-delay" as string]: `${index * 70}ms` }}>
       {tooltip && showTooltip && (
-        <div className="whd-tooltip whd-mono">
+        <div id={tooltipId} role="tooltip" className="whd-tooltip whd-mono">
           {tooltip}
-          <span className="whd-tooltip-arrow" />
+          <span className="whd-tooltip-arrow" aria-hidden="true" />
         </div>
       )}
 
@@ -210,19 +216,25 @@ const StatCard = ({
           emphasis ? "ring-1 ring-primary/30 whd-card-emphasis" : ""
         }`}
         style={{ ["--whd-accent" as string]: accent.hex }}
+        role="group"
+        aria-label={accessibleSummary}
+        aria-describedby={tooltip && showTooltip ? tooltipId : undefined}
+        tabIndex={tooltip ? 0 : undefined}
         onMouseEnter={() => tooltip && setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
+        onFocus={() => tooltip && setShowTooltip(true)}
+        onBlur={() => setShowTooltip(false)}
       >
-        <span className="whd-corner tl" />
-        <span className="whd-corner tr" />
-        <span className="whd-corner bl" />
-        <span className="whd-corner br" />
+        <span className="whd-corner tl" aria-hidden="true" />
+        <span className="whd-corner tr" aria-hidden="true" />
+        <span className="whd-corner bl" aria-hidden="true" />
+        <span className="whd-corner br" aria-hidden="true" />
 
-        <div className="whd-card-body">
+        <div className="whd-card-body" aria-hidden="true">
           <div className="flex items-center justify-between">
             <span className="whd-label text-sm text-muted-foreground">{label}</span>
             <span className={`whd-icon-chip flex h-9 w-9 items-center justify-center rounded-full ${accent.bg} ${accent.fg}`}>
-              <Icon className="h-4.5 w-4.5" />
+              <Icon className="h-[18px] w-[18px]" />
             </span>
           </div>
 
@@ -325,22 +337,24 @@ const FavoriteChip = ({
         className={`whd-fav-chip ${active ? "whd-fav-chip--active" : ""}`}
         style={{ ["--whd-fav-accent" as string]: accent.hex }}
         onClick={onSelect}
+        aria-pressed={active}
         title={client}
       >
-        <Star className="whd-fav-chip-star h-3 w-3" fill="currentColor" />
+        <Star className="whd-fav-chip-star h-3 w-3" fill="currentColor" aria-hidden="true" />
         <span className="whd-fav-chip-label">{client}</span>
       </button>
       <button
         type="button"
         className="whd-fav-chip-remove"
         title={`Remove ${client} from favorites`}
+        aria-label={`Remove ${client} from favorites`}
         onClick={(e) => {
           e.stopPropagation();
           onRemove();
         }}
         disabled={busy}
       >
-        {busy ? <span className="whd-fav-spinner whd-fav-spinner--sm" /> : <X className="h-3 w-3" />}
+        {busy ? <span className="whd-fav-spinner whd-fav-spinner--sm" aria-hidden="true" /> : <X className="h-3 w-3" aria-hidden="true" />}
       </button>
     </div>
   );
@@ -370,6 +384,13 @@ const WorkHoursDashboard = () => {
   const [favError, setFavError] = useState("");
   const [manageOpen, setManageOpen] = useState(false);
   const [favSearch, setFavSearch] = useState("");
+  const manageBtnRef = useRef<HTMLButtonElement>(null);
+
+  const projectSelectId = useId();
+  const favClientsLabelId = useId();
+  const favModalTitleId = useId();
+  const favModalDescId = useId();
+  const favSearchInputId = useId();
 
   /* Fetch client list once */
   useEffect(() => {
@@ -495,6 +516,24 @@ const WorkHoursDashboard = () => {
   const total = summary?.totalHours ?? 0;
   const pct = (n: number, denom: number) => (denom > 0 ? (n / denom) * 100 : 0);
 
+  /* Closes the manage popup and returns focus to the button that opened
+     it, so keyboard users don't get dropped back at the top of the page. */
+  const closeManage = useCallback(() => {
+    setManageOpen(false);
+    requestAnimationFrame(() => manageBtnRef.current?.focus());
+  }, []);
+
+  /* Escape closes the manage popup, same as clicking the overlay or the
+     close button. Without this, keyboard-only users had no way out. */
+  useEffect(() => {
+    if (!manageOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeManage();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [manageOpen, closeManage]);
+
   return (
     <div className="whd-page">
       <PageHeader
@@ -508,16 +547,17 @@ const WorkHoursDashboard = () => {
           <div className="relative flex flex-col gap-3 md:flex-row md:items-end">
             <div className="grid flex-1 gap-3 md:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5 text-xs">
-                  <Star className="h-3.5 w-3.5" /> Client (Favorites)
+                <Label id={favClientsLabelId} className="flex items-center gap-1.5 text-xs">
+                  <Star className="h-3.5 w-3.5" aria-hidden="true" /> Client (Favorites)
                 </Label>
 
-                <div className="whd-fav-strip">
+                <div className="whd-fav-strip" role="group" aria-labelledby={favClientsLabelId}>
                   <button
                     type="button"
                     className={`whd-fav-chip whd-fav-chip--all ${
                       selectedClient === ALL_VALUE ? "whd-fav-chip--active" : ""
                     }`}
+                    aria-pressed={selectedClient === ALL_VALUE}
                     onClick={() => setSelectedClient(ALL_VALUE)}
                   >
                     All Clients
@@ -525,8 +565,8 @@ const WorkHoursDashboard = () => {
 
                   {loadingFavorites ? (
                     <>
-                      <span className="whd-fav-chip whd-fav-chip--skeleton" />
-                      <span className="whd-fav-chip whd-fav-chip--skeleton" />
+                      <span className="whd-fav-chip whd-fav-chip--skeleton" aria-hidden="true" />
+                      <span className="whd-fav-chip whd-fav-chip--skeleton" aria-hidden="true" />
                     </>
                   ) : favoriteClients.length === 0 ? (
                     <span className="whd-fav-empty-hint">No favorites pinned yet</span>
@@ -545,26 +585,27 @@ const WorkHoursDashboard = () => {
 
                   <button
                     type="button"
+                    ref={manageBtnRef}
                     className="whd-fav-manage-btn"
                     onClick={() => setManageOpen(true)}
                     title="Manage favorite clients"
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                     Manage
                   </button>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5 text-xs">
-                  <Filter className="h-3.5 w-3.5" /> Project
+                <Label htmlFor={projectSelectId} className="flex items-center gap-1.5 text-xs">
+                  <Filter className="h-3.5 w-3.5" aria-hidden="true" /> Project
                 </Label>
                 <Select
                   value={selectedProject}
                   onValueChange={setSelectedProject}
                   disabled={selectedClient === ALL_VALUE || loadingProjects}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id={projectSelectId}>
                     <SelectValue
                       placeholder={selectedClient === ALL_VALUE ? "Select a client first" : "All projects"}
                     />
@@ -581,13 +622,13 @@ const WorkHoursDashboard = () => {
               </div>
             </div>
 
-            <div className="whd-dim-divider">
+            <div className="whd-dim-divider" aria-hidden="true">
               <span className="whd-dim-dot" />
             </div>
 
             <div className="flex gap-2">
               <Button variant="outline" onClick={clearFilters} className="flex-1 md:flex-none">
-                <RotateCcw className="mr-2 h-4 w-4" />
+                <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
                 Clear Filters
               </Button>
               <Button
@@ -597,7 +638,7 @@ const WorkHoursDashboard = () => {
                 aria-label="Refresh"
                 title="Refresh"
               >
-                <RotateCcw className="h-4 w-4" />
+                <RotateCcw className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
           </div>
@@ -612,22 +653,23 @@ const WorkHoursDashboard = () => {
         <div className="pt-2" />
 
         {error ? (
-          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {error}
           </div>
         ) : loadingSummary ? (
-          <>
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div role="status" aria-live="polite" className="space-y-4">
+            <span className="sr-only">Loading hours summary…</span>
+            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-hidden="true">
               {Array.from({ length: 4 }).map((_, i) => (
                 <SkeletonCard key={i} index={i} />
               ))}
             </section>
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-hidden="true">
               {Array.from({ length: 4 }).map((_, i) => (
                 <SkeletonCard key={i} index={i + 4} />
               ))}
             </section>
-          </>
+          </div>
         ) : (
           <>
             {/* TOP-LEVEL: three buckets + grand total */}
@@ -674,7 +716,7 @@ const WorkHoursDashboard = () => {
                 <h2 className="whitespace-nowrap text-sm text-muted-foreground">
                   Editing Breakdown (Individual)
                 </h2>
-                <span className="whd-scale-rule" />
+                <span className="whd-scale-rule" aria-hidden="true" />
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {DRAWING_COMPONENTS.map(({ key, label, icon, accent }, i) => (
@@ -698,7 +740,7 @@ const WorkHoursDashboard = () => {
       {manageOpen && (
         <div
           className="whd-fav-overlay"
-          onClick={() => setManageOpen(false)}
+          onClick={closeManage}
           role="presentation"
         >
           <div
@@ -706,30 +748,33 @@ const WorkHoursDashboard = () => {
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            aria-label="Manage favorite clients"
+            aria-labelledby={favModalTitleId}
+            aria-describedby={favModalDescId}
           >
-            <span className="whd-corner tl" />
-            <span className="whd-corner tr" />
-            <span className="whd-corner bl" />
-            <span className="whd-corner br" />
+            <span className="whd-corner tl" aria-hidden="true" />
+            <span className="whd-corner tr" aria-hidden="true" />
+            <span className="whd-corner bl" aria-hidden="true" />
+            <span className="whd-corner br" aria-hidden="true" />
 
             <button
               type="button"
               className="whd-fav-modal-close"
-              onClick={() => setManageOpen(false)}
+              onClick={closeManage}
               aria-label="Close"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
 
-            <h3 className="whd-fav-modal-title">Favorite Clients</h3>
-            <p className="whd-fav-modal-subtitle">
+            <h3 id={favModalTitleId} className="whd-fav-modal-title">Favorite Clients</h3>
+            <p id={favModalDescId} className="whd-fav-modal-subtitle">
               Star the clients you want pinned to this dashboard's filter bar.
             </p>
 
             <div className="whd-fav-search">
-              <Search className="h-3.5 w-3.5" />
+              <Search className="h-3.5 w-3.5" aria-hidden="true" />
+              <label htmlFor={favSearchInputId} className="sr-only">Search clients</label>
               <input
+                id={favSearchInputId}
                 value={favSearch}
                 onChange={(e) => setFavSearch(e.target.value)}
                 placeholder="Search clients…"
@@ -737,11 +782,13 @@ const WorkHoursDashboard = () => {
               />
             </div>
 
-            {favError && <div className="whd-fav-error">⚠ {favError}</div>}
+            {favError && <div role="alert" className="whd-fav-error">⚠ {favError}</div>}
 
             <div className="whd-fav-list">
               {loadingClients ? (
                 <div className="whd-fav-loading">Loading clients…</div>
+              ) : clients.length === 0 ? (
+                <div className="whd-fav-loading">No clients found.</div>
               ) : filteredAllClients.length === 0 ? (
                 <div className="whd-fav-loading">No clients match “{favSearch}”.</div>
               ) : (
@@ -755,14 +802,16 @@ const WorkHoursDashboard = () => {
                       className={`whd-fav-row ${isFav ? "whd-fav-row--active" : ""}`}
                       onClick={() => toggleFavorite(c)}
                       disabled={busy}
+                      aria-pressed={isFav}
                     >
                       <span className="whd-fav-row-name">{c}</span>
                       {busy ? (
-                        <span className="whd-fav-spinner" />
+                        <span className="whd-fav-spinner" aria-hidden="true" />
                       ) : (
                         <Star
                           className={`h-4 w-4 ${isFav ? "whd-fav-star--on" : "whd-fav-star--off"}`}
                           fill={isFav ? "currentColor" : "none"}
+                          aria-hidden="true"
                         />
                       )}
                     </button>

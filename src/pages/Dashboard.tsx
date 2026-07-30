@@ -12,6 +12,14 @@ import {
   MessageSquareText,
   Copy,
   Check,
+  Eye,
+  Download,
+  Trash2,
+  Pencil,
+  X,
+  Plus,
+  ChevronRight,
+  AlertTriangle,
 } from "lucide-react";
 
 // ─── API CONFIG ───────────────────────────────────────────────────────────────
@@ -196,6 +204,32 @@ function useAbortController() {
   return { getController, abort };
 }
 
+// Closes the topmost modal on Escape, and (optionally) restores focus to the
+// element that had focus before the modal opened, for a11y/keyboard users.
+function useEscapeToClose(isOpen, onClose) {
+  const previouslyFocused = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    previouslyFocused.current = document.activeElement;
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        onClose?.();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      // Restore focus for keyboard/screen-reader users once the modal closes.
+      if (previouslyFocused.current && typeof previouslyFocused.current.focus === "function") {
+        previouslyFocused.current.focus();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+}
+
 // ─── STYLES ────────────────────────────────────────────────────────────────
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -233,6 +267,7 @@ const styles = `
     --shadow-sm:   0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
     --shadow:      0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
     --shadow-lg:   0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
+    --focus-ring:  0 0 0 3px rgba(61,79,124,0.35);
   }
 
   :root.dark {
@@ -264,9 +299,35 @@ const styles = `
     --shadow-sm:   0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
     --shadow:      0 4px 16px rgba(0,0,0,0.35), 0 1px 4px rgba(0,0,0,0.2);
     --shadow-lg:   0 12px 40px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.25);
+    --focus-ring:  0 0 0 3px rgba(124,143,201,0.45);
   }
 
+  html { scroll-behavior: smooth; }
   body { background: var(--bg); font-family: 'Outfit', sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; }
+
+  /* ── Global accessible focus state ─────────────────────────────────────
+     Visible only for keyboard users (not on mouse click), consistent across
+     every interactive element in the dashboard. */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: 6px;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
 
   .dash-root {
     min-height: 100vh;
@@ -284,38 +345,41 @@ const styles = `
   .year-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
   .year-card { position: relative; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 36px 20px; cursor: pointer; overflow: hidden; background: var(--surface); box-shadow: var(--shadow-sm); transition: border-color .25s, box-shadow .25s, transform .2s; text-align: center; }
   .year-card::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, var(--indigo-dim), transparent 70%); opacity: 0; transition: opacity .3s; }
-  .year-card:hover { border-color: var(--indigo); box-shadow: var(--shadow), 0 0 0 3px var(--indigo-glow); transform: translateY(-2px); }
-  .year-card:hover::before { opacity: 1; }
+  .year-card:hover, .year-card:focus-visible { border-color: var(--indigo); box-shadow: var(--shadow), 0 0 0 3px var(--indigo-glow); transform: translateY(-2px); }
+  .year-card:hover::before, .year-card:focus-visible::before { opacity: 1; }
   .year-card-num { font-family: 'Playfair Display', serif; font-size: 3.2rem; font-weight: 700; color: var(--text); line-height: 1; position: relative; z-index: 1; transition: color .25s; letter-spacing: -0.02em; }
-  .year-card:hover .year-card-num { color: var(--indigo); }
+  .year-card:hover .year-card-num, .year-card:focus-visible .year-card-num { color: var(--indigo); }
   .year-card-label { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin-top: 8px; position: relative; z-index: 1; transition: color .25s; font-family: 'JetBrains Mono', monospace; }
-  .year-card:hover .year-card-label { color: var(--indigo); }
+  .year-card:hover .year-card-label, .year-card:focus-visible .year-card-label { color: var(--indigo); }
 
   .client-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
   .client-card { position: relative; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px 22px; cursor: pointer; background: var(--surface); overflow: hidden; box-shadow: var(--shadow-sm); transition: border-color .25s, box-shadow .25s, transform .2s; }
   .client-card::after { content: ''; position: absolute; right: -16px; bottom: -16px; width: 80px; height: 80px; border-radius: 50%; background: var(--teal-dim); transition: transform .35s; }
-  .client-card:hover { border-color: var(--teal); box-shadow: var(--shadow), 0 0 0 3px rgba(15,113,117,0.12); transform: translateY(-2px); }
-  .client-card:hover::after { transform: scale(2.8); }
-  .client-card-name { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; color: var(--text); position: relative; z-index: 1; transition: color .25s; }
-  .client-card:hover .client-card-name { color: var(--teal); }
+  .client-card:hover, .client-card:focus-visible { border-color: var(--teal); box-shadow: var(--shadow), 0 0 0 3px rgba(15,113,117,0.12); transform: translateY(-2px); }
+  .client-card:hover::after, .client-card:focus-visible::after { transform: scale(2.8); }
+  .client-card-name { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; color: var(--text); position: relative; z-index: 1; transition: color .25s; padding-right: 64px; }
+  .client-card:hover .client-card-name, .client-card:focus-visible .client-card-name { color: var(--teal); }
   .client-card-count { font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; font-family: 'JetBrains Mono', monospace; position: relative; z-index: 1; }
+  .client-card-actions { position: absolute; top: 14px; right: 14px; z-index: 2; display: flex; gap: 6px; }
 
   .project-list { display: flex; flex-direction: column; gap: 10px; }
   .project-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; cursor: pointer; background: var(--surface); box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: space-between; gap: 16px; transition: border-color .2s, box-shadow .2s, transform .15s; position: relative; overflow: hidden; }
   .project-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--copper); transform: scaleY(0); transition: transform .25s; transform-origin: bottom; }
-  .project-card:hover { border-color: var(--copper-light); box-shadow: var(--shadow); transform: translateX(2px); }
-  .project-card:hover::before { transform: scaleY(1); }
+  .project-card:hover, .project-card:focus-visible { border-color: var(--copper-light); box-shadow: var(--shadow); transform: translateX(2px); }
+  .project-card:hover::before, .project-card:focus-visible::before { transform: scaleY(1); }
   .project-name { font-weight: 600; font-size: 0.95rem; color: var(--text); }
-  .project-meta { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+  .project-meta { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
   .project-job { font-family: 'JetBrains Mono', monospace; font-size: 0.73rem; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); padding: 3px 9px; border-radius: 6px; }
-  .project-arrow { color: var(--text-dim); font-size: 1rem; transition: transform .2s, color .2s; }
-  .project-card:hover .project-arrow { transform: translateX(4px); color: var(--copper); }
+  .project-arrow { color: var(--text-dim); font-size: 1rem; transition: transform .2s, color .2s; display: inline-flex; }
+  .project-card:hover .project-arrow, .project-card:focus-visible .project-arrow { transform: translateX(4px); color: var(--copper); }
 
-  .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border-dark); background: var(--surface); color: var(--text-soft); font-size: 0.85rem; cursor: pointer; flex-shrink: 0; transition: background .15s, color .15s, border-color .15s, transform .15s; }
+  .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border-dark); background: var(--surface); color: var(--text-soft); font-size: 0.85rem; cursor: pointer; flex-shrink: 0; transition: background .15s, color .15s, border-color .15s, transform .15s; }
   .icon-btn:hover:not(:disabled) { background: var(--indigo-dim); color: var(--indigo); border-color: var(--indigo); transform: translateY(-1px); }
-  .icon-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .icon-btn:active:not(:disabled) { transform: translateY(0); }
+  .icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .icon-btn.danger:hover:not(:disabled) { background: var(--rose-dim); color: var(--rose); border-color: var(--rose); }
 
-  .view-table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow-sm); margin-bottom: 24px; }
+  .view-table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow-sm); margin-bottom: 24px; -webkit-overflow-scrolling: touch; }
   .view-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; background: var(--surface); }
   .view-table th { background: var(--surface-2); color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; padding: 11px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
   .view-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text); }
@@ -326,14 +390,14 @@ const styles = `
   .modal-overlay { position: fixed; inset: 0; z-index: 300; background: rgba(26,25,23,0.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 16px; }
   .modal-box { background: var(--surface); border: 1px solid var(--border-dark); border-radius: 20px; width: 100%; max-width: 960px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
   .modal-header { padding: 22px 26px 0; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface-2); }
-  .modal-title { font-family: 'Playfair Display', serif; font-size: 1.55rem; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
+  .modal-title { font-family: 'Playfair Display', serif; font-size: 1.55rem; font-weight: 700; letter-spacing: -0.01em; color: var(--text); padding-right: 40px; }
   .modal-subtitle { font-size: 0.76rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-top: 3px; margin-bottom: 14px; }
-  .modal-tabs { display: flex; gap: 2px; }
-  .modal-tab { padding: 10px 20px; font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; border: none; background: transparent; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: color .2s, border-color .2s; font-family: 'Outfit', sans-serif; }
+  .modal-tabs { display: flex; gap: 2px; overflow-x: auto; }
+  .modal-tab { padding: 10px 20px; font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; border: none; background: transparent; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: color .2s, border-color .2s; font-family: 'Outfit', sans-serif; white-space: nowrap; }
   .modal-tab.active { color: var(--indigo); border-bottom-color: var(--indigo); }
   .modal-tab:hover:not(.active) { color: var(--text-soft); }
   .modal-body { overflow-y: auto; padding: 22px 26px; flex: 1; background: var(--surface); }
-  .modal-close { position: absolute; top: 18px; right: 22px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border-dark); background: var(--surface); color: var(--text-muted); font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .2s, color .2s, border-color .2s; z-index: 10; box-shadow: var(--shadow-sm); }
+  .modal-close { position: absolute; top: 18px; right: 22px; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border-dark); background: var(--surface); color: var(--text-muted); font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .2s, color .2s, border-color .2s; z-index: 10; box-shadow: var(--shadow-sm); }
   .modal-close:hover { background: var(--rose-dim); color: var(--rose); border-color: var(--rose); }
 
   .detail-section { margin-bottom: 22px; }
@@ -351,7 +415,7 @@ const styles = `
   .detail-grid.detail-grid-status { grid-template-columns: repeat(2, 1fr); }
   .detail-grid.detail-grid-team { grid-template-columns: repeat(3, 1fr); }
   .detail-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; min-width: 0; }
-  .detail-label { font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 5px; font-family: 'JetBrains Mono', monospace; }
+  .detail-label { font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 5px; font-family: 'JetBrains Mono', monospace; display: flex; align-items: center; }
   .detail-value { font-size: 0.9rem; font-weight: 500; color: var(--text); white-space: pre-wrap; word-break: break-word; }
   .detail-card.remarks { grid-column: 1 / -1; }
   .detail-card.full { grid-column: 1 / -1; }
@@ -413,7 +477,7 @@ const styles = `
 
   .detail-copy-btn {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 20px; height: 20px; border-radius: 6px; border: none;
+    width: 22px; height: 22px; border-radius: 6px; border: none;
     background: transparent; color: var(--text-dim); cursor: pointer;
     margin-left: 6px; padding: 0; transition: color .15s ease, background .15s ease, transform .15s ease;
     vertical-align: middle;
@@ -432,6 +496,7 @@ const styles = `
   @media (prefers-reduced-motion: reduce) {
     .status-dot--pulse { animation: none !important; }
     .detail-card, .detail-card::before, .detail-copy-btn { transition: none !important; }
+    html { scroll-behavior: auto; }
   }
 
   .edit-form { display: flex; flex-direction: column; gap: 14px; }
@@ -439,8 +504,10 @@ const styles = `
   .form-row.three { grid-template-columns: 1fr 1fr 1fr; }
   .form-group { display: flex; flex-direction: column; gap: 5px; }
   .form-label { font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+  .form-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
   .form-input, .form-textarea, .form-select { background: var(--surface-2); border: 1px solid var(--border-dark); border-radius: 8px; color: var(--text); font-family: 'Outfit', sans-serif; font-size: 0.87rem; padding: 9px 12px; outline: none; transition: border-color .2s, box-shadow .2s; width: 100%; }
   .form-input:focus, .form-textarea:focus, .form-select:focus { border-color: var(--indigo); box-shadow: 0 0 0 3px var(--indigo-dim); }
+  .form-input[readonly] { cursor: not-allowed; opacity: .8; }
   .form-textarea { resize: vertical; min-height: 80px; }
   .form-select option { background: var(--surface); color: var(--text); }
 
@@ -481,14 +548,18 @@ const styles = `
     background-repeat: no-repeat;
     background-position: center;
     pointer-events: none;  /* allow click to pass through to input */
-    transition: opacity 0.2s;
+    transition: opacity 0.2s, filter 0.2s;
   }
 
-  /* In dark mode, make the icon white */
+  /* In dark mode, make the icon white. Two separate rules — one for the
+     manual .dark class toggle, one for the OS-level preference — since a
+     selector list can't be mixed into an @media block. */
   :root.dark .date-picker-wrapper::after,
-  .dark .date-picker-wrapper::after,
+  .dark .date-picker-wrapper::after {
+    filter: invert(1) brightness(200%);
+  }
   @media (prefers-color-scheme: dark) {
-    .date-picker-wrapper::after {
+    :root:not(.light) .date-picker-wrapper::after {
       filter: invert(1) brightness(200%);
     }
   }
@@ -498,7 +569,7 @@ const styles = `
     opacity: 0.8;
   }
 
-  .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; flex-wrap: wrap; }
 
   .btn { padding: 9px 18px; border-radius: 8px; border: none; font-family: 'Outfit', sans-serif; font-size: 0.82rem; font-weight: 600; letter-spacing: 0.02em; cursor: pointer; transition: all .18s; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; position: relative; }
   .btn:disabled { opacity: 0.55; cursor: not-allowed; }
@@ -554,7 +625,12 @@ const styles = `
   .spinner { width: 34px; height: 34px; border: 2px solid var(--border-dark); border-top-color: var(--indigo); border-radius: 50%; animation: spin .7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .error-banner { background: var(--rose-dim); border: 1px solid rgba(185,28,58,0.2); color: var(--rose); font-size: 0.82rem; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; }
+  .empty-state { text-align: center; padding: 64px 20px; color: var(--text-muted); }
+  .empty-state-title { font-family: 'Playfair Display', serif; font-size: 1.15rem; font-weight: 700; color: var(--text-soft); margin-bottom: 6px; }
+  .empty-state-sub { font-size: 0.85rem; color: var(--text-muted); }
+
+  .error-banner { background: var(--rose-dim); border: 1px solid rgba(185,28,58,0.2); color: var(--rose); font-size: 0.82rem; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; display: flex; align-items: flex-start; gap: 8px; }
+  .error-banner svg { flex-shrink: 0; margin-top: 1px; }
 
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -565,13 +641,14 @@ const styles = `
     position: fixed; inset: 0; z-index: 400;
     background: rgba(26,25,23,0.7); backdrop-filter: blur(8px);
     display: flex; align-items: center; justify-content: center;
+    padding: 16px;
   }
   .confirm-modal {
-    background: var(--surface); border-radius: 24px; width: 380px;
+    background: var(--surface); border-radius: 24px; width: 380px; max-width: 100%;
     padding: 28px 24px 24px; text-align: center;
     border: 1px solid var(--border); box-shadow: var(--shadow-lg);
   }
-  .confirm-icon { font-size: 48px; margin-bottom: 12px; }
+  .confirm-icon { font-size: 40px; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; color: var(--rose); }
   .confirm-title { font-family: 'Playfair Display', serif; font-size: 1.5rem;
     font-weight: 700; color: var(--rose); margin-bottom: 6px; }
   .confirm-message { color: var(--text-soft); margin-bottom: 28px;
@@ -583,7 +660,8 @@ const styles = `
   .confirm-cancel:hover { background: var(--surface-2); color: var(--text); }
   .confirm-delete { background: var(--rose-dim); border: none;
     color: var(--rose); padding: 8px 20px; border-radius: 40px;
-    font-weight: 600; cursor: pointer; transition: all .2s; }
+    font-weight: 600; cursor: pointer; transition: all .2s;
+    display: inline-flex; align-items: center; gap: 6px; }
   .client-modal-overlay {
     position: fixed; inset: 0; z-index: 420;
     background: rgba(26,25,23,0.7); backdrop-filter: blur(8px);
@@ -624,15 +702,26 @@ const styles = `
   .confirm-delete:hover { background: rgba(185,28,58,0.2);
     transform: scale(0.96); }
 
+  .add-year-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  @media (max-width: 900px) {
+    .year-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
   @media (max-width: 640px) {
-    .dash-content { padding: 24px 16px; }
+    .dash-content { padding: 20px 14px; }
     .section-title { font-size: 1.6rem; }
+    .section-subtitle { margin-bottom: 22px; }
     .year-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
     .year-card { padding: 28px 12px; }
     .year-card-num { font-size: 2.4rem; }
     .client-grid { grid-template-columns: 1fr; gap: 10px; }
-    .project-card { flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px 16px; }
+    .client-card-name { padding-right: 0; margin-bottom: 24px; }
+    .client-card-actions { top: auto; bottom: 14px; left: 22px; right: auto; }
+    .project-card { flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px 16px; }
     .project-meta { width: 100%; justify-content: space-between; }
+    .section-actions { justify-content: stretch; }
+    .section-actions .btn { flex: 1 1 auto; justify-content: center; }
     .form-row { grid-template-columns: 1fr !important; gap: 12px; }
     .form-row.three { grid-template-columns: 1fr !important; }
     .modal-overlay { padding: 0; align-items: flex-end; }
@@ -645,7 +734,11 @@ const styles = `
     .detail-grid.detail-grid-status { grid-template-columns: 1fr; }
     .detail-grid.detail-grid-team { grid-template-columns: 1fr 1fr; }
     .co-header { flex-direction: column; align-items: flex-start; }
-    .confirm-modal { width: 300px; margin: 0 16px; }
+    .co-header > div { width: 100%; }
+    .co-header .btn { flex: 1; justify-content: center; }
+    .confirm-modal { width: 100%; margin: 0; }
+    .form-actions { justify-content: stretch; }
+    .form-actions .btn { flex: 1 1 auto; justify-content: center; }
   }
 `;
 
@@ -695,7 +788,7 @@ function initialsFrom(name) {
     .slice(0, 2);
 }
 // ─── DATE INPUT (with clickable custom calendar icon) ──────────────────────
-function IfcIfaDateInput({ value, onChange, className = "" }) {
+function IfcIfaDateInput({ value, onChange, className = "", label }) {
   const inputRef = useRef(null);
 
   const openPicker = () => {
@@ -715,6 +808,7 @@ function IfcIfaDateInput({ value, onChange, className = "" }) {
       <input
         ref={inputRef}
         type="date"
+        aria-label={label}
         className={`form-input date-input-ifc-ifa ${className}`}
         value={value || ""}
         onChange={(e) => onChange(e.target.value)}
@@ -937,7 +1031,7 @@ function parseCSVtoCOs(text) {
 }
 
 function BtnSpinner({ dark = false }) {
-  return <span className={`btn-spinner${dark ? " btn-spinner-dark" : ""}`} />;
+  return <span className={`btn-spinner${dark ? " btn-spinner-dark" : ""}`} aria-hidden="true" />;
 }
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
@@ -1399,10 +1493,22 @@ export default function Dashboard() {
     }
   };
 
+  // Escape-to-close for every overlay currently on screen.
+  useEscapeToClose(!!selectedProject, () => {
+    setSelectedProject(null);
+    setEditingProjectMode(false);
+    setShowAddCo(false);
+    setEditingCoId(null);
+    setError("");
+  });
+  useEscapeToClose(!!viewProject, closeViewModal);
+  useEscapeToClose(!!viewClient, closeViewClientModal);
+  useEscapeToClose(confirmDialog.isOpen, () => setConfirmDialog(prev => ({ ...prev, isOpen: false })));
+
   if (loading) return (
-    <div className="loading-screen">
-      <div className="spinner" />
-      <p className="loading-text">Loading Dashboard</p>
+    <div className="loading-screen" role="status" aria-live="polite">
+      <div className="spinner" aria-hidden="true" />
+      <p className="loading-text">Loading dashboard…</p>
     </div>
   );
 
@@ -1416,14 +1522,17 @@ export default function Dashboard() {
             {/* ════ YEAR SELECTION ════ */}
             {!selectedYear && (
               <motion.div key="years" variants={fadeUp} initial="hidden" animate="show" exit="exit">
-                <p className="section-title">Select Year</p>
-                <p className="section-subtitle">Choose a fiscal year to explore projects</p>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
+                <p className="section-title">Select year</p>
+                <p className="section-subtitle">Choose a fiscal year to explore its projects</p>
+                <div className="add-year-inline" style={{ marginBottom: 24 }}>
                   {showAddYear ? (
                     <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <label htmlFor="new-year-input" className="sr-only">New year</label>
                       <input
+                        id="new-year-input"
                         className="form-input" style={{ width: 110, fontFamily: "'JetBrains Mono', monospace", fontSize: "0.95rem" }}
                         placeholder="e.g. 2026" maxLength={4} value={newYearInput}
+                        inputMode="numeric"
                         onChange={e => setNewYearInput(e.target.value.replace(/\D/g, ""))}
                         onKeyDown={e => {
                           if (e.key === "Enter") { const y = newYearInput.trim(); if (y.length === 4 && !years.includes(y)) setYears(prev => [...prev, y].sort((a, b) => b - a)); setNewYearInput(""); setShowAddYear(false); }
@@ -1431,17 +1540,26 @@ export default function Dashboard() {
                         }} autoFocus
                       />
                       <button className="btn btn-gold btn-sm" onClick={() => { const y = newYearInput.trim(); if (y.length === 4 && !years.includes(y)) setYears(prev => [...prev, y].sort((a, b) => b - a)); setNewYearInput(""); setShowAddYear(false); }}>Add</button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => { setNewYearInput(""); setShowAddYear(false); }}>✕</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => { setNewYearInput(""); setShowAddYear(false); }} aria-label="Cancel adding year"><X size={14} /></button>
                     </motion.div>
                   ) : (
-                    <button className="btn btn-ghost btn-sm" onClick={() => setShowAddYear(true)}>+ Add Year</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setShowAddYear(true)}><Plus size={14} /> Add year</button>
                   )}
                 </div>
                 <div className="year-grid">
                   {years.length === 0 ? (
-                    <p style={{ color: "var(--text-muted)", gridColumn: "1/-1" }}>No years yet. Add one above.</p>
+                    <div className="empty-state" style={{ gridColumn: "1/-1" }}>
+                      <p className="empty-state-title">No years yet</p>
+                      <p className="empty-state-sub">Add a fiscal year above to start tracking projects.</p>
+                    </div>
                   ) : years.map((y) => (
-                    <motion.div key={y} variants={item} className="year-card" onClick={() => { setSelectedYear(y); setSelectedClient(null); setSelectedProject(null); }} whileTap={{ scale: 0.97 }}>
+                    <motion.div
+                      key={y} variants={item} className="year-card" role="button" tabIndex={0}
+                      aria-label={`View ${allProjects.filter(p => p.year === y).length} projects for ${y}`}
+                      onClick={() => { setSelectedYear(y); setSelectedClient(null); setSelectedProject(null); }}
+                      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedYear(y); setSelectedClient(null); setSelectedProject(null); } }}
+                      whileTap={{ scale: 0.97 }}
+                    >
                       <div className="year-card-num">{y}</div>
                       <div className="year-card-label">{allProjects.filter(p => p.year === y).length} projects</div>
                     </motion.div>
@@ -1453,9 +1571,9 @@ export default function Dashboard() {
             {/* ════ CLIENT SELECTION ════ */}
             {selectedYear && !selectedClient && (
               <motion.div key="clients" variants={fadeUp} initial="hidden" animate="show" exit="exit">
-                <button className="back-btn" onClick={() => setSelectedYear(null)}>← Back to Years</button>
+                <button className="back-btn" onClick={() => setSelectedYear(null)}>← Back to years</button>
                 <p className="section-title">Clients — {selectedYear}</p>
-                <p className="section-subtitle">{clientsForYear.length} client(s) with active projects</p>
+                <p className="section-subtitle">{clientsForYear.length} client{clientsForYear.length === 1 ? "" : "s"} with active projects</p>
                 <div style={{ marginBottom: 18 }}>
                   <button className="btn btn-gold" onClick={() => {
                     setShowAddProject(v => !v);
@@ -1467,7 +1585,7 @@ export default function Dashboard() {
                       }));
                     }
                   }}>
-                    {showAddProject ? "✕ Cancel" : "+ New Project"}
+                    {showAddProject ? <><X size={14} /> Cancel</> : <><Plus size={14} /> New project</>}
                   </button>
                 </div>
                 <AnimatePresence>
@@ -1488,34 +1606,45 @@ export default function Dashboard() {
                   )}
                 </AnimatePresence>
                 {clientsForYear.length === 0 ? (
-                  <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "60px 0" }}>No projects found for {selectedYear}.</p>
+                  <div className="empty-state">
+                    <p className="empty-state-title">No projects for {selectedYear}</p>
+                    <p className="empty-state-sub">Create a new project to get this year started.</p>
+                  </div>
                 ) : (
                   <div className="client-grid">
                     {clientsForYear.map((client) => {
                       const clientProjects = filteredByYear.filter(p => p.client === client);
                       return (
-                        <motion.div key={client} variants={item} className="client-card" onClick={() => setSelectedClient(client)} whileTap={{ scale: 0.98 }}>
+                        <motion.div
+                          key={client} variants={item} className="client-card" role="button" tabIndex={0}
+                          aria-label={`View ${clientProjects.length} projects for ${client}`}
+                          onClick={() => setSelectedClient(client)}
+                          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedClient(client); } }}
+                          whileTap={{ scale: 0.98 }}
+                        >
                           <div className="client-card-name">{client}</div>
-                          <div className="client-card-count">{clientProjects.length} project(s)</div>
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            title="View all projects for this client"
-                            style={{ position: "absolute", top: 14, right: 52, zIndex: 2 }}
-                            onClick={(e) => handleViewClientAll(e, client, clientProjects)}
-                          >
-                            👁
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            title="Download all projects for this client (Excel)"
-                            disabled={downloadingClient}
-                            style={{ position: "absolute", top: 14, right: 14, zIndex: 2 }}
-                            onClick={(e) => handleDownloadClientAll(e, client, clientProjects)}
-                          >
-                            {downloadingClient ? <span className="btn-spinner btn-spinner-dark" /> : "⬇"}
-                          </button>
+                          <div className="client-card-count">{clientProjects.length} project{clientProjects.length === 1 ? "" : "s"}</div>
+                          <div className="client-card-actions">
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="View all projects for this client"
+                              aria-label={`View all projects for ${client}`}
+                              onClick={(e) => handleViewClientAll(e, client, clientProjects)}
+                            >
+                              <Eye size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="Download all projects for this client (Excel)"
+                              aria-label={`Download all projects for ${client} as Excel`}
+                              disabled={downloadingClient}
+                              onClick={(e) => handleDownloadClientAll(e, client, clientProjects)}
+                            >
+                              {downloadingClient ? <span className="btn-spinner btn-spinner-dark" aria-hidden="true" /> : <Download size={15} />}
+                            </button>
+                          </div>
                         </motion.div>
                       );
                     })}
@@ -1527,9 +1656,9 @@ export default function Dashboard() {
             {/* ════ PROJECT LIST ════ */}
             {selectedYear && selectedClient && !selectedProject && (
               <motion.div key="projects" variants={fadeUp} initial="hidden" animate="show" exit="exit">
-                <button className="back-btn" onClick={() => setSelectedClient(null)}>← Back to Clients</button>
+                <button className="back-btn" onClick={() => setSelectedClient(null)}>← Back to clients</button>
                 <p className="section-title">{selectedClient}</p>
-                <p className="section-subtitle">{projectsForClient.length} project(s) in {selectedYear}</p>
+                <p className="section-subtitle">{projectsForClient.length} project{projectsForClient.length === 1 ? "" : "s"} in {selectedYear}</p>
                 <div className="section-actions">
                   <button
                     type="button"
@@ -1538,7 +1667,7 @@ export default function Dashboard() {
                     onClick={(e) => handleViewClientAll(e, selectedClient, projectsForClient)}
                     title="View all of this client's projects"
                   >
-                    👁 View All
+                    <Eye size={15} /> View all
                   </button>
                   <button
                     type="button"
@@ -1547,7 +1676,7 @@ export default function Dashboard() {
                     onClick={(e) => handleDownloadClientAll(e, selectedClient, projectsForClient)}
                     title="Download all of this client's projects as one Excel file"
                   >
-                    {downloadingClient ? <BtnSpinner dark /> : "⬇ Download All (Excel)"}
+                    {downloadingClient ? <BtnSpinner dark /> : <Download size={15} />} Download all (Excel)
                   </button>
                   <button className="btn btn-gold" onClick={() => {
                     setShowAddProject(v => !v);
@@ -1559,7 +1688,7 @@ export default function Dashboard() {
                       }));
                     }
                   }}>
-                    {showAddProject ? "✕ Cancel" : "+ New Project"}
+                    {showAddProject ? <><X size={14} /> Cancel</> : <><Plus size={14} /> New project</>}
                   </button>
                 </div>
                 <AnimatePresence>
@@ -1580,15 +1709,24 @@ export default function Dashboard() {
                   )}
                 </AnimatePresence>
                 {projectsForClient.length === 0 ? (
-                  <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "60px 0" }}>No projects found.</p>
+                  <div className="empty-state">
+                    <p className="empty-state-title">No projects yet</p>
+                    <p className="empty-state-sub">Add the first project for {selectedClient} above.</p>
+                  </div>
                 ) : (
                   <motion.div className="project-list" variants={fadeUp}>
                     {projectsForClient.map((p) => (
-                      <motion.div key={p.jobNumber || p.projectName} variants={item} className="project-card" onClick={() => { setSelectedProject(p); setActiveTab("main"); setEditingProjectMode(false); }} whileTap={{ scale: 0.99 }}>
+                      <motion.div
+                        key={p.jobNumber || p.projectName} variants={item} className="project-card" role="button" tabIndex={0}
+                        aria-label={`Open project ${p.projectName}`}
+                        onClick={() => { setSelectedProject(p); setActiveTab("main"); setEditingProjectMode(false); }}
+                        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedProject(p); setActiveTab("main"); setEditingProjectMode(false); } }}
+                        whileTap={{ scale: 0.99 }}
+                      >
                         <div>
                           <div className="project-name" style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             {p.projectName}
-                            <CopyButton text={p.projectName} />
+                            <CopyButton text={p.projectName} label="project name" />
                           </div>
                           <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
                             {p.approvalStatus && <span className="badge badge-default">Approval: {p.approvalStatus}</span>}
@@ -1601,24 +1739,26 @@ export default function Dashboard() {
                             type="button"
                             className="icon-btn"
                             title="View details"
+                            aria-label={`View details for ${p.projectName}`}
                             onClick={(e) => handleViewProject(e, p)}
                           >
-                            👁
+                            <Eye size={15} />
                           </button>
                           <button
                             type="button"
                             className="icon-btn"
                             title="Download Excel"
+                            aria-label={`Download Excel for ${p.projectName}`}
                             disabled={downloadingKey === (p.jobNumber || p.projectName)}
                             onClick={(e) => handleDownloadProject(e, p)}
                           >
                             {downloadingKey === (p.jobNumber || p.projectName) ? (
-                              <span className="btn-spinner btn-spinner-dark" />
+                              <span className="btn-spinner btn-spinner-dark" aria-hidden="true" />
                             ) : (
-                              "⬇"
+                              <Download size={15} />
                             )}
                           </button>
-                          <span className="project-arrow">›</span>
+                          <span className="project-arrow" aria-hidden="true"><ChevronRight size={18} /></span>
                         </div>
                       </motion.div>
                     ))}
@@ -1634,6 +1774,7 @@ export default function Dashboard() {
         <AnimatePresence>
           {selectedProject && (
             <motion.div className="modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              role="presentation"
               onClick={(e) => {
                 if (e.target === e.currentTarget) {
                   setSelectedProject(null);
@@ -1643,33 +1784,36 @@ export default function Dashboard() {
                   setError("");
                 }
               }}>
-              <motion.div className="modal-box" variants={scaleIn} initial="hidden" animate="show" exit="exit"
-                onClick={e => e.stopPropagation()} style={{ position: "relative" }}>
-                <button className="modal-close" onClick={() => { setSelectedProject(null); setEditingProjectMode(false); setError(""); }}>✕</button>
+              <motion.div
+                className="modal-box" variants={scaleIn} initial="hidden" animate="show" exit="exit"
+                onClick={e => e.stopPropagation()} style={{ position: "relative" }}
+                role="dialog" aria-modal="true" aria-labelledby="project-modal-title"
+              >
+                <button className="modal-close" aria-label="Close project details" onClick={() => { setSelectedProject(null); setEditingProjectMode(false); setError(""); }}><X size={16} /></button>
 
                 <div className="modal-header">
-                  <p className="modal-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <p className="modal-title" id="project-modal-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     {selectedProject.projectName}
-                    <CopyButton text={selectedProject.projectName} />
+                    <CopyButton text={selectedProject.projectName} label="project name" />
                   </p>
                   <p className="modal-subtitle" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       {selectedProject.client}
-                      <CopyButton text={selectedProject.client} />
+                      <CopyButton text={selectedProject.client} label="client name" />
                     </span>
-                    <span>·</span>
+                    <span aria-hidden="true">·</span>
                     <span>#{selectedProject.jobNumber || "N/A"}</span>
-                    <span>·</span>
+                    <span aria-hidden="true">·</span>
                     <span>{selectedProject.year}</span>
                   </p>
-                  <div className="modal-tabs">
-                    <button className={`modal-tab ${activeTab === "main" ? "active" : ""}`} onClick={() => { setActiveTab("main"); setEditingProjectMode(false); }}>Main Details</button>
-                    <button className={`modal-tab ${activeTab === "change" ? "active" : ""}`} onClick={() => setActiveTab("change")}>Change Orders</button>
+                  <div className="modal-tabs" role="tablist" aria-label="Project sections">
+                    <button role="tab" aria-selected={activeTab === "main"} className={`modal-tab ${activeTab === "main" ? "active" : ""}`} onClick={() => { setActiveTab("main"); setEditingProjectMode(false); }}>Main details</button>
+                    <button role="tab" aria-selected={activeTab === "change"} className={`modal-tab ${activeTab === "change" ? "active" : ""}`} onClick={() => setActiveTab("change")}>Change orders</button>
                   </div>
                 </div>
 
                 <div className="modal-body">
-                  {error && <div className="error-banner">⚠ {error}</div>}
+                  {error && <div className="error-banner" role="alert"><AlertTriangle size={14} /> <span>{error}</span></div>}
 
                   <AnimatePresence mode="wait">
                     {activeTab === "main" && (
@@ -1677,9 +1821,9 @@ export default function Dashboard() {
                         {!editingProjectMode ? (
                           <>
                             <div className="section-actions">
-                              <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setEditProjectData({ ...selectedProject }); setEditingProjectMode(true); }}>✎ Edit</button>
+                              <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setEditProjectData({ ...selectedProject }); setEditingProjectMode(true); }}><Pencil size={13} /> Edit</button>
                               <button className="btn btn-danger btn-sm" onClick={handleDeleteProject} disabled={deletingProject}>
-                                {deletingProject ? <><BtnSpinner />&nbsp;Deleting…</> : "🗑 Delete"}
+                                {deletingProject ? <><BtnSpinner />&nbsp;Deleting…</> : <><Trash2 size={13} /> Delete</>}
                               </button>
                             </div>
                             <ProjectDetailsView project={selectedProject} />
@@ -1687,7 +1831,7 @@ export default function Dashboard() {
                         ) : (
                           <>
                             <div style={{ marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontFamily: "'Playfair Display', serif", fontSize: "1rem", fontWeight: 700, color: "var(--indigo)" }}>Editing Project</span>
+                              <span style={{ fontFamily: "'Playfair Display', serif", fontSize: "1rem", fontWeight: 700, color: "var(--indigo)" }}>Editing project</span>
                             </div>
                             <EditProjectForm data={editProjectData} setData={setEditProjectData} onSave={handleSaveProject} onCancel={() => setEditingProjectMode(false)} saving={savingProject} />
                           </>
@@ -1698,10 +1842,10 @@ export default function Dashboard() {
                     {activeTab === "change" && (
                       <motion.div key="co-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                         <div className="co-header">
-                          <span className="co-title">Change Orders</span>
+                          <span className="co-title">Change orders</span>
                           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                             <button className="btn btn-teal btn-sm" onClick={() => { setShowAddCo(v => !v); setEditingCoId(null); }}>
-                              {showAddCo ? "✕ Cancel" : "+ Add CO"}
+                              {showAddCo ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add change order</>}
                             </button>
                           </div>
                         </div>
@@ -1710,7 +1854,7 @@ export default function Dashboard() {
                           {showAddCo && (
                             <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
                               <div className="add-panel" style={{ borderColor: "rgba(15,113,117,0.18)", background: "rgba(15,113,117,0.03)" }}>
-                                <p className="add-panel-title" style={{ color: "var(--teal)" }}>New Change Order</p>
+                                <p className="add-panel-title" style={{ color: "var(--teal)" }}>New change order</p>
                                 <CoEditRow data={newCoData} setData={setNewCoData} onSave={handleAddCo} onCancel={() => setShowAddCo(false)} saving={addingCo} />
                               </div>
                             </motion.div>
@@ -1718,45 +1862,47 @@ export default function Dashboard() {
                         </AnimatePresence>
 
                         {coLoading ? (
-                          <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
-                            <div className="spinner" style={{ margin: "0 auto 12px" }} />
-                            Loading change orders...
+                          <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }} role="status" aria-live="polite">
+                            <div className="spinner" style={{ margin: "0 auto 12px" }} aria-hidden="true" />
+                            Loading change orders…
                           </div>
                         ) : (
                           <div className="co-table-wrap">
                             <table className="co-table">
+                              <caption className="sr-only">Change orders for {selectedProject.projectName}</caption>
                               <thead>
                                 <tr>
-                                  <th>#</th><th>CO</th><th>Description</th><th>Status</th><th>Amount</th>
-                                  <th>IFA Date</th><th>IFA %</th><th>IFF Date</th><th>IFF %</th><th>Remarks</th><th>Actions</th>
+                                  <th scope="col">#</th><th scope="col">CO</th><th scope="col">Description</th><th scope="col">Status</th><th scope="col">Amount</th>
+                                  <th scope="col">IFA date</th><th scope="col">IFA %</th><th scope="col">IFF date</th><th scope="col">IFF %</th><th scope="col">Remarks</th><th scope="col">Actions</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {changeOrders.length === 0 ? (
-                                  <tr><td colSpan={11} className="co-empty">No change orders yet. Add one above.</td></tr>
+                                  <tr><td colSpan={11} className="co-empty">No change orders yet. Add one above to get started.</td></tr>
                                 ) : changeOrders.map((co, idx) => (
                                   <React.Fragment key={co.id}>
                                     {editingCoId === co.id ? (
                                       <tr style={{ background: "var(--indigo-dim)" }}>
                                         <td className="co-idx">{idx + 1}</td>
-                                        <td><input className="co-table-input" value={editCoData.co || ""} onChange={e => setEditCoData(p => ({ ...p, co: e.target.value }))} /></td>
-                                        <td><input className="co-table-input" value={editCoData.description || ""} onChange={e => setEditCoData(p => ({ ...p, description: e.target.value }))} /></td>
+                                        <td><label className="sr-only" htmlFor={`co-num-${co.id}`}>CO number</label><input id={`co-num-${co.id}`} className="co-table-input" value={editCoData.co || ""} onChange={e => setEditCoData(p => ({ ...p, co: e.target.value }))} /></td>
+                                        <td><label className="sr-only" htmlFor={`co-desc-${co.id}`}>Description</label><input id={`co-desc-${co.id}`} className="co-table-input" value={editCoData.description || ""} onChange={e => setEditCoData(p => ({ ...p, description: e.target.value }))} /></td>
                                         <td>
-                                          <select className="co-table-select" value={editCoData.status || ""} onChange={e => setEditCoData(p => ({ ...p, status: e.target.value }))}>
+                                          <label className="sr-only" htmlFor={`co-status-${co.id}`}>Status</label>
+                                          <select id={`co-status-${co.id}`} className="co-table-select" value={editCoData.status || ""} onChange={e => setEditCoData(p => ({ ...p, status: e.target.value }))}>
                                             {CO_STATUSES.map(s => <option key={s}>{s}</option>)}
                                           </select>
                                         </td>
-                                       <td><input type="number" className="co-table-input" style={{ minWidth: 80 }} value={editCoData.amount === 0 || editCoData.amount === "" ? "" : editCoData.amount} onChange={e => { const val = e.target.value; setEditCoData(p => ({ ...p, amount: val === "" ? "" : parseFloat(val) || 0 })); }} placeholder="0" /></td>
-                                        <td><input type="date" className="co-table-input" value={editCoData.ifaDate || ""} onChange={e => setEditCoData(p => ({ ...p, ifaDate: e.target.value }))} onClick={(e) => { try { e.target.showPicker && e.target.showPicker(); } catch (_) {} }} /></td>
-                                        <td><input className="co-table-input" style={{ minWidth: 55 }} value={editCoData.ifaPer || ""} onChange={e => setEditCoData(p => ({ ...p, ifaPer: e.target.value }))} /></td>
-                                        <td><input type="date" className="co-table-input" value={editCoData.iffDate || ""} onChange={e => setEditCoData(p => ({ ...p, iffDate: e.target.value }))} onClick={(e) => { try { e.target.showPicker && e.target.showPicker(); } catch (_) {} }} /></td>
-                                        <td><input className="co-table-input" style={{ minWidth: 55 }} value={editCoData.iffPer || ""} onChange={e => setEditCoData(p => ({ ...p, iffPer: e.target.value }))} /></td>
-                                        <td><input className="co-table-input" value={editCoData.remarks || ""} onChange={e => setEditCoData(p => ({ ...p, remarks: e.target.value }))} /></td>
+                                       <td><label className="sr-only" htmlFor={`co-amt-${co.id}`}>Amount</label><input id={`co-amt-${co.id}`} type="number" className="co-table-input" style={{ minWidth: 80 }} value={editCoData.amount === 0 || editCoData.amount === "" ? "" : editCoData.amount} onChange={e => { const val = e.target.value; setEditCoData(p => ({ ...p, amount: val === "" ? "" : parseFloat(val) || 0 })); }} placeholder="0" /></td>
+                                        <td><label className="sr-only" htmlFor={`co-ifa-${co.id}`}>IFA date</label><input id={`co-ifa-${co.id}`} type="date" className="co-table-input" value={editCoData.ifaDate || ""} onChange={e => setEditCoData(p => ({ ...p, ifaDate: e.target.value }))} onClick={(e) => { try { e.target.showPicker && e.target.showPicker(); } catch (_) {} }} /></td>
+                                        <td><label className="sr-only" htmlFor={`co-ifap-${co.id}`}>IFA percent</label><input id={`co-ifap-${co.id}`} className="co-table-input" style={{ minWidth: 55 }} value={editCoData.ifaPer || ""} onChange={e => setEditCoData(p => ({ ...p, ifaPer: e.target.value }))} /></td>
+                                        <td><label className="sr-only" htmlFor={`co-iff-${co.id}`}>IFF date</label><input id={`co-iff-${co.id}`} type="date" className="co-table-input" value={editCoData.iffDate || ""} onChange={e => setEditCoData(p => ({ ...p, iffDate: e.target.value }))} onClick={(e) => { try { e.target.showPicker && e.target.showPicker(); } catch (_) {} }} /></td>
+                                        <td><label className="sr-only" htmlFor={`co-iffp-${co.id}`}>IFF percent</label><input id={`co-iffp-${co.id}`} className="co-table-input" style={{ minWidth: 55 }} value={editCoData.iffPer || ""} onChange={e => setEditCoData(p => ({ ...p, iffPer: e.target.value }))} /></td>
+                                        <td><label className="sr-only" htmlFor={`co-remarks-${co.id}`}>Remarks</label><input id={`co-remarks-${co.id}`} className="co-table-input" value={editCoData.remarks || ""} onChange={e => setEditCoData(p => ({ ...p, remarks: e.target.value }))} /></td>
                                         <td style={{ whiteSpace: "nowrap", display: "flex", gap: 6, padding: "10px 8px" }}>
                                           <button className="btn btn-gold btn-sm" onClick={handleSaveCo} disabled={savingCo}>
                                             {savingCo ? <><BtnSpinner />&nbsp;Saving</> : "Save"}
                                           </button>
-                                          <button className="btn btn-ghost btn-sm" onClick={() => setEditingCoId(null)}>✕</button>
+                                          <button className="btn btn-ghost btn-sm" aria-label="Cancel editing change order" onClick={() => setEditingCoId(null)}><X size={13} /></button>
                                         </td>
                                       </tr>
                                     ) : (
@@ -1798,36 +1944,40 @@ export default function Dashboard() {
         <AnimatePresence>
           {viewProject && (
             <motion.div className="modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              role="presentation"
               onClick={closeViewModal}>
-              <motion.div className="modal-box" variants={scaleIn} initial="hidden" animate="show" exit="exit"
-                onClick={e => e.stopPropagation()} style={{ position: "relative" }}>
-                <button className="modal-close" onClick={closeViewModal}>✕</button>
+              <motion.div
+                className="modal-box" variants={scaleIn} initial="hidden" animate="show" exit="exit"
+                onClick={e => e.stopPropagation()} style={{ position: "relative" }}
+                role="dialog" aria-modal="true" aria-labelledby="view-project-modal-title"
+              >
+                <button className="modal-close" aria-label="Close" onClick={closeViewModal}><X size={16} /></button>
 
                 <div className="modal-header">
-                  <p className="modal-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <p className="modal-title" id="view-project-modal-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     {viewProject.projectName}
-                    <CopyButton text={viewProject.projectName} />
+                    <CopyButton text={viewProject.projectName} label="project name" />
                   </p>
                   <p className="modal-subtitle" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       {viewProject.client}
-                      <CopyButton text={viewProject.client} />
+                      <CopyButton text={viewProject.client} label="client name" />
                     </span>
-                    <span>·</span>
+                    <span aria-hidden="true">·</span>
                     <span>#{viewProject.jobNumber || "N/A"}</span>
-                    <span>·</span>
+                    <span aria-hidden="true">·</span>
                     <span>{viewProject.year}</span>
                   </p>
                 </div>
 
                 <div className="modal-body">
                   {viewLoading ? (
-                    <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
-                      <div className="spinner" style={{ margin: "0 auto 12px" }} />
-                      Loading project details...
+                    <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }} role="status" aria-live="polite">
+                      <div className="spinner" style={{ margin: "0 auto 12px" }} aria-hidden="true" />
+                      Loading project details…
                     </div>
                   ) : viewError ? (
-                    <div className="error-banner">⚠ {viewError}</div>
+                    <div className="error-banner" role="alert"><AlertTriangle size={14} /> <span>{viewError}</span></div>
                   ) : viewData && (
                     <>
                       <div className="section-actions">
@@ -1835,13 +1985,14 @@ export default function Dashboard() {
                           className="btn btn-gold btn-sm"
                           onClick={() => downloadProjectWorkbook(viewData.project, viewData.changeOrders)}
                         >
-                          ⬇ Download as Excel
+                          <Download size={13} /> Download as Excel
                         </button>
                       </div>
 
-                      <p className="detail-section-heading">Main Details</p>
+                      <p className="detail-section-heading">Main details</p>
                       <div className="view-table-wrap">
                         <table className="view-table">
+                          <caption className="sr-only">Main details for {viewData.project.projectName}</caption>
                           <tbody>
                             {(() => {
                               const team = parseTeam(viewData.project.team);
@@ -1871,16 +2022,17 @@ export default function Dashboard() {
                         </table>
                       </div>
 
-                      <p className="detail-section-heading">Change Orders ({viewData.changeOrders.length})</p>
+                      <p className="detail-section-heading">Change orders ({viewData.changeOrders.length})</p>
                       {viewData.changeOrders.length === 0 ? (
-                        <p style={{ color: "var(--text-muted)", padding: "16px 0" }}>No change orders for this project.</p>
+                        <p style={{ color: "var(--text-muted)", padding: "16px 0" }}>No change orders for this project yet.</p>
                       ) : (
                         <div className="view-table-wrap">
                           <table className="view-table" style={{ minWidth: 900 }}>
+                            <caption className="sr-only">Change orders for {viewData.project.projectName}</caption>
                             <thead>
                               <tr>
-                                <th>#</th><th>CO</th><th>Description</th><th>Status</th><th>Amount</th>
-                                <th>IFA Date</th><th>IFA %</th><th>IFF Date</th><th>IFF %</th><th>Remarks</th>
+                                <th scope="col">#</th><th scope="col">CO</th><th scope="col">Description</th><th scope="col">Status</th><th scope="col">Amount</th>
+                                <th scope="col">IFA date</th><th scope="col">IFA %</th><th scope="col">IFF date</th><th scope="col">IFF %</th><th scope="col">Remarks</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -1914,27 +2066,31 @@ export default function Dashboard() {
         <AnimatePresence>
           {viewClient && (
             <motion.div className="modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              role="presentation"
               onClick={closeViewClientModal}>
-              <motion.div className="modal-box" variants={scaleIn} initial="hidden" animate="show" exit="exit"
-                onClick={e => e.stopPropagation()} style={{ position: "relative", maxWidth: 1040 }}>
-                <button className="modal-close" onClick={closeViewClientModal}>✕</button>
+              <motion.div
+                className="modal-box" variants={scaleIn} initial="hidden" animate="show" exit="exit"
+                onClick={e => e.stopPropagation()} style={{ position: "relative", maxWidth: 1040 }}
+                role="dialog" aria-modal="true" aria-labelledby="view-client-modal-title"
+              >
+                <button className="modal-close" aria-label="Close" onClick={closeViewClientModal}><X size={16} /></button>
 
                 <div className="modal-header">
-                  <p className="modal-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <p className="modal-title" id="view-client-modal-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     {viewClient.client}
-                    <CopyButton text={viewClient.client} />
+                    <CopyButton text={viewClient.client} label="client name" />
                   </p>
-                  <p className="modal-subtitle">{viewClient.projects.length} project(s)</p>
+                  <p className="modal-subtitle">{viewClient.projects.length} project{viewClient.projects.length === 1 ? "" : "s"}</p>
                 </div>
 
                 <div className="modal-body">
                   {viewClientLoading ? (
-                    <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
-                      <div className="spinner" style={{ margin: "0 auto 12px" }} />
-                      Loading all projects...
+                    <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }} role="status" aria-live="polite">
+                      <div className="spinner" style={{ margin: "0 auto 12px" }} aria-hidden="true" />
+                      Loading all projects…
                     </div>
                   ) : viewClientError ? (
-                    <div className="error-banner">⚠ {viewClientError}</div>
+                    <div className="error-banner" role="alert"><AlertTriangle size={14} /> <span>{viewClientError}</span></div>
                   ) : viewClientData && (
                     <>
                       <div className="section-actions">
@@ -1948,7 +2104,7 @@ export default function Dashboard() {
                             downloadClientWorkbook(viewClient.client, viewClient.projects, changeOrdersByProject);
                           }}
                         >
-                          ⬇ Download All (Excel)
+                          <Download size={13} /> Download all (Excel)
                         </button>
                       </div>
 
@@ -1965,13 +2121,14 @@ export default function Dashboard() {
                                 className="btn btn-ghost btn-sm"
                                 onClick={() => downloadProjectWorkbook(project, cos)}
                               >
-                                ⬇ This Project
+                                <Download size={13} /> This project
                               </button>
                             </div>
 
-                            <p className="detail-section-heading">Main Details</p>
+                            <p className="detail-section-heading">Main details</p>
                             <div className="view-table-wrap">
                               <table className="view-table">
+                                <caption className="sr-only">Main details for {project.projectName}</caption>
                                 <tbody>
                                   {[
                                     ["Client", project.client || "—"],
@@ -1996,16 +2153,17 @@ export default function Dashboard() {
                               </table>
                             </div>
 
-                            <p className="detail-section-heading">Change Orders ({cos.length})</p>
+                            <p className="detail-section-heading">Change orders ({cos.length})</p>
                             {cos.length === 0 ? (
-                              <p style={{ color: "var(--text-muted)", padding: "10px 0" }}>No change orders for this project.</p>
+                              <p style={{ color: "var(--text-muted)", padding: "10px 0" }}>No change orders for this project yet.</p>
                             ) : (
                               <div className="view-table-wrap">
                                 <table className="view-table" style={{ minWidth: 900 }}>
+                                  <caption className="sr-only">Change orders for {project.projectName}</caption>
                                   <thead>
                                     <tr>
-                                      <th>#</th><th>CO</th><th>Description</th><th>Status</th><th>Amount</th>
-                                      <th>IFA Date</th><th>IFA %</th><th>IFF Date</th><th>IFF %</th><th>Remarks</th>
+                                      <th scope="col">#</th><th scope="col">CO</th><th scope="col">Description</th><th scope="col">Status</th><th scope="col">Amount</th>
+                                      <th scope="col">IFA date</th><th scope="col">IFA %</th><th scope="col">IFF date</th><th scope="col">IFF %</th><th scope="col">Remarks</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -2046,6 +2204,7 @@ export default function Dashboard() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              role="presentation"
               onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
             >
               <motion.div
@@ -2054,15 +2213,17 @@ export default function Dashboard() {
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.95, y: 10 }}
                 onClick={e => e.stopPropagation()}
+                role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message"
               >
-                <div className="confirm-icon">⚠️</div>
-                <h3 className="confirm-title">{confirmDialog.title}</h3>
-                <p className="confirm-message">{confirmDialog.message}</p>
+                <div className="confirm-icon" aria-hidden="true"><AlertTriangle size={40} /></div>
+                <h3 className="confirm-title" id="confirm-dialog-title">{confirmDialog.title}</h3>
+                <p className="confirm-message" id="confirm-dialog-message">{confirmDialog.message}</p>
                 <div className="confirm-actions">
                   <button
                     className="confirm-cancel"
                     onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
                     disabled={deletingProject || deletingCoId !== null}
+                    autoFocus
                   >
                     Cancel
                   </button>
@@ -2072,7 +2233,7 @@ export default function Dashboard() {
                     disabled={deletingProject || deletingCoId !== null}
                     style={{ opacity: (deletingProject || deletingCoId !== null) ? 0.6 : 1, cursor: (deletingProject || deletingCoId !== null) ? "not-allowed" : "pointer" }}
                   >
-                    {deletingProject ? <><BtnSpinner />&nbsp;Deleting…</> : (deletingCoId !== null ? <><BtnSpinner />&nbsp;Deleting…</> : "Delete")}
+                    {deletingProject ? <><BtnSpinner />&nbsp;Deleting…</> : (deletingCoId !== null ? <><BtnSpinner />&nbsp;Deleting…</> : <><Trash2 size={13} /> Delete</>)}
                   </button>
                 </div>
               </motion.div>
@@ -2147,6 +2308,7 @@ function ProjectDetailsView({ project }) {
             <span
               className={`status-dot ${prefersReducedMotion ? "" : "status-dot--pulse"}`}
               style={{ background: getStatusColor(project.approvalStatus) }}
+              aria-hidden="true"
             />
             Approval: {project.approvalStatus}
           </span>
@@ -2165,6 +2327,7 @@ function ProjectDetailsView({ project }) {
             <span
               className={`status-dot ${prefersReducedMotion ? "" : "status-dot--pulse"}`}
               style={{ background: getStatusColor(project.fabStatus) }}
+              aria-hidden="true"
             />
             FAB: {project.fabStatus}
           </span>
@@ -2184,8 +2347,8 @@ function ProjectDetailsView({ project }) {
         variants={detailSectionVariants}
       >
         <p className="detail-section-heading">
-          <Building2 size={13} />
-          Project Identification
+          <Building2 size={13} aria-hidden="true" />
+          Project identification
         </p>
         <motion.div
           className="detail-grid"
@@ -2195,15 +2358,15 @@ function ProjectDetailsView({ project }) {
         >
           <motion.div className="detail-card" variants={detailCardVariants} style={{ "--card-accent": "var(--indigo)" }}>
             <p className="detail-label">
-              <Building2 size={10} style={{ marginRight: 4, verticalAlign: "-1px" }} />
+              <Building2 size={10} aria-hidden="true" style={{ marginRight: 4 }} />
               Client
             </p>
             <p className="detail-value">{project.client || "—"}</p>
           </motion.div>
           <motion.div className="detail-card" variants={detailCardVariants} style={{ "--card-accent": "var(--indigo)" }}>
             <p className="detail-label">
-              <Hash size={10} style={{ marginRight: 4, verticalAlign: "-1px" }} />
-              Job Number
+              <Hash size={10} aria-hidden="true" style={{ marginRight: 4 }} />
+              Job number
             </p>
             <p className="detail-value" style={{ fontFamily: "'JetBrains Mono',monospace" }}>
               {project.jobNumber || "N/A"}
@@ -2222,15 +2385,15 @@ function ProjectDetailsView({ project }) {
           </motion.div>
           <motion.div className="detail-card" variants={detailCardVariants} style={{ "--card-accent": "var(--indigo)" }}>
             <p className="detail-label">
-              <CalendarDays size={10} style={{ marginRight: 4, verticalAlign: "-1px" }} />
+              <CalendarDays size={10} aria-hidden="true" style={{ marginRight: 4 }} />
               Year
             </p>
             <p className="detail-value">{project.year || "—"}</p>
           </motion.div>
           <motion.div className="detail-card" variants={detailCardVariants} style={{ "--card-accent": "var(--indigo)" }}>
             <p className="detail-label">
-              <UserCircle2 size={10} style={{ marginRight: 4, verticalAlign: "-1px" }} />
-              Project Manager
+              <UserCircle2 size={10} aria-hidden="true" style={{ marginRight: 4 }} />
+              Project manager
             </p>
             <p className="detail-value">{project.projectManager || "—"}</p>
           </motion.div>
@@ -2245,7 +2408,7 @@ function ProjectDetailsView({ project }) {
         variants={detailSectionVariants}
       >
         <p className="detail-section-heading">
-          <ShieldCheck size={13} />
+          <ShieldCheck size={13} aria-hidden="true" />
           Approval
         </p>
         <motion.div
@@ -2259,13 +2422,14 @@ function ProjectDetailsView({ project }) {
             variants={detailCardVariants}
             style={{ "--card-accent": getStatusColor(project.approvalStatus) }}
           >
-            <p className="detail-label">Approval Status</p>
+            <p className="detail-label">Approval status</p>
             <p className="detail-value">
               {project.approvalStatus ? (
                 <span className="status-pill" style={{ color: getStatusColor(project.approvalStatus) }}>
                   <span
                     className={`status-dot ${prefersReducedMotion ? "" : "status-dot--pulse"}`}
                     style={{ background: getStatusColor(project.approvalStatus) }}
+                    aria-hidden="true"
                   />
                   {project.approvalStatus}
                 </span>
@@ -2273,7 +2437,7 @@ function ProjectDetailsView({ project }) {
             </p>
           </motion.div>
           <motion.div className="detail-card" variants={detailCardVariants} style={{ "--card-accent": "var(--indigo)" }}>
-            <p className="detail-label">IFA Date</p>
+            <p className="detail-label">IFA date</p>
             <p className="detail-value">{project.ifaDate || "—"}</p>
           </motion.div>
         </motion.div>
@@ -2287,7 +2451,7 @@ function ProjectDetailsView({ project }) {
         variants={detailSectionVariants}
       >
         <p className="detail-section-heading">
-          <Factory size={13} />
+          <Factory size={13} aria-hidden="true" />
           FAB
         </p>
         <motion.div
@@ -2301,13 +2465,14 @@ function ProjectDetailsView({ project }) {
             variants={detailCardVariants}
             style={{ "--card-accent": getStatusColor(project.fabStatus) }}
           >
-            <p className="detail-label">FAB Status</p>
+            <p className="detail-label">FAB status</p>
             <p className="detail-value">
               {project.fabStatus ? (
                 <span className="status-pill" style={{ color: getStatusColor(project.fabStatus) }}>
                   <span
                     className={`status-dot ${prefersReducedMotion ? "" : "status-dot--pulse"}`}
                     style={{ background: getStatusColor(project.fabStatus) }}
+                    aria-hidden="true"
                   />
                   {project.fabStatus}
                 </span>
@@ -2315,7 +2480,7 @@ function ProjectDetailsView({ project }) {
             </p>
           </motion.div>
           <motion.div className="detail-card" variants={detailCardVariants} style={{ "--card-accent": "var(--copper)" }}>
-            <p className="detail-label">IFC Date</p>
+            <p className="detail-label">IFC date</p>
             <p className="detail-value">{project.ifcDate || "—"}</p>
           </motion.div>
         </motion.div>
@@ -2329,7 +2494,7 @@ function ProjectDetailsView({ project }) {
         variants={detailSectionVariants}
       >
         <p className="detail-section-heading">
-          <Users size={13} />
+          <Users size={13} aria-hidden="true" />
           Team
         </p>
         <motion.div
@@ -2341,21 +2506,21 @@ function ProjectDetailsView({ project }) {
           <motion.div className="detail-card" variants={detailCardVariants} style={{ "--card-accent": "var(--teal)" }}>
             <p className="detail-label">Modeler</p>
             <p className="detail-value">
-              <span className="team-avatar">{initialsFrom(team.modeler)}</span>
+              <span className="team-avatar" aria-hidden="true">{initialsFrom(team.modeler)}</span>
               {team.modeler}
             </p>
           </motion.div>
           <motion.div className="detail-card" variants={detailCardVariants} style={{ "--card-accent": "var(--teal)" }}>
             <p className="detail-label">Editor</p>
             <p className="detail-value">
-              <span className="team-avatar">{initialsFrom(team.editor)}</span>
+              <span className="team-avatar" aria-hidden="true">{initialsFrom(team.editor)}</span>
               {team.editor}
             </p>
           </motion.div>
           <motion.div className="detail-card" variants={detailCardVariants} style={{ "--card-accent": "var(--teal)" }}>
             <p className="detail-label">Checker</p>
             <p className="detail-value">
-              <span className="team-avatar">{initialsFrom(team.checker)}</span>
+              <span className="team-avatar" aria-hidden="true">{initialsFrom(team.checker)}</span>
               {team.checker}
             </p>
           </motion.div>
@@ -2371,7 +2536,7 @@ function ProjectDetailsView({ project }) {
           variants={detailSectionVariants}
         >
           <p className="detail-section-heading">
-            <MessageSquareText size={13} />
+            <MessageSquareText size={13} aria-hidden="true" />
             Remarks
           </p>
           <motion.div initial={gridInitial} animate="show" variants={detailGridVariants}>
@@ -2392,18 +2557,19 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
   return (
     <div className="edit-form">
       <div className="form-row">
-        <div className="form-group"><label className="form-label">Client</label><input className="form-input" value={f("client")} onChange={e => s("client")(e.target.value)} /></div>
-        <div className="form-group"><label className="form-label">Project Name</label><input className="form-input" value={f("projectName")} onChange={e => s("projectName")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label" htmlFor="edit-client">Client</label><input id="edit-client" className="form-input" value={f("client")} onChange={e => s("client")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label" htmlFor="edit-projectName">Project name</label><input id="edit-projectName" className="form-input" value={f("projectName")} onChange={e => s("projectName")(e.target.value)} /></div>
       </div>
       <div className="form-row three">
-        <div className="form-group"><label className="form-label">Job Number</label><input className="form-input" value={f("jobNumber")} onChange={e => s("jobNumber")(e.target.value)} /></div>
-        <div className="form-group"><label className="form-label">Year</label><input className="form-input" value={f("year")} onChange={e => s("year")(e.target.value)} /></div>
-        <div className="form-group"><label className="form-label">Project Manager</label><input className="form-input" value={f("projectManager")} onChange={e => s("projectManager")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label" htmlFor="edit-jobNumber">Job number</label><input id="edit-jobNumber" className="form-input" value={f("jobNumber")} onChange={e => s("jobNumber")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label" htmlFor="edit-year">Year</label><input id="edit-year" className="form-input" value={f("year")} onChange={e => s("year")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label" htmlFor="edit-pm">Project manager</label><input id="edit-pm" className="form-input" value={f("projectManager")} onChange={e => s("projectManager")(e.target.value)} /></div>
       </div>
       <div className="form-row three">
         <div className="form-group">
-          <label className="form-label">Approval Status</label>
+          <label className="form-label" htmlFor="edit-approvalStatus">Approval status</label>
           <input
+            id="edit-approvalStatus"
             className="form-input"
             value={f("approvalStatus")}
             onChange={e => s("approvalStatus")(e.target.value)}
@@ -2411,15 +2577,16 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
           />
         </div>
         <div className="form-group">
-          <label className="form-label">IFA Date</label>
-          <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} />
+          <label className="form-label" htmlFor="edit-ifaDate">IFA date</label>
+          <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} label="IFA date" />
         </div>
         <div className="form-group"></div>
       </div>
       <div className="form-row">
         <div className="form-group">
-          <label className="form-label">FAB Status</label>
+          <label className="form-label" htmlFor="edit-fabStatus">FAB status</label>
           <input
+            id="edit-fabStatus"
             className="form-input"
             value={f("fabStatus")}
             onChange={e => s("fabStatus")(e.target.value)}
@@ -2427,18 +2594,24 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
           />
         </div>
         <div className="form-group">
-          <label className="form-label">IFC Date</label>
-          <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} />
+          <label className="form-label" htmlFor="edit-ifcDate">IFC date</label>
+          <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} label="IFC date" />
         </div>
       </div>
       <div className="form-row">
-        <div className="form-group"><label className="form-label">Team (Modeler/Editor/Checker)</label><input className="form-input" placeholder="e.g. Modeler/Editor/Checker" value={f("team")} onChange={e => s("team")(e.target.value)} /></div>
+        <div className="form-group">
+          <label className="form-label" htmlFor="edit-team">Team (modeler/editor/checker)</label>
+          <input id="edit-team" className="form-input" placeholder="e.g. Modeler/Editor/Checker" value={f("team")} onChange={e => s("team")(e.target.value)} />
+        </div>
       </div>
-      <div className="form-group"><label className="form-label">Remarks</label><textarea className="form-textarea" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} /></div>
+      <div className="form-group">
+        <label className="form-label" htmlFor="edit-remarks">Remarks</label>
+        <textarea id="edit-remarks" className="form-textarea" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} />
+      </div>
       <div className="form-actions">
         <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
         <button className="btn btn-gold" onClick={onSave} disabled={saving}>
-          {saving ? <><BtnSpinner />&nbsp;Saving…</> : "Save Changes"}
+          {saving ? <><BtnSpinner />&nbsp;Saving…</> : "Save changes"}
         </button>
       </div>
     </div>
@@ -2454,6 +2627,8 @@ function AddClientModal({ existingClients = [], onAdd, onCancel }) {
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  useEscapeToClose(true, onCancel);
 
   const handleAdd = () => {
     const trimmed = name.trim();
@@ -2473,13 +2648,13 @@ function AddClientModal({ existingClients = [], onAdd, onCancel }) {
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") handleAdd();
-    if (e.key === "Escape") onCancel();
   };
 
   return (
     <motion.div
       className="client-modal-overlay"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      role="presentation"
       onClick={onCancel}
     >
       <motion.div
@@ -2489,27 +2664,32 @@ function AddClientModal({ existingClients = [], onAdd, onCancel }) {
         exit={{ opacity: 0, scale: 0.94, y: 12 }}
         transition={{ duration: 0.18 }}
         onClick={(e) => e.stopPropagation()}
+        role="dialog" aria-modal="true" aria-labelledby="add-client-title"
       >
-        <div className="client-modal-icon">✦</div>
-        <p className="client-modal-title">Add New Client</p>
+        <div className="client-modal-icon" aria-hidden="true">✦</div>
+        <p className="client-modal-title" id="add-client-title">Add new client</p>
         <p className="client-modal-subtitle">
           This client will be added to your list and available for this and future projects.
         </p>
         <div className="client-modal-input-wrap">
+          <label className="sr-only" htmlFor="new-client-name">Client name</label>
           <input
+            id="new-client-name"
             ref={inputRef}
             className="client-modal-input"
             placeholder="e.g. Whitfield Development Co."
             value={name}
             onChange={(e) => { setName(e.target.value); if (error) setError(""); }}
             onKeyDown={handleKeyDown}
+            aria-invalid={!!error}
+            aria-describedby={error ? "add-client-error" : undefined}
           />
         </div>
-        <p className="client-modal-error">{error}</p>
+        <p className="client-modal-error" id="add-client-error" role="alert">{error}</p>
         <div className="client-modal-actions">
           <button className="client-modal-cancel" onClick={onCancel}>Cancel</button>
           <button className="client-modal-add" onClick={handleAdd} disabled={!name.trim()}>
-            Add Client
+            Add client
           </button>
         </div>
       </motion.div>
@@ -2518,7 +2698,7 @@ function AddClientModal({ existingClients = [], onAdd, onCancel }) {
 }
 
 // ─── Copy Button ──────────────────────────────────────────────────────────────
-function CopyButton({ text }) {
+function CopyButton({ text, label = "text" }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -2537,7 +2717,7 @@ function CopyButton({ text }) {
       type="button"
       className={`detail-copy-btn ${copied ? "copied" : ""}`}
       onClick={handleCopy}
-      aria-label="Copy to clipboard"
+      aria-label={copied ? `Copied ${label}` : `Copy ${label}`}
       title="Copy"
     >
       {copied ? <Check size={12} /> : <Copy size={12} />}
@@ -2570,17 +2750,19 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
   };
 
   const isClientLocked = !!defaultClient;
+  const missingRequired = !f("projectName").trim() || !f("jobNumber").trim() || (!isClientLocked && !f("client").trim());
 
   return (
     <div className="add-panel">
-      <p className="add-panel-title">New Project</p>
-      {error && <div className="error-banner">⚠ {error}</div>}
+      <p className="add-panel-title">New project</p>
+      {error && <div className="error-banner" role="alert"><AlertTriangle size={14} /> <span>{error}</span></div>}
       <div className="edit-form">
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Client {!isClientLocked && "*"}</label>
+            <label className="form-label" htmlFor="new-client">Client {!isClientLocked && "*"}</label>
             {isClientLocked ? (
               <input
+                id="new-client"
                 className="form-input"
                 value={f("client")}
                 readOnly={true}
@@ -2588,48 +2770,48 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
               />
             ) : (
               <select
+                id="new-client"
                 className="form-select"
                 value={f("client")}
                 onChange={e => handleClientChange(e.target.value)}
               >
-                <option value="">Select a client...</option>
+                <option value="">Select a client…</option>
                 {uniqueClients.map(client => (
                   <option key={client} value={client}>{client}</option>
                 ))}
-                <option value="__new__">➕ Add New Client</option>
+                <option value="__new__">➕ Add new client</option>
               </select>
             )}
             {isClientLocked && (
-              <small style={{ color: "var(--text-muted)", fontSize: 11 }}>
-                Client locked to: {defaultClient}
-              </small>
+              <span className="form-hint">Client locked to: {defaultClient}</span>
             )}
           </div>
           <div className="form-group">
-            <label className="form-label">Project Name *</label>
-            <input className="form-input" value={f("projectName")} onChange={e => s("projectName")(e.target.value)} />
+            <label className="form-label" htmlFor="new-projectName">Project name *</label>
+            <input id="new-projectName" className="form-input" value={f("projectName")} onChange={e => s("projectName")(e.target.value)} />
           </div>
         </div>
         <div className="form-row three">
           <div className="form-group">
-            <label className="form-label">Job Number *</label>
-            <input className="form-input" value={f("jobNumber")} onChange={e => s("jobNumber")(e.target.value)} />
+            <label className="form-label" htmlFor="new-jobNumber">Job number *</label>
+            <input id="new-jobNumber" className="form-input" value={f("jobNumber")} onChange={e => s("jobNumber")(e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Year</label>
-            <input className="form-input" value={defaultYear || f("year")} readOnly={!!defaultYear} onChange={e => s("year")(e.target.value)} />
+            <label className="form-label" htmlFor="new-year">Year</label>
+            <input id="new-year" className="form-input" value={defaultYear || f("year")} readOnly={!!defaultYear} onChange={e => s("year")(e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Project Manager</label>
-            <input className="form-input" value={f("projectManager")} onChange={e => s("projectManager")(e.target.value)} />
+            <label className="form-label" htmlFor="new-pm">Project manager</label>
+            <input id="new-pm" className="form-input" value={f("projectManager")} onChange={e => s("projectManager")(e.target.value)} />
           </div>
         </div>
 
         {/* Row 1: Approval Status + IFA Date */}
         <div className="form-row three">
           <div className="form-group">
-            <label className="form-label">Approval Status</label>
+            <label className="form-label" htmlFor="new-approvalStatus">Approval status</label>
             <input
+              id="new-approvalStatus"
               className="form-input"
               value={f("approvalStatus")}
               onChange={e => s("approvalStatus")(e.target.value)}
@@ -2637,8 +2819,8 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
             />
           </div>
           <div className="form-group">
-            <label className="form-label">IFA Date</label>
-            <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} />
+            <label className="form-label" htmlFor="new-ifaDate">IFA date</label>
+            <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} label="IFA date" />
           </div>
           <div className="form-group"></div> {/* empty placeholder for the third column */}
         </div>
@@ -2646,8 +2828,9 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
         {/* Row 2: FAB Status + IFC Date */}
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">FAB Status</label>
+            <label className="form-label" htmlFor="new-fabStatus">FAB status</label>
             <input
+              id="new-fabStatus"
               className="form-input"
               value={f("fabStatus")}
               onChange={e => s("fabStatus")(e.target.value)}
@@ -2655,25 +2838,25 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
             />
           </div>
           <div className="form-group">
-            <label className="form-label">IFC Date</label>
-            <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} />
+            <label className="form-label" htmlFor="new-ifcDate">IFC date</label>
+            <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} label="IFC date" />
           </div>
         </div>
 
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Team (Modeler/Editor/Checker)</label>
-            <input className="form-input" placeholder="e.g. Modeler/Editor/Checker" value={f("team")} onChange={e => s("team")(e.target.value)} />
+            <label className="form-label" htmlFor="new-team">Team (modeler/editor/checker)</label>
+            <input id="new-team" className="form-input" placeholder="e.g. Modeler/Editor/Checker" value={f("team")} onChange={e => s("team")(e.target.value)} />
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label">Remarks</label>
-          <textarea className="form-textarea" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} />
+          <label className="form-label" htmlFor="new-remarks">Remarks</label>
+          <textarea id="new-remarks" className="form-textarea" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} />
         </div>
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
-          <button className="btn btn-gold" onClick={onSave} disabled={saving}>
-            {saving ? <><BtnSpinner />&nbsp;Creating…</> : "Create Project"}
+          <button className="btn btn-gold" onClick={onSave} disabled={saving || missingRequired} title={missingRequired ? "Fill in the required fields marked with *" : undefined}>
+            {saving ? <><BtnSpinner />&nbsp;Creating…</> : "Create project"}
           </button>
         </div>
       </div>
@@ -2698,35 +2881,35 @@ function CoEditRow({ data, setData, onSave, onCancel, saving }) {
   return (
     <div className="edit-form">
       <div className="form-row three">
-        <div className="form-group"><label className="form-label">CO # (auto if blank)</label><input className="form-input" value={f("co")} onChange={e => s("co")(e.target.value)} /></div>
-        <div className="form-group"><label className="form-label">Description</label><input className="form-input" value={f("description")} onChange={e => s("description")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label" htmlFor="co-new-num">CO # (auto if blank)</label><input id="co-new-num" className="form-input" value={f("co")} onChange={e => s("co")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label" htmlFor="co-new-desc">Description</label><input id="co-new-desc" className="form-input" value={f("description")} onChange={e => s("description")(e.target.value)} /></div>
         <div className="form-group">
-          <label className="form-label">Status</label>
-          <select className="form-select" value={f("status")} onChange={e => s("status")(e.target.value)}>
+          <label className="form-label" htmlFor="co-new-status">Status</label>
+          <select id="co-new-status" className="form-select" value={f("status")} onChange={e => s("status")(e.target.value)}>
             {CO_STATUSES.map(s => <option key={s}>{s}</option>)}
           </select>
         </div>
       </div>
       <div className="form-row">
-        <div className="form-group"><label className="form-label">Amount ($)</label><input type="number" className="form-input" value={f("amount") === 0 || f("amount") === "" ? "" : f("amount")} onChange={e => { const val = e.target.value; s("amount")(val === "" ? "" : parseFloat(val) || 0); }} placeholder="0" /></div>
-        <div className="form-group"><label className="form-label">Remarks</label><input className="form-input" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label" htmlFor="co-new-amount">Amount ($)</label><input id="co-new-amount" type="number" className="form-input" value={f("amount") === 0 || f("amount") === "" ? "" : f("amount")} onChange={e => { const val = e.target.value; s("amount")(val === "" ? "" : parseFloat(val) || 0); }} placeholder="0" /></div>
+        <div className="form-group"><label className="form-label" htmlFor="co-new-remarks">Remarks</label><input id="co-new-remarks" className="form-input" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} /></div>
       </div>
       <div className="form-row" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
         <div className="form-group">
-          <label className="form-label">IFA Date</label>
-          <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} />
+          <label className="form-label" htmlFor="co-new-ifa">IFA date</label>
+          <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} label="IFA date" />
         </div>
-        <div className="form-group"><label className="form-label">IFA %</label><input className="form-input" placeholder="e.g. 100%" value={f("ifaPer")} onChange={e => s("ifaPer")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label" htmlFor="co-new-ifap">IFA %</label><input id="co-new-ifap" className="form-input" placeholder="e.g. 100%" value={f("ifaPer")} onChange={e => s("ifaPer")(e.target.value)} /></div>
         <div className="form-group">
-          <label className="form-label">IFF Date</label>
-          <IfcIfaDateInput value={f("iffDate")} onChange={s("iffDate")} />
+          <label className="form-label" htmlFor="co-new-iff">IFF date</label>
+          <IfcIfaDateInput value={f("iffDate")} onChange={s("iffDate")} label="IFF date" />
         </div>
-        <div className="form-group"><label className="form-label">IFF %</label><input className="form-input" placeholder="e.g. 100%" value={f("iffPer")} onChange={e => s("iffPer")(e.target.value)} /></div>
+        <div className="form-group"><label className="form-label" htmlFor="co-new-iffp">IFF %</label><input id="co-new-iffp" className="form-input" placeholder="e.g. 100%" value={f("iffPer")} onChange={e => s("iffPer")(e.target.value)} /></div>
       </div>
       <div className="form-actions">
         <button className="btn btn-ghost btn-sm" onClick={onCancel}>Cancel</button>
         <button className="btn btn-teal btn-sm" onClick={onSave} disabled={saving}>
-          {saving ? <><BtnSpinner />&nbsp;Adding…</> : "Add Change Order"}
+          {saving ? <><BtnSpinner />&nbsp;Adding…</> : "Add change order"}
         </button>
       </div>
     </div>

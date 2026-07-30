@@ -18,6 +18,8 @@ import {
   Stars,
   Zap,
   Timer,
+  Link,
+  Share2
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
@@ -714,34 +716,43 @@ export const AppSidebar = () => {
     navigate("/my-profile");
   };
 
-  const navItems =
-    role === "OWNER"
+  // One-off allowance: Zeeshan gets the Media Hub link even though their
+// role isn't OWNER. This is a name check, not a real permission system —
+// if more people need per-user access, replace this with a backend-driven
+// permissions list instead of stacking more name checks here.
+const isZeeshan = (name || "").trim().toLowerCase() === "zeeshan";
+
+const navItems =
+  role === "OWNER"
+    ? [
+      { to: "/admin", label: "Admin Console", icon: ShieldCheck },
+      { to: "/social-hub", label: "Media Hub", icon: Share2 },
+      { to: "/hours-dashboard", label: "Dashboard", icon: BarChart3 },
+      { to: "/dashboard", label: "Projects", icon: Briefcase },
+      { to: "/documents", label: "Documents", icon: FolderOpen },
+      { to: "/reports", label: "Work Report", icon: FileText },
+      { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+      { to: "/permission", label: "Permission Portal", icon: Timer },
+      { to: "/messages", label: "Messages", icon: MessageSquare },
+    ]
+    : role === "LEAD"
       ? [
-        { to: "/admin", label: "Admin Console", icon: ShieldCheck },
-        { to: "/hours-dashboard", label: "Dashboard", icon: BarChart3 },
+        ...(isZeeshan ? [{ to: "/social-hub", label: "Media Hub", icon: Share2 }] : []),
+        { to: "/reports", label: "Work Report", icon: FileText },
         { to: "/dashboard", label: "Projects", icon: Briefcase },
         { to: "/documents", label: "Documents", icon: FolderOpen },
-        { to: "/reports", label: "Work Report", icon: FileText },
-        { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+        { to: "/leave", label: "Leave Report", icon: CalendarDays },
         { to: "/permission", label: "Permission Portal", icon: Timer },
         { to: "/messages", label: "Messages", icon: MessageSquare },
       ]
-      : role === "LEAD"
-        ? [
-          { to: "/reports", label: "Work Report", icon: FileText },
-          { to: "/dashboard", label: "Projects", icon: Briefcase },
-          { to: "/documents", label: "Documents", icon: FolderOpen },
-          { to: "/leave", label: "Leave Report", icon: CalendarDays },
-          { to: "/permission", label: "Permission Portal", icon: Timer },
-          { to: "/messages", label: "Messages", icon: MessageSquare },
-        ]
-        : [
-          { to: "/reports", label: "Work Report", icon: FileText },
-          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
-          { to: "/permission", label: "Permission Portal", icon: Timer },
-          { to: "/documents", label: "Documents", icon: FolderOpen },
-          { to: "/messages", label: "Messages", icon: MessageSquare },
-        ];
+      : [
+        ...(isZeeshan ? [{ to: "/social-hub", label: "Media Hub", icon: Share2 }] : []),
+        { to: "/reports", label: "Work Report", icon: FileText },
+        { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+        { to: "/permission", label: "Permission Portal", icon: Timer },
+        { to: "/documents", label: "Documents", icon: FolderOpen },
+        { to: "/messages", label: "Messages", icon: MessageSquare },
+      ];
 
   return (
     <>

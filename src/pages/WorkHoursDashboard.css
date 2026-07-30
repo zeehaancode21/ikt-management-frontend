@@ -24,6 +24,45 @@
   font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
+/* Visually hidden but still announced by screen readers — used for labels
+   that would be redundant on-screen (search inputs already have an icon
+   and placeholder, chip groups already have a visible heading). */
+.whd-page .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Consistent, visible keyboard-focus ring for every custom interactive
+   element on this page (native buttons/inputs from shadcn already have
+   their own focus ring; this covers the bespoke chips/rows/close buttons). */
+.whd-page button:focus-visible,
+.whd-page input:focus-visible,
+.whd-page [tabindex]:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* .whd-card clips its own grid texture with overflow:hidden, so a normal
+   outset ring would be cut off — draw it inset instead. */
+.whd-card:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
+}
+
+/* Same clipping issue inside the manage-favorites popup. */
+.whd-fav-modal button:focus-visible,
+.whd-fav-modal input:focus-visible {
+  outline-offset: -2px;
+}
+
 /* faint blueprint grid behind the whole page, barely-there */
 .whd-page::before {
   content: "";
@@ -242,7 +281,8 @@
 .whd-corner.tr { top: 7px; right: 7px; border-top: 2px solid; border-right: 2px solid; transform: translate(4px, -4px); }
 .whd-corner.bl { bottom: 7px; left: 7px; border-bottom: 2px solid; border-left: 2px solid; transform: translate(-4px, 4px); }
 .whd-corner.br { bottom: 7px; right: 7px; border-bottom: 2px solid; border-right: 2px solid; transform: translate(4px, 4px); }
-.whd-card:hover .whd-corner {
+.whd-card:hover .whd-corner,
+.whd-card:focus-visible .whd-corner {
   opacity: 0.9;
   transform: translate(0, 0);
 }
@@ -757,6 +797,7 @@
   color: hsl(var(--foreground));
   transition: background 0.15s ease, border-color 0.15s ease;
   text-align: left;
+  width: 100%;
 }
 
 .whd-fav-row:hover:not(:disabled) {

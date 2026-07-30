@@ -50,15 +50,9 @@ import {
   ChevronDown,
   ChevronRight,
   ArrowLeft,
-  Sparkles,
   TrendingUp,
   BarChart3,
   Users,
-  FolderOpen,
-  Layers,
-  Zap,
-  Star,
-  Award,
 } from "lucide-react";
 
 /* ─── Types ─────────────────────────────────────────────── */
@@ -300,7 +294,7 @@ const isWithinDeleteWindow = (createdAt?: string) => {
   return diffMinutes <= DELETE_WINDOW_MINUTES;
 };
 
-/* ─── Enhanced Animations & Global Styles ────────────────────────── */
+/* ─── Animations & Global Styles ────────────────────────── */
 const animationStyles = `
   @keyframes fadeSlideDown {
     0%   { opacity: 0; transform: translateY(-14px) scale(0.97); }
@@ -332,11 +326,6 @@ const animationStyles = `
     to   { opacity: 1; transform: translateY(0); }
   }
 
-  @keyframes subtlePulse {
-    0%,100% { transform: scale(1); }
-    50%     { transform: scale(1.05); }
-  }
-
   @keyframes floatUp {
     0%   { opacity: 0; transform: translateY(8px); }
     100% { opacity: 1; transform: translateY(0); }
@@ -363,32 +352,18 @@ const animationStyles = `
     100% { background-position: 200% 0; }
   }
 
-  @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-6px); }
+  @keyframes weekendDotPulse {
+    0%, 100% { opacity: 0.55; transform: scale(1); }
+    50%      { opacity: 1;    transform: scale(1.15); }
   }
 
-  @keyframes glowPulse {
-    0%, 100% { opacity: 0.6; }
-    50% { opacity: 1; }
-  }
-
-  @keyframes borderGlow {
-    0%, 100% { border-color: rgba(99, 102, 241, 0.2); }
-    50% { border-color: rgba(99, 102, 241, 0.5); }
-  }
-
-  @keyframes slideDown {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
+  @keyframes editBannerIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
 
   .animate-step-in {
     animation: stepIn 0.32s cubic-bezier(0.34,1.05,0.64,1) forwards;
-  }
-
-  .animate-conflict-modal {
-    animation: fadeSlideDown 0.22s cubic-bezier(0.34,1.2,0.64,1) forwards;
   }
 
   .animate-backdrop {
@@ -415,63 +390,24 @@ const animationStyles = `
     animation: successBounce 0.55s cubic-bezier(0.68,-0.55,0.265,1.55);
   }
 
-  .subtle-pulse {
-    animation: subtlePulse 0.5s ease-in-out;
-  }
-
   .shimmer-bg {
-    background: linear-gradient(90deg, 
-      rgba(99, 102, 241, 0.03) 25%, 
-      rgba(99, 102, 241, 0.08) 50%, 
+    background: linear-gradient(90deg,
+      rgba(99, 102, 241, 0.03) 25%,
+      rgba(99, 102, 241, 0.08) 50%,
       rgba(99, 102, 241, 0.03) 75%
     );
     background-size: 200% 100%;
     animation: shimmer 3s ease-in-out infinite;
   }
 
-  .float-animation {
-    animation: float 3s ease-in-out infinite;
-  }
-
-  .glow-pulse {
-    animation: glowPulse 2s ease-in-out infinite;
-  }
-
-  .border-glow {
-    animation: borderGlow 3s ease-in-out infinite;
-  }
-
-  .slide-down {
-    animation: slideDown 0.3s ease-out forwards;
-  }
-
   .card-hover {
-    transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
+    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1), box-shadow 0.25s cubic-bezier(0.4,0,0.2,1);
     position: relative;
-    overflow: hidden;
   }
-  
-  .card-hover::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.03), rgba(139, 92, 246, 0.03));
-    opacity: 0;
-    transition: opacity 0.35s ease;
-    pointer-events: none;
-  }
-  
-  .card-hover:hover::before {
-    opacity: 1;
-  }
-  
+
   .card-hover:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 40px -12px rgba(99,102,241,.15),
-                0 4px 12px -4px rgba(0,0,0,.04);
+    box-shadow: 0 12px 40px -16px rgba(99,102,241,.18),
+                0 4px 12px -6px rgba(0,0,0,.06);
   }
 
   .card-hover-gradient {
@@ -500,12 +436,11 @@ const animationStyles = `
 
   [data-work-report-table] .entry-row {
     border: none !important;
-    transition: all 0.2s ease;
+    transition: background-color 0.15s ease;
   }
-  
+
   [data-work-report-table] .entry-row:hover {
-    background: rgba(99,102,241,.04) !important;
-    transform: scale(1.001);
+    background: rgba(99,102,241,.05) !important;
   }
 
   [data-work-report-table] thead tr {
@@ -513,43 +448,41 @@ const animationStyles = `
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.03), rgba(139, 92, 246, 0.03));
   }
 
+  .dark [data-work-report-table] thead tr {
+    border-bottom: 1px solid rgb(51 65 85) !important;
+  }
+
   [data-work-report-table] thead th {
     border-bottom: none !important;
     font-weight: 600;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
   }
 
   .progress-bar-fill {
-    animation: progressFill 0.7s cubic-bezier(0.4,0,0.2,1) both;
     transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
     background: linear-gradient(90deg, #818cf8, #8b5cf6, #a78bfa);
     background-size: 200% 100%;
-    animation: progressFill 0.7s cubic-bezier(0.4,0,0.2,1) both, shimmer 2s ease-in-out infinite;
+    animation: progressFill 0.7s cubic-bezier(0.4,0,0.2,1) both, shimmer 2.4s ease-in-out infinite;
   }
 
   .btn-hover-scale {
-    transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+    transition: transform 0.15s cubic-bezier(0.4,0,0.2,1);
   }
-  .btn-hover-scale:hover  { transform: scale(1.05); }
-  .btn-hover-scale:active { transform: scale(0.95); }
+  .btn-hover-scale:hover  { transform: scale(1.04); }
+  .btn-hover-scale:active { transform: scale(0.96); }
 
   .table-row-animate {
     animation: floatUp 0.36s ease-out forwards;
     opacity: 0;
   }
 
-  .custom-scrollbar::-webkit-scrollbar       { width: 5px; }
+  .custom-scrollbar::-webkit-scrollbar       { width: 6px; height: 6px; }
   .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
   .custom-scrollbar::-webkit-scrollbar-thumb {
     background: linear-gradient(135deg, #818cf8, #8b5cf6);
     border-radius: 4px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6366f1; }
-
-  @keyframes weekendDotPulse {
-    0%, 100% { opacity: 0.55; transform: scale(1); }
-    50%      { opacity: 1;    transform: scale(1.15); }
-  }
 
   [data-work-report-table] .weekend-row {
     position: relative;
@@ -597,16 +530,17 @@ const animationStyles = `
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 700;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
     text-transform: uppercase;
     color: #c2410c;
     background: rgba(251, 146, 60, 0.14);
     border: 1px solid rgba(251, 146, 60, 0.3);
     border-radius: 9999px;
-    padding: 1px 6px;
+    padding: 2px 7px;
     margin-left: 6px;
+    white-space: nowrap;
   }
 
   .dark .weekend-badge {
@@ -635,14 +569,6 @@ const animationStyles = `
     background: linear-gradient(90deg, transparent, rgba(251, 146, 60, 0.4), transparent);
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .weekend-divider-row { animation: none !important; opacity: 1 !important; }
-  }
-
-  @keyframes editBannerIn {
-    from { opacity: 0; transform: translateY(-6px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
   .edit-mode-banner {
     animation: editBannerIn 0.22s ease-out forwards;
   }
@@ -662,7 +588,7 @@ const animationStyles = `
     margin: 0;
     padding: 4px;
     border-radius: 6px;
-    transition: opacity 0.15s ease, filter 0.15s ease, background-color 0.15s ease;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
   }
   .date-step-input::-webkit-calendar-picker-indicator:hover {
     opacity: 1;
@@ -703,16 +629,11 @@ const animationStyles = `
     background-clip: text;
   }
 
-  .badge-glow {
-    box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
-  }
-
   .filter-pill {
-    transition: all 0.2s ease;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
   .filter-pill:hover {
-    transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+    transform: scale(1.03);
   }
 
   .glass-effect {
@@ -732,7 +653,7 @@ const animationStyles = `
     border: 1px solid rgba(99, 102, 241, 0.1);
     border-radius: 12px;
     padding: 12px 16px;
-    transition: all 0.3s ease;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
   }
   .stats-card:hover {
     transform: translateY(-2px);
@@ -740,20 +661,23 @@ const animationStyles = `
     border-color: rgba(99, 102, 241, 0.2);
   }
 
-  .shimmer-loading {
-    background: linear-gradient(90deg, 
-      rgba(99, 102, 241, 0.02) 25%, 
-      rgba(99, 102, 241, 0.06) 50%, 
-      rgba(99, 102, 241, 0.02) 75%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 2s ease-in-out infinite;
+  /* Accessible, visible focus ring for every interactive element in this page,
+     including custom (non-shadcn) buttons that don't ship their own focus style. */
+  [data-work-report-root] a:focus-visible,
+  [data-work-report-root] button:focus-visible,
+  [data-work-report-root] input:focus-visible,
+  [data-work-report-root] [role="button"]:focus-visible,
+  [data-work-report-root] [tabindex]:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .animate-step-in, .animate-conflict-modal, .animate-backdrop, .animate-modal-enter,
+    .animate-step-in, .animate-backdrop, .animate-modal-enter,
     .animate-slide-right, .animate-fade-in-up, .animate-float-up, .animate-success-bounce,
-    .subtle-pulse, .table-row-animate, .edit-mode-banner, .weekend-dot {
+    .table-row-animate, .edit-mode-banner, .weekend-dot, .shimmer-bg, .progress-bar-fill,
+    .weekend-divider-row {
       animation: none !important;
       opacity: 1 !important;
     }
@@ -826,7 +750,7 @@ const ConfirmDialog = ({
         <div className="p-5">
           <div className="flex items-start gap-3">
             <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-950/40">
-              <Trash2 className="h-4 w-4 text-rose-500" />
+              <Trash2 className="h-4 w-4 text-rose-500" aria-hidden="true" />
             </div>
             <div className="flex-1 pt-0.5">
               <h3
@@ -850,7 +774,7 @@ const ConfirmDialog = ({
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
@@ -858,10 +782,11 @@ const ConfirmDialog = ({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className="px-3.5 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all duration-150 btn-hover-scale disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
+            autoFocus
+            className="px-3.5 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors duration-150 btn-hover-scale disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
             {loading && (
-              <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
             )}
             {loading ? "Deleting…" : confirmLabel}
           </button>
@@ -913,7 +838,7 @@ const DateDetailModal = ({
   const totalHours = entries.reduce((s, r) => s + (r.time || 0), 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-backdrop"
         onClick={onClose}
@@ -927,31 +852,31 @@ const DateDetailModal = ({
         aria-labelledby="detail-modal-title"
       >
         {/* Gradient header */}
-        <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-violet-700 p-5 text-white relative overflow-hidden flex-shrink-0">
+        <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-violet-700 p-4 sm:p-5 text-white relative overflow-hidden flex-shrink-0">
           <div className="absolute -top-8 -right-8 h-28 w-28 rounded-full bg-white/10" />
           <div className="absolute -bottom-5 -left-5 h-20 w-20 rounded-full bg-white/[0.06]" />
 
-          <div className="relative flex items-start justify-between">
-            <div>
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <p className="text-[10px] font-semibold text-indigo-200 uppercase tracking-widest mb-1">
                 Work Report Details
               </p>
-              <h3 id="detail-modal-title" className="text-lg font-bold">
+              <h3 id="detail-modal-title" className="text-base sm:text-lg font-bold truncate">
                 {date ? fmt(date) : ""}
               </h3>
             </div>
             <button
               onClick={onClose}
-              className="text-white/50 hover:text-white transition-colors p-1.5 rounded-xl hover:bg-white/10"
-              aria-label="Close modal"
+              className="text-white/60 hover:text-white transition-colors p-1.5 rounded-xl hover:bg-white/10 flex-shrink-0"
+              aria-label="Close details"
             >
-              <XCircle className="h-5 w-5" />
+              <XCircle className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
 
-          <div className="relative mt-4 flex gap-2.5">
+          <div className="relative mt-4 flex flex-wrap gap-2.5">
             <div className="bg-white/15 rounded-xl px-3 py-2 flex items-center gap-2 animate-float-up">
-              <Clock className="h-3.5 w-3.5 text-indigo-200" />
+              <Clock className="h-3.5 w-3.5 text-indigo-200" aria-hidden="true" />
               <span className="text-sm font-bold">{totalHours.toFixed(1)}h</span>
               <span className="text-xs text-indigo-200">total</span>
             </div>
@@ -959,7 +884,7 @@ const DateDetailModal = ({
               className="bg-white/15 rounded-xl px-3 py-2 flex items-center gap-2 animate-float-up"
               style={{ animationDelay: "0.08s" }}
             >
-              <FileText className="h-3.5 w-3.5 text-indigo-200" />
+              <FileText className="h-3.5 w-3.5 text-indigo-200" aria-hidden="true" />
               <span className="text-sm font-bold">{entries.length}</span>
               <span className="text-xs text-indigo-200">
                 {entries.length === 1 ? "entry" : "entries"}
@@ -969,22 +894,22 @@ const DateDetailModal = ({
         </div>
 
         {/* Scrollable entries */}
-        <div className="overflow-y-auto p-4 space-y-3 flex-1 custom-scrollbar">
+        <div className="overflow-y-auto p-3 sm:p-4 space-y-3 flex-1 custom-scrollbar">
           {entries.map((r, idx) => (
             <div
               key={r.id}
-              className="border border-slate-100 dark:border-slate-800 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all duration-200 hover:shadow-sm hover:border-slate-200 dark:hover:border-slate-700"
+              className="border border-slate-100 dark:border-slate-800 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors duration-200 hover:border-slate-200 dark:hover:border-slate-700"
               style={{
                 animation: `staggerFadeUp 0.28s ease ${idx * 0.06}s forwards`,
                 opacity: 0,
               }}
             >
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <span
                   className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${WORK_TYPE_COLORS[r.workType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
                     }`}
                 >
-                  <Tag className="h-2.5 w-2.5" />
+                  <Tag className="h-2.5 w-2.5" aria-hidden="true" />
                   {WORK_TYPE_LABELS[r.workType] ?? r.workType}
                 </span>
                 <div className="flex items-center gap-1.5">
@@ -996,42 +921,42 @@ const DateDetailModal = ({
                       type="button"
                       onClick={() => onDeleteEntry(r.id)}
                       disabled={deletingId === r.id}
-                      aria-label="Delete entry"
+                      aria-label={`Delete ${WORK_TYPE_LABELS[r.workType] ?? "this"} entry (${r.time}h)`}
                       title="Delete this entry"
-                      className="p-1.5 rounded-lg text-slate-300 dark:text-slate-600 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {deletingId === r.id ? (
-                        <div className="h-3 w-3 border-2 border-rose-300 border-t-transparent rounded-full animate-spin" />
+                        <div className="h-3.5 w-3.5 border-2 border-rose-300 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
                       ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                       )}
                     </button>
                   )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 gap-3 mb-3">
                 <div className="flex items-start gap-2">
-                  <User className="h-3 w-3 text-slate-300 dark:text-slate-600 mt-0.5 flex-shrink-0" />
-                  <div>
+                  <User className="h-3 w-3 text-slate-400 dark:text-slate-500 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                  <div className="min-w-0">
                     <p className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-medium">Client</p>
-                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5">{r.client || "—"}</p>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5 break-words">{r.client || "—"}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
-                  <Briefcase className="h-3 w-3 text-slate-300 dark:text-slate-600 mt-0.5 flex-shrink-0" />
-                  <div>
+                  <Briefcase className="h-3 w-3 text-slate-400 dark:text-slate-500 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                  <div className="min-w-0">
                     <p className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-medium">Project</p>
-                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5">{r.project || "—"}</p>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5 break-words">{r.project || "—"}</p>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-start gap-2 bg-white dark:bg-slate-900 rounded-lg p-2.5 border border-slate-100 dark:border-slate-800">
-                <FileText className="h-3 w-3 text-slate-300 dark:text-slate-600 mt-0.5 flex-shrink-0" />
-                <div>
+                <FileText className="h-3 w-3 text-slate-400 dark:text-slate-500 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                <div className="min-w-0">
                   <p className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-medium mb-1">Description</p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{r.description || "—"}</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed break-words">{r.description || "—"}</p>
                 </div>
               </div>
             </div>
@@ -1041,7 +966,7 @@ const DateDetailModal = ({
         <div className="px-4 py-3 flex justify-end bg-slate-50/60 dark:bg-slate-800/40 flex-shrink-0 border-t border-slate-100 dark:border-slate-800">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all duration-150 btn-hover-scale"
+            className="px-4 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors duration-150 btn-hover-scale"
           >
             Close
           </button>
@@ -1157,15 +1082,6 @@ const EmployeeView = () => {
     setReportsError(null);
     try {
       const { data } = await api.get<Report[]>("/reports/my");
-      // ── ADD THIS BLOCK HERE ──
-      console.log("RAW reports from API:", data);
-      if (Array.isArray(data) && data.length > 0) {
-        const sample = data[0];
-        console.log("createdAt raw:", sample.createdAt);
-        console.log("parsed as Date:", new Date(sample.createdAt as string));
-        console.log("browser 'now':", new Date());
-      }
-      // ── END BLOCK ──
       const reportsData = Array.isArray(data)
         ? data.filter(report => report.date && report.date.trim() !== '') // Filter out reports without date
         : [];
@@ -1358,7 +1274,7 @@ const EmployeeView = () => {
           // Just deselecting — simple removal.
           updatedTypes = e.workTypes.filter((t) => t !== workType);
         } else if (OPTIONAL_WORK_TYPES.has(workType)) {
-          // Selecting an exclusive type (Training/Practicing/Misc/Estimation) — clear all other types so
+          // Selecting an exclusive type (Training/Practicing/Misc) — clear all other types so
           // it becomes the ONLY selected type.
           updatedTypes = [workType];
         } else {
@@ -1469,578 +1385,589 @@ const EmployeeView = () => {
 
   return (
     <>
-      <div
-        style={{
-          transform: "scale(0.75)",
-          transformOrigin: "top left",
-          width: "133.33%",
-          marginBottom: "-30%",
-        }}
-      >
-        <div className="space-y-5">
+      <div className="space-y-4 sm:space-y-5" data-work-report-root="">
 
-          {/* ══ STEP 1 — Date selection ══ */}
-          {!hasDate && (
-            <section className="rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm shadow-sm card-hover animate-step-in p-6">
-              <div className="flex items-center gap-2.5 mb-5">
-                <div className="p-1.5 rounded-xl shadow-sm bg-gradient-to-br from-indigo-500 to-purple-600">
-                  <Calendar className="h-4 w-4 text-white" />
-                </div>
-                <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-                  Select a date
-                </h2>
+        {/* ══ STEP 1 — Date selection ══ */}
+        {!hasDate && (
+          <section className="rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm shadow-sm card-hover animate-step-in p-4 sm:p-6">
+            <div className="flex items-center gap-2.5 mb-5">
+              <div className="p-1.5 rounded-xl shadow-sm bg-gradient-to-br from-indigo-500 to-purple-600">
+                <Calendar className="h-4 w-4 text-white" aria-hidden="true" />
               </div>
+              <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                Select a date
+              </h2>
+            </div>
 
-              <Label htmlFor="date-step" className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5" /> Report date
-              </Label>
-              <Input
-                id="date-step"
-                type="date"
-                autoFocus
-                className="date-step-input h-12 text-base font-medium border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-indigo-100 max-w-xs"
-                value={draftDate}
-                onChange={(e) => setDraftDate(e.target.value)}
-                max={today}
-              />
+            <Label htmlFor="date-step" className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5" aria-hidden="true" /> Report date
+            </Label>
+            <Input
+              id="date-step"
+              type="date"
+              autoFocus
+              className="date-step-input h-12 text-base font-medium border-slate-200 dark:border-slate-700 focus-visible:border-indigo-400 dark:focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-100 dark:focus-visible:ring-indigo-900/40 w-full max-w-xs"
+              value={draftDate}
+              onChange={(e) => setDraftDate(e.target.value)}
+              max={today}
+            />
 
-              {draftDate && (
-                <div
-                  className={`mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs animate-fade-in-up max-w-xs ${existingReportForDraft
-                      ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
-                      : "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
-                    }`}
-                >
-                  {existingReportForDraft ? (
-                    <>
-                      <Pencil className="h-3.5 w-3.5 flex-shrink-0" />
-                      A report already exists for <span className="font-semibold">{fmt(draftDate)}</span> — continuing will let you edit it.
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
-                      <span className="font-semibold">{fmt(draftDate)}</span> is open — you'll start a fresh report.
-                    </>
-                  )}
-                </div>
-              )}
-
-              <Button
-                onClick={() => commitDate(draftDate)}
-                disabled={!draftDate}
-                className="mt-5 h-10 gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-sm font-semibold shadow-sm btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 px-5"
+            {draftDate && (
+              <div
+                role="status"
+                className={`mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs animate-fade-in-up max-w-xs ${existingReportForDraft
+                    ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
+                    : "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                  }`}
               >
-                Continue
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+                {existingReportForDraft ? (
+                  <>
+                    <Pencil className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                    <span>A report already exists for <span className="font-semibold">{fmt(draftDate)}</span> — continuing will let you edit it.</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                    <span><span className="font-semibold">{fmt(draftDate)}</span> is open — you'll start a fresh report.</span>
+                  </>
+                )}
+              </div>
+            )}
 
-              {reportsError && (
-                <p className="mt-3 text-[11px] text-red-500 flex items-center gap-1.5">
-                  <AlertCircle className="h-3 w-3" /> {reportsError}
-                </p>
-              )}
-            </section>
-          )}
-
-          {/* ══ STEP 2 — Submit / Edit Form ══ */}
-          {hasDate && (
-            <section
-              className={`rounded-2xl border bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-5 shadow-sm card-hover transition-colors duration-300 animate-step-in ${isEditMode
-                  ? "border-amber-300 dark:border-amber-700/80 ring-1 ring-amber-200/60"
-                  : "border-slate-200/80 dark:border-slate-700/60"
-                }`}
+            <Button
+              onClick={() => commitDate(draftDate)}
+              disabled={!draftDate}
+              className="mt-5 h-10 w-full sm:w-auto gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-sm font-semibold shadow-sm btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 px-5"
             >
-              {/* ── Edit mode banner ── */}
-              {isEditMode && (
-                <div className="edit-mode-banner mb-4 flex items-center justify-between gap-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3.5 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1 bg-amber-100 rounded-lg">
-                      <Pencil className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-amber-800">Edit mode</p>
-                      <p className="text-[10px] text-amber-600 dark:text-amber-400">
-                        Changes will replace the existing entries for this date.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+              Continue
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </Button>
 
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 animate-fade-in-up">
-                  <button
-                    type="button"
-                    onClick={handleChangeDate}
-                    aria-label="Back to date selection"
-                    className="p-1.5 rounded-xl text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-all duration-150 btn-hover-scale"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                  </button>
-                  <div
-                    className={`p-1.5 rounded-xl shadow-sm ${isEditMode
-                        ? "bg-gradient-to-br from-amber-500 to-orange-500"
-                        : "bg-gradient-to-br from-indigo-500 to-purple-600"
-                      }`}
-                  >
-                    {isEditMode ? (
-                      <Pencil className="h-4 w-4 text-white" />
-                    ) : (
-                      <Calendar className="h-4 w-4 text-white" />
-                    )}
+            {reportsError && (
+              <p role="alert" className="mt-3 text-xs text-red-500 flex items-center gap-1.5">
+                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" /> {reportsError}
+              </p>
+            )}
+          </section>
+        )}
+
+        {/* ══ STEP 2 — Submit / Edit Form ══ */}
+        {hasDate && (
+          <section
+            className={`rounded-2xl border bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-4 sm:p-5 shadow-sm card-hover transition-colors duration-300 animate-step-in ${isEditMode
+                ? "border-amber-300 dark:border-amber-700/80 ring-1 ring-amber-200/60 dark:ring-amber-800/40"
+                : "border-slate-200/80 dark:border-slate-700/60"
+              }`}
+          >
+            {/* ── Edit mode banner ── */}
+            {isEditMode && (
+              <div className="edit-mode-banner mb-4 flex items-center justify-between gap-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3.5 py-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 bg-amber-100 dark:bg-amber-900/50 rounded-lg">
+                    <Pencil className="h-3 w-3 text-amber-600 dark:text-amber-400" aria-hidden="true" />
                   </div>
                   <div>
-                    <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 leading-tight">
-                      {isEditMode ? "Edit work report" : "Submit work report"}
-                    </h2>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                      {fmtLong(date)}
+                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">Edit mode</p>
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                      Changes will replace the existing entries for this date.
                     </p>
                   </div>
                 </div>
+              </div>
+            )}
 
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 animate-fade-in-up min-w-0">
                 <button
                   type="button"
                   onClick={handleChangeDate}
-                  className="flex items-center gap-1.5 h-8 px-3 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-50 dark:bg-slate-800/60 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-700 rounded-lg transition-all duration-150 btn-hover-scale animate-fade-in-up"
-                  style={{ animationDelay: "0.05s" }}
+                  aria-label="Back to date selection"
+                  className="p-1.5 rounded-xl text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors duration-150 btn-hover-scale flex-shrink-0"
                 >
-                  <Calendar className="h-3 w-3" />
-                  Change date
+                  <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                 </button>
-              </div>
-
-              {/* Progress bar */}
-              {showProgress && (
-                <div className="mb-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 border border-slate-100/80 dark:border-slate-800/60 animate-fade-in-up">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <Clock className="h-3.5 w-3.5 text-indigo-500" />
-                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total hours</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
-                        {totalHours.toFixed(1)}h
-                      </span>
-                    </div>
-                  </div>
-                  <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-2">
-                    <div
-                      className={`progress-bar-fill h-full rounded-full ${isEditMode
-                          ? "bg-gradient-to-r from-amber-400 to-orange-400"
-                          : "bg-gradient-to-r from-indigo-500 to-purple-500"
-                        }`}
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Entries table */}
-              <div
-                data-work-report-table=""
-                className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm animate-fade-in-up"
-                style={{ animationDelay: "0.1s" }}
-              >
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50/80 dark:bg-slate-800/60">
-                      <TableHead className="min-w-[130px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Client</TableHead>
-                      <TableHead className="min-w-[150px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Project</TableHead>
-                      <TableHead className="min-w-[140px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Type</TableHead>
-                      <TableHead className="min-w-[90px]  text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Time (h)</TableHead>
-                      <TableHead className="min-w-[200px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Description</TableHead>
-                      <TableHead className="w-8" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {entries.map((entry, index) => {
-                      const isOptional = isClientProjectOptional(entry.workTypes);
-                      const safeClients = Array.isArray(clients) ? clients : [];
-                      return (
-                        <TableRow
-                          key={entry.localId}
-                          className="entry-row"
-                          style={{ animationDelay: `${index * 0.04}s` }}
-                        >
-                          <TableCell className="py-1.5">
-                            <Select
-                              value={entry.client}
-                              onValueChange={(v) => updateEntry(entry.localId, "client", v)}
-                              disabled={isOptional}
-                            >
-                              <SelectTrigger className={`h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 ${isOptional ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}>
-                                <SelectValue placeholder={isOptional ? "Not required" : (clientsError ? "Error" : "Select client")} />
-                              </SelectTrigger>
-                              <SelectContent
-                                side="top"
-                                align="start"
-                                sideOffset={4}
-                                className="max-h-[320px] overflow-y-auto"
-                              >
-                                {safeClients.length === 0 && !clientsError ? (
-                                  <SelectItem value="loading" disabled>Loading clients...</SelectItem>
-                                ) : (
-                                  safeClients.map((c) => (
-                                    <SelectItem key={c} value={c} className="text-xs py-1.5">
-                                      {c}
-                                    </SelectItem>
-                                  ))
-                                )}
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell className="py-1.5">
-                            <Select
-                              value={entry.project}
-                              disabled={isOptional || !entry.client || loadingProjects[entry.client]}
-                              onValueChange={(v) => updateEntry(entry.localId, "project", v)}
-                            >
-                              <SelectTrigger className={`h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 ${isOptional ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}>
-                                <SelectValue placeholder={
-                                  isOptional ? "Not required" :
-                                    !entry.client
-                                      ? "Select client"
-                                      : loadingProjects[entry.client]
-                                        ? "Loading..."
-                                        : "Select"
-                                } />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {(projectsCache[entry.client] ?? []).map((p) => (
-                                  <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell className="py-1.5">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="flex h-7 w-full items-center justify-between gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-xs hover:border-indigo-300 dark:hover:border-indigo-600 focus:border-indigo-400 dark:focus:border-indigo-500 focus:outline-none"
-                                >
-                                  <span className={`truncate ${entry.workTypes.length === 0 ? "text-slate-400 dark:text-slate-500" : "text-slate-700 dark:text-slate-300"}`}>
-                                    {entry.workTypes.length === 0
-                                      ? "Select type(s)"
-                                      : entry.workTypes.length === 1
-                                        ? WORK_TYPE_LABELS[entry.workTypes[0]]
-                                        : `${entry.workTypes.length} types selected`}
-                                  </span>
-                                  <ChevronDown className="h-3 w-3 shrink-0 text-slate-400 dark:text-slate-500" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start" className="max-h-[320px] overflow-y-auto">
-                                <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                                  Select one or more
-                                </DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                {(Object.keys(WORK_TYPE_LABELS) as WorkType[]).map((k) => {
-                                  // If an exclusive type (Training/Practicing/Misc) is already
-                                  // selected, block every other option until it's deselected.
-                                  const hasExclusiveSelected = entry.workTypes.some((t) =>
-                                    OPTIONAL_WORK_TYPES.has(t)
-                                  );
-                                  const isDisabled =
-                                    hasExclusiveSelected && !entry.workTypes.includes(k);
-
-                                  return (
-                                    <DropdownMenuCheckboxItem
-                                      key={k}
-                                      checked={entry.workTypes.includes(k)}
-                                      disabled={isDisabled}
-                                      onCheckedChange={() => toggleWorkType(entry.localId, k)}
-                                      onSelect={(e) => e.preventDefault()}
-                                      className={`text-xs ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
-                                    >
-                                      <div className="flex items-center gap-1.5">
-                                        {(k === "TRAINING" || k === "PRACTICING") && <GraduationCap className="h-2.5 w-2.5" />}
-                                        {WORK_TYPE_LABELS[k]}
-                                      </div>
-                                    </DropdownMenuCheckboxItem>
-                                  );
-                                })}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                            {entry.workTypes.length > 1 && (
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {entry.workTypes.map((wt) => (
-                                  <span
-                                    key={wt}
-                                    className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium ${WORK_TYPE_COLORS[wt] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"}`}
-                                  >
-                                    {WORK_TYPE_LABELS[wt]}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell className="py-1.5">
-                            <Input
-                              type="number"
-                              min="0.5"
-                              max="24"
-                              step="0.5"
-                              placeholder="0"
-                              className="h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500"
-                              value={entry.time}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                if (value === "") { updateEntry(entry.localId, "time", value); return; }
-                                const numValue = parseFloat(value);
-                                if (!isNaN(numValue) && numValue >= 0 && numValue <= 24) {
-                                  updateEntry(entry.localId, "time", value);
-                                }
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell className="py-1.5">
-                            <Input
-                              placeholder="Description..."
-                              className="h-7 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500"
-                              value={entry.description}
-                              onChange={(e) => updateEntry(entry.localId, "description", e.target.value)}
-                              maxLength={500}
-                            />
-                          </TableCell>
-                          <TableCell className="py-1.5">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-slate-300 dark:text-slate-600 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all duration-150 rounded-lg"
-                              disabled={entries.length <= 1}
-                              onClick={() => removeEntry(entry.localId)}
-                              aria-label="Remove entry"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div className="mt-4 flex items-center justify-between animate-fade-in-up" style={{ animationDelay: "0.18s" }}>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addEntry}
-                  className="gap-1.5 h-7 text-xs border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 btn-hover-scale transition-all duration-150"
+                <div
+                  className={`p-1.5 rounded-xl shadow-sm flex-shrink-0 ${isEditMode
+                      ? "bg-gradient-to-br from-amber-500 to-orange-500"
+                      : "bg-gradient-to-br from-indigo-500 to-purple-600"
+                    }`}
                 >
-                  <Plus className="h-3 w-3" /> Add row
-                </Button>
-                <div className="flex items-center gap-2">
-                  {isEditMode && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleCancelEdit}
-                      className="h-7 text-xs text-slate-500 dark:text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 btn-hover-scale transition-all duration-150"
-                    >
-                      Discard changes
-                    </Button>
+                  {isEditMode ? (
+                    <Pencil className="h-4 w-4 text-white" aria-hidden="true" />
+                  ) : (
+                    <Calendar className="h-4 w-4 text-white" aria-hidden="true" />
                   )}
-                  <Button
-                    onClick={handleFinalSubmit}
-                    disabled={submitting || !date}
-                    size="sm"
-                    className={`gap-1.5 h-7 text-xs shadow-sm btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 ${isEditMode
-                        ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 hover:shadow-amber-200"
-                        : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 hover:shadow-indigo-200"
-                      }`}
-                  >
-                    {submitting ? (
-                      <>
-                        <div className="h-2.5 w-2.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        {isEditMode ? "Updating…" : "Submitting…"}
-                      </>
-                    ) : isEditMode ? (
-                      <>
-                        <Pencil className="h-3 w-3" /> Update report
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="h-3 w-3" /> Submit report
-                      </>
-                    )}
-                  </Button>
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 leading-tight truncate">
+                    {isEditMode ? "Edit work report" : "Submit work report"}
+                  </h2>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                    {fmtLong(date)}
+                  </p>
                 </div>
               </div>
-            </section>
-          )}
 
-          {/* ══ My Reports ══ */}
-          <section className="animate-slide-right">
-            <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-indigo-400" />
-              My reports
-              {!loadingReports && reports.length > 0 && (
-                <span className="text-xs font-normal text-slate-400 dark:text-slate-500">
-                  ({reports.length} total)
-                </span>
-              )}
-            </h2>
-
-            {loadingReports ? (
-              <div className="flex justify-center py-8">
-                <FullSpinner />
-              </div>
-            ) : reportsError && groupedDates.length === 0 ? (
-              <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-600 animate-fade-in-up">
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertCircle className="h-3.5 w-3.5" />
-                  <span>{reportsError}</span>
-                </div>
-                <button onClick={loadReports} className="text-xs text-red-500 hover:underline">
-                  Try again
-                </button>
-              </div>
-            ) : groupedDates.length === 0 ? (
-              <div className="text-center py-10 animate-fade-in-up">
-                <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
-                  <FileText className="h-5 w-5 text-slate-300 dark:text-slate-600" />
-                </div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">No reports submitted yet.</p>
-              </div>
-            ) : (
-              <div
-                data-work-report-table=""
-                className="overflow-x-auto rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm animate-fade-in-up"
+              <button
+                type="button"
+                onClick={handleChangeDate}
+                className="flex items-center gap-1.5 h-8 px-3 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-50 dark:bg-slate-800/60 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-700 rounded-lg transition-colors duration-150 btn-hover-scale animate-fade-in-up"
+                style={{ animationDelay: "0.05s" }}
               >
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50/80 dark:bg-slate-800/60">
-                      <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Entries</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total time</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Work types</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reportDateSegments.map((item, index) => {
-                      // Plain divider — marks the boundary between the
-                      // weekend block (above) and Friday's row (below).
-                      if (item.type === "divider") {
-                        return (
-                          <TableRow key={`divider-${index}`} className="weekend-divider-row">
-                            <TableCell colSpan={5} className="py-0">
-                              <div className="weekend-divider-line" />
-                            </TableCell>
-                          </TableRow>
-                        );
-                      }
+                <Calendar className="h-3 w-3" aria-hidden="true" />
+                Change date
+              </button>
+            </div>
 
-                      // Weekend pair with zero submitted entries — one
-                      // combined divider line for both days, not two.
-                      if (item.type === "weekend-empty") {
-                        const [first, second] = item.dateKeys;
-                        const label = second
-                          ? `Weekend · ${fmt(second)} – ${fmt(first)} · no entries`
-                          : `Weekend · ${fmt(first)} · no entries`;
-                        return (
-                          <TableRow key={`weekend-empty-${first}`} className="weekend-divider-row">
-                            <TableCell colSpan={5} className="py-0">
-                              <div className="flex items-center gap-3 px-1">
-                                <div className="weekend-divider-line flex-1" />
-                                <span className="weekend-badge whitespace-nowrap">
-                                  <span className="weekend-dot" />
-                                  {label}
+            {/* Progress bar */}
+            {showProgress && (
+              <div className="mb-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 border border-slate-100/80 dark:border-slate-800/60 animate-fade-in-up">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <Clock className="h-3.5 w-3.5 text-indigo-500" aria-hidden="true" />
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total hours</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                      {totalHours.toFixed(1)}h
+                    </span>
+                  </div>
+                </div>
+                <div
+                  className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-2"
+                  role="progressbar"
+                  aria-valuenow={Math.round(progressPercent)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Progress toward an 8 hour day"
+                >
+                  <div
+                    className={`progress-bar-fill h-full rounded-full ${isEditMode
+                        ? "bg-gradient-to-r from-amber-400 to-orange-400"
+                        : "bg-gradient-to-r from-indigo-500 to-purple-500"
+                      }`}
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Entries table */}
+            <div
+              data-work-report-table=""
+              className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm animate-fade-in-up custom-scrollbar"
+              style={{ animationDelay: "0.1s" }}
+            >
+              <Table className="min-w-[720px]">
+                <TableHeader>
+                  <TableRow className="bg-slate-50/80 dark:bg-slate-800/60">
+                    <TableHead className="min-w-[140px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Client</TableHead>
+                    <TableHead className="min-w-[150px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Project</TableHead>
+                    <TableHead className="min-w-[150px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Type</TableHead>
+                    <TableHead className="min-w-[100px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Time (h)</TableHead>
+                    <TableHead className="min-w-[200px] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Description</TableHead>
+                    <TableHead className="w-10 text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      <span className="sr-only">Remove row</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {entries.map((entry, index) => {
+                    const isOptional = isClientProjectOptional(entry.workTypes);
+                    const safeClients = Array.isArray(clients) ? clients : [];
+                    return (
+                      <TableRow
+                        key={entry.localId}
+                        className="entry-row"
+                        style={{ animationDelay: `${index * 0.04}s` }}
+                      >
+                        <TableCell className="py-2">
+                          <Label htmlFor={`client-${entry.localId}`} className="sr-only">Client</Label>
+                          <Select
+                            value={entry.client}
+                            onValueChange={(v) => updateEntry(entry.localId, "client", v)}
+                            disabled={isOptional}
+                          >
+                            <SelectTrigger id={`client-${entry.localId}`} className={`h-8 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 ${isOptional ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}>
+                              <SelectValue placeholder={isOptional ? "Not required" : (clientsError ? "Error loading" : "Select client")} />
+                            </SelectTrigger>
+                            <SelectContent
+                              side="top"
+                              align="start"
+                              sideOffset={4}
+                              className="max-h-[320px] overflow-y-auto"
+                            >
+                              {safeClients.length === 0 && !clientsError ? (
+                                <SelectItem value="loading" disabled>Loading clients...</SelectItem>
+                              ) : (
+                                safeClients.map((c) => (
+                                  <SelectItem key={c} value={c} className="text-xs py-1.5">
+                                    {c}
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="py-2">
+                          <Label htmlFor={`project-${entry.localId}`} className="sr-only">Project</Label>
+                          <Select
+                            value={entry.project}
+                            disabled={isOptional || !entry.client || loadingProjects[entry.client]}
+                            onValueChange={(v) => updateEntry(entry.localId, "project", v)}
+                          >
+                            <SelectTrigger id={`project-${entry.localId}`} className={`h-8 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 ${isOptional ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}>
+                              <SelectValue placeholder={
+                                isOptional ? "Not required" :
+                                  !entry.client
+                                    ? "Select client first"
+                                    : loadingProjects[entry.client]
+                                      ? "Loading..."
+                                      : "Select project"
+                              } />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(projectsCache[entry.client] ?? []).map((p) => (
+                                <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="py-2">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label={entry.workTypes.length === 0 ? "Select work type(s)" : `${entry.workTypes.length} work type(s) selected`}
+                                className="flex h-8 w-full items-center justify-between gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs hover:border-indigo-300 dark:hover:border-indigo-600 focus:border-indigo-400 dark:focus:border-indigo-500 focus:outline-none"
+                              >
+                                <span className={`truncate ${entry.workTypes.length === 0 ? "text-slate-400 dark:text-slate-500" : "text-slate-700 dark:text-slate-300"}`}>
+                                  {entry.workTypes.length === 0
+                                    ? "Select type(s)"
+                                    : entry.workTypes.length === 1
+                                      ? WORK_TYPE_LABELS[entry.workTypes[0]]
+                                      : `${entry.workTypes.length} types selected`}
                                 </span>
-                                <div className="weekend-divider-line flex-1" />
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      }
+                                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="max-h-[320px] overflow-y-auto">
+                              <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                                Select one or more
+                              </DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              {(Object.keys(WORK_TYPE_LABELS) as WorkType[]).map((k) => {
+                                // If an exclusive type (Training/Practicing/Misc) is already
+                                // selected, block every other option until it's deselected.
+                                const hasExclusiveSelected = entry.workTypes.some((t) =>
+                                  OPTIONAL_WORK_TYPES.has(t)
+                                );
+                                const isDisabled =
+                                  hasExclusiveSelected && !entry.workTypes.includes(k);
 
-                      const dk = item.dateKey;
-                      const dayReports = reportsByDate[dk] || [];
-                      const totalTime = dayReports.reduce((s, r) => s + (r.time || 0), 0);
-                      const uniqueTypes = [...new Set(dayReports.map((r) => r.workType))];
-                      const isCurrentlyEditing = isEditMode && date === dk;
-                      const weekend = isWeekend(dk);
-                      return (
-                        <TableRow
-                          key={dk}
-                          className={`entry-row table-row-animate ${weekend ? "weekend-row" : ""} ${isCurrentlyEditing ? "bg-amber-50/60 dark:bg-amber-950/30" : ""}`}
-                          style={{ animationDelay: `${index * 0.04}s` }}
-                        >
-                          <TableCell className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                            {fmt(dk)}
-                            {weekend && (
-                              <span className="weekend-badge">
-                                <span className="weekend-dot" />
-                                {weekendLabel(dk)}
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700">
-                              {dayReports.length}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full">
-                              {totalTime.toFixed(1)}h
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {uniqueTypes.map((wt) => (
+                                return (
+                                  <DropdownMenuCheckboxItem
+                                    key={k}
+                                    checked={entry.workTypes.includes(k)}
+                                    disabled={isDisabled}
+                                    onCheckedChange={() => toggleWorkType(entry.localId, k)}
+                                    onSelect={(e) => e.preventDefault()}
+                                    className={`text-xs ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                                  >
+                                    <div className="flex items-center gap-1.5">
+                                      {(k === "TRAINING" || k === "PRACTICING") && <GraduationCap className="h-2.5 w-2.5" aria-hidden="true" />}
+                                      {WORK_TYPE_LABELS[k]}
+                                    </div>
+                                  </DropdownMenuCheckboxItem>
+                                );
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          {entry.workTypes.length > 1 && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {entry.workTypes.map((wt) => (
                                 <span
                                   key={wt}
-                                  className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${WORK_TYPE_COLORS[wt as WorkType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-                                    }`}
+                                  className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium ${WORK_TYPE_COLORS[wt] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"}`}
                                 >
-                                  {WORK_TYPE_LABELS[wt as WorkType] ?? wt}
+                                  {WORK_TYPE_LABELS[wt]}
                                 </span>
                               ))}
                             </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-2">
+                          <Label htmlFor={`time-${entry.localId}`} className="sr-only">Time in hours</Label>
+                          <Input
+                            id={`time-${entry.localId}`}
+                            type="number"
+                            min="0.5"
+                            max="24"
+                            step="0.5"
+                            placeholder="0"
+                            inputMode="decimal"
+                            className="h-8 text-xs border-slate-200 dark:border-slate-700 focus-visible:border-indigo-400 dark:focus-visible:border-indigo-500"
+                            value={entry.time}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === "") { updateEntry(entry.localId, "time", value); return; }
+                              const numValue = parseFloat(value);
+                              if (!isNaN(numValue) && numValue >= 0 && numValue <= 24) {
+                                updateEntry(entry.localId, "time", value);
+                              }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="py-2">
+                          <Label htmlFor={`desc-${entry.localId}`} className="sr-only">Description</Label>
+                          <Input
+                            id={`desc-${entry.localId}`}
+                            placeholder="Description..."
+                            className="h-8 text-xs border-slate-200 dark:border-slate-700 focus-visible:border-indigo-400 dark:focus-visible:border-indigo-500"
+                            value={entry.description}
+                            onChange={(e) => updateEntry(entry.localId, "description", e.target.value)}
+                            maxLength={500}
+                          />
+                        </TableCell>
+                        <TableCell className="py-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-400 dark:text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors duration-150 rounded-lg"
+                            disabled={entries.length <= 1}
+                            onClick={() => removeEntry(entry.localId)}
+                            aria-label="Remove this row"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-fade-in-up" style={{ animationDelay: "0.18s" }}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addEntry}
+                className="gap-1.5 h-8 text-xs border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 btn-hover-scale transition-colors duration-150 w-full sm:w-auto justify-center"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add row
+              </Button>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                {isEditMode && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCancelEdit}
+                    className="h-8 text-xs text-slate-500 dark:text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 btn-hover-scale transition-colors duration-150 flex-1 sm:flex-none"
+                  >
+                    Discard changes
+                  </Button>
+                )}
+                <Button
+                  onClick={handleFinalSubmit}
+                  disabled={submitting || !date}
+                  size="sm"
+                  className={`gap-1.5 h-8 text-xs shadow-sm btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 flex-1 sm:flex-none justify-center ${isEditMode
+                      ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                      : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                    }`}
+                >
+                  {submitting ? (
+                    <>
+                      <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                      {isEditMode ? "Updating…" : "Submitting…"}
+                    </>
+                  ) : isEditMode ? (
+                    <>
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Update report
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Submit report
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ══ My Reports ══ */}
+        <section className="animate-slide-right">
+          <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-indigo-400" aria-hidden="true" />
+            My reports
+            {!loadingReports && reports.length > 0 && (
+              <span className="text-xs font-normal text-slate-400 dark:text-slate-500">
+                ({reports.length} total)
+              </span>
+            )}
+          </h2>
+
+          {loadingReports ? (
+            <div className="flex justify-center py-8">
+              <FullSpinner />
+            </div>
+          ) : reportsError && groupedDates.length === 0 ? (
+            <div role="alert" className="rounded-xl border border-red-100 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-xs text-red-600 dark:text-red-400 animate-fade-in-up">
+              <div className="flex items-center gap-2 mb-1">
+                <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>{reportsError}</span>
+              </div>
+              <button onClick={loadReports} className="text-xs font-semibold text-red-600 dark:text-red-400 hover:underline">
+                Try again
+              </button>
+            </div>
+          ) : groupedDates.length === 0 ? (
+            <div className="text-center py-10 animate-fade-in-up">
+              <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
+                <FileText className="h-5 w-5 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">No reports submitted yet.</p>
+            </div>
+          ) : (
+            <div
+              data-work-report-table=""
+              className="overflow-x-auto rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm animate-fade-in-up custom-scrollbar"
+            >
+              <Table className="min-w-[640px]">
+                <TableHeader>
+                  <TableRow className="bg-slate-50/80 dark:bg-slate-800/60">
+                    <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date</TableHead>
+                    <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Entries</TableHead>
+                    <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total time</TableHead>
+                    <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Work types</TableHead>
+                    <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reportDateSegments.map((item, index) => {
+                    // Plain divider — marks the boundary between the
+                    // weekend block (above) and Friday's row (below).
+                    if (item.type === "divider") {
+                      return (
+                        <TableRow key={`divider-${index}`} className="weekend-divider-row">
+                          <TableCell colSpan={5} className="py-0">
+                            <div className="weekend-divider-line" />
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1.5">
-                              {/* View button */}
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="h-6 px-2 text-[10px] gap-1 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all btn-hover-scale"
-                                onClick={() => { setDetailDate(dk); setDetailOpen(true); }}
-                              >
-                                <Eye className="h-3 w-3" />
-                                View
-                              </Button>
-                              {/* Edit button */}
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className={`h-6 px-2 text-[10px] gap-1 transition-all btn-hover-scale ${isCurrentlyEditing
-                                    ? "text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30"
-                                    : "text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900 hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:border-amber-300 dark:hover:border-amber-700"
-                                  }`}
-                                onClick={() => handleDateChange(dk)}
-                              >
-                                <Pencil className="h-3 w-3" />
-                                {isCurrentlyEditing ? "Editing…" : "Edit"}
-                              </Button>
+                        </TableRow>
+                      );
+                    }
+
+                    // Weekend pair with zero submitted entries — one
+                    // combined divider line for both days, not two.
+                    if (item.type === "weekend-empty") {
+                      const [first, second] = item.dateKeys;
+                      const label = second
+                        ? `Weekend · ${fmt(second)} – ${fmt(first)} · no entries`
+                        : `Weekend · ${fmt(first)} · no entries`;
+                      return (
+                        <TableRow key={`weekend-empty-${first}`} className="weekend-divider-row">
+                          <TableCell colSpan={5} className="py-0">
+                            <div className="flex items-center gap-3 px-1">
+                              <div className="weekend-divider-line flex-1" />
+                              <span className="weekend-badge whitespace-nowrap">
+                                <span className="weekend-dot" />
+                                {label}
+                              </span>
+                              <div className="weekend-divider-line flex-1" />
                             </div>
                           </TableCell>
                         </TableRow>
                       );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </section>
-        </div>
+                    }
+
+                    const dk = item.dateKey;
+                    const dayReports = reportsByDate[dk] || [];
+                    const totalTime = dayReports.reduce((s, r) => s + (r.time || 0), 0);
+                    const uniqueTypes = [...new Set(dayReports.map((r) => r.workType))];
+                    const isCurrentlyEditing = isEditMode && date === dk;
+                    const weekend = isWeekend(dk);
+                    return (
+                      <TableRow
+                        key={dk}
+                        className={`entry-row table-row-animate ${weekend ? "weekend-row" : ""} ${isCurrentlyEditing ? "bg-amber-50/60 dark:bg-amber-950/30" : ""}`}
+                        style={{ animationDelay: `${index * 0.04}s` }}
+                      >
+                        <TableCell className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                          {fmt(dk)}
+                          {weekend && (
+                            <span className="weekend-badge">
+                              <span className="weekend-dot" />
+                              {weekendLabel(dk)}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                            {dayReports.length}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full">
+                            {totalTime.toFixed(1)}h
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {uniqueTypes.map((wt) => (
+                              <span
+                                key={wt}
+                                className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${WORK_TYPE_COLORS[wt as WorkType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                                  }`}
+                              >
+                                {WORK_TYPE_LABELS[wt as WorkType] ?? wt}
+                              </span>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            {/* View button */}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 text-[11px] gap-1 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors btn-hover-scale"
+                              onClick={() => { setDetailDate(dk); setDetailOpen(true); }}
+                              aria-label={`View entries for ${fmt(dk)}`}
+                            >
+                              <Eye className="h-3 w-3" aria-hidden="true" />
+                              View
+                            </Button>
+                            {/* Edit button */}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className={`h-7 px-2 text-[11px] gap-1 transition-colors btn-hover-scale ${isCurrentlyEditing
+                                  ? "text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30"
+                                  : "text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900 hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:border-amber-300 dark:hover:border-amber-700"
+                                }`}
+                              onClick={() => handleDateChange(dk)}
+                              aria-label={`Edit entries for ${fmt(dk)}`}
+                            >
+                              <Pencil className="h-3 w-3" aria-hidden="true" />
+                              {isCurrentlyEditing ? "Editing…" : "Edit"}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </section>
       </div>
 
       <DateDetailModal
@@ -2065,7 +1992,7 @@ const EmployeeView = () => {
 };
 
 /* =========================================================
-   OWNER VIEW - COMPACT ENHANCED UI WITH FULLY VISIBLE DATE PICKERS
+   OWNER VIEW - Team performance overview with filters
 ========================================================= */
 const OwnerView = () => {
   const [reports, setReports] = useState<Report[]>([]);
@@ -2259,106 +2186,98 @@ const OwnerView = () => {
   // Enhanced stats
   const totalEmployees = uniqueEmployees.length;
   const totalClients = uniqueClients.length;
-  const totalProjects = uniqueProjects.length;
   const avgHoursPerReport = reports.length > 0 ? (reports.reduce((s, r) => s + (r.time || 0), 0) / reports.length) : 0;
 
   return (
-    <div
-      style={{
-        transform: "scale(0.75)",
-        transformOrigin: "top left",
-        width: "133.33%",
-        marginBottom: "-30%",
-      }}
-    >
-      {/* Compact Stats Overview - Single Row */}
+    <div data-work-report-root="" className="space-y-3">
+      {/* Stats Overview - responsive grid: 2 cols on mobile, up to 5 on desktop */}
       {!loading && !error && reports.length > 0 && (
-        <div className="grid grid-cols-5 gap-2 mb-3 animate-fade-in-up">
-          <div className="stats-card flex items-center gap-2 py-2 px-3">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/20">
-              <FileText className="h-3.5 w-3.5 text-white" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 animate-fade-in-up">
+          <div className="stats-card flex items-center gap-2 py-2.5 px-3">
+            <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/20 flex-shrink-0">
+              <FileText className="h-3.5 w-3.5 text-white" aria-hidden="true" />
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Reports</span>
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">Reports</span>
               <span className="text-sm font-bold gradient-text">{reports.length}</span>
             </div>
           </div>
 
-          <div className="stats-card flex items-center gap-2 py-2 px-3">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/20">
-              <Users className="h-3.5 w-3.5 text-white" />
+          <div className="stats-card flex items-center gap-2 py-2.5 px-3">
+            <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/20 flex-shrink-0">
+              <Users className="h-3.5 w-3.5 text-white" aria-hidden="true" />
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Employees</span>
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">Employees</span>
               <span className="text-sm font-bold gradient-text">{totalEmployees}</span>
             </div>
           </div>
 
-          <div className="stats-card flex items-center gap-2 py-2 px-3">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-500/20">
-              <Briefcase className="h-3.5 w-3.5 text-white" />
+          <div className="stats-card flex items-center gap-2 py-2.5 px-3">
+            <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-500/20 flex-shrink-0">
+              <Briefcase className="h-3.5 w-3.5 text-white" aria-hidden="true" />
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Clients</span>
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">Clients</span>
               <span className="text-sm font-bold gradient-text">{totalClients}</span>
             </div>
           </div>
 
-          <div className="stats-card flex items-center gap-2 py-2 px-3">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 shadow-lg shadow-rose-500/20">
-              <Clock className="h-3.5 w-3.5 text-white" />
+          <div className="stats-card flex items-center gap-2 py-2.5 px-3">
+            <div className="p-1.5 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 shadow-lg shadow-rose-500/20 flex-shrink-0">
+              <Clock className="h-3.5 w-3.5 text-white" aria-hidden="true" />
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Avg Hrs</span>
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">Avg hrs</span>
               <span className="text-sm font-bold gradient-text">{avgHoursPerReport.toFixed(1)}h</span>
             </div>
           </div>
 
-          <div className="stats-card flex items-center gap-2 py-2 px-3">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 shadow-lg shadow-cyan-500/20">
-              <TrendingUp className="h-3.5 w-3.5 text-white" />
+          <div className="stats-card flex items-center gap-2 py-2.5 px-3">
+            <div className="p-1.5 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 shadow-lg shadow-cyan-500/20 flex-shrink-0">
+              <TrendingUp className="h-3.5 w-3.5 text-white" aria-hidden="true" />
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Total Hrs</span>
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">Total hrs</span>
               <span className="text-sm font-bold gradient-text">{reports.reduce((s, r) => s + (r.time || 0), 0).toFixed(1)}h</span>
             </div>
           </div>
         </div>
       )}
 
-      <section className="glass-effect rounded-xl p-4 shadow-xl shadow-indigo-500/5 border border-slate-200/50 dark:border-slate-700/50 card-hover">
-        {/* Warning for missing dates - Compact */}
+      <section className="glass-effect rounded-xl p-3 sm:p-4 shadow-xl shadow-indigo-500/5 border border-slate-200/50 dark:border-slate-700/50 card-hover">
+        {/* Warning for missing dates */}
         {missingDatesCount > 0 && (
-          <div className="mb-3 rounded-lg bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 animate-fade-in-up">
+          <div role="alert" className="mb-3 rounded-lg bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 animate-fade-in-up">
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-              <p className="text-[10px] text-amber-700 dark:text-amber-400">
+              <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" aria-hidden="true" />
+              <p className="text-xs text-amber-700 dark:text-amber-400">
                 <span className="font-bold">{missingDatesCount}</span> report(s) missing dates
               </p>
             </div>
           </div>
         )}
 
-        {/* Compact Header */}
-        <div className="flex items-center gap-2 mb-3 animate-fade-in-up">
+        {/* Header */}
+        <div className="flex flex-wrap items-center gap-2 mb-3 animate-fade-in-up">
           <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/20">
-            <BarChart3 className="h-4 w-4 text-white" />
+            <BarChart3 className="h-4 w-4 text-white" aria-hidden="true" />
           </div>
           <div>
             <h3 className="text-sm font-bold gradient-text leading-tight">Team Performance</h3>
           </div>
           {!loading && !error && (
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border border-indigo-200 dark:border-indigo-800">
-                <div className="h-1.5 w-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 animate-pulse" />
-                <span className="text-[9px] font-semibold text-indigo-600 dark:text-indigo-400">
+                <div className="h-1.5 w-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 animate-pulse" aria-hidden="true" />
+                <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
                   {filtered.length}/{reports.length}
                 </span>
               </div>
               {reports.length > 0 && (
                 <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-800">
-                  <Clock className="h-2.5 w-2.5 text-emerald-500" />
-                  <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  <Clock className="h-2.5 w-2.5 text-emerald-500" aria-hidden="true" />
+                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
                     {totalFilteredHours.toFixed(1)}h
                   </span>
                 </div>
@@ -2367,212 +2286,224 @@ const OwnerView = () => {
           )}
         </div>
 
-        {/* Compact Filter Bar with Labels - FULLY VISIBLE DATE PICKERS */}
+        {/* Filter Bar — stacks vertically on mobile, wraps into rows on larger screens */}
         {!loading && !error && reports.length > 0 && (
-          <div className="mb-3 p-2.5 glass-effect rounded-lg border border-slate-200/50 dark:border-slate-700/50 animate-fade-in-up">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1.5">
-                <Filter className="h-3 w-3 text-indigo-500" />
-                <span className="text-[9px] font-semibold text-slate-500 dark:text-slate-400">Filters:</span>
-              </div>
+          <div className="mb-3 p-3 glass-effect rounded-lg border border-slate-200/50 dark:border-slate-700/50 animate-fade-in-up">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <Filter className="h-3.5 w-3.5 text-indigo-500" aria-hidden="true" />
+              <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Filters</span>
+            </div>
 
-              {/* Date Filter - With Fully Visible Date Pickers */}
-              <div className="date-filter-group flex items-center gap-1.5 bg-white dark:bg-slate-900 rounded-md px-2 py-1 border border-slate-200 dark:border-slate-700">
-  <span className="text-[8px] font-semibold text-slate-400 dark:text-slate-500">Date:</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDateFilterMode("single");
-                      setFilterDateFrom("");
-                      setFilterDateTo("");
-                    }}
-                    className={`h-5 px-1.5 rounded text-[8px] font-semibold transition-all duration-200 ${dateFilterMode === "single"
-                        ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/20"
-                        : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
-                      }`}
-                  >
-                    S
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDateFilterMode("range");
-                      setFilterDate("all");
-                    }}
-                    className={`h-5 px-1.5 rounded text-[8px] font-semibold transition-all duration-200 ${dateFilterMode === "range"
-                        ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/20"
-                        : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
-                      }`}
-                  >
-                    R
-                  </button>
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
+              {/* Date Filter */}
+              <div className="flex flex-col gap-1.5 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Date</span>
+                  <div className="flex items-center gap-1" role="group" aria-label="Date filter mode">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateFilterMode("single");
+                        setFilterDateFrom("");
+                        setFilterDateTo("");
+                      }}
+                      aria-pressed={dateFilterMode === "single"}
+                      className={`h-6 px-2 rounded text-[10px] font-semibold transition-colors duration-150 ${dateFilterMode === "single"
+                          ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm"
+                          : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                        }`}
+                    >
+                      Single
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateFilterMode("range");
+                        setFilterDate("all");
+                      }}
+                      aria-pressed={dateFilterMode === "range"}
+                      className={`h-6 px-2 rounded text-[10px] font-semibold transition-colors duration-150 ${dateFilterMode === "range"
+                          ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm"
+                          : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                        }`}
+                    >
+                      Range
+                    </button>
+                    {isDateFilterActive && (
+                      <button
+                        onClick={clearDateFilter}
+                        aria-label="Clear date filter"
+                        className="text-slate-400 hover:text-rose-500 transition-colors ml-0.5"
+                      >
+                        <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {dateFilterMode === "single" ? (
                   <Select value={filterDate} onValueChange={setFilterDate}>
-                    <SelectTrigger className="h-6 text-[9px] w-[90px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
-                      <SelectValue placeholder="All" />
+                    <SelectTrigger aria-label="Filter by date" className="h-8 text-xs w-full sm:w-[140px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                      <SelectValue placeholder="All dates" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all" className="text-[10px]">All</SelectItem>
+                      <SelectItem value="all" className="text-xs">All dates</SelectItem>
                       {uniqueDates.map((d) => (
-                        <SelectItem key={d} value={d} className="text-[10px]">{fmt(d)}</SelectItem>
+                        <SelectItem key={d} value={d} className="text-xs">{fmt(d)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 ) : (
                   <div className="flex items-center gap-1.5">
-                    <div className="relative">
-                      <Input
-  type="date"
-  value={filterDateFrom}
-  onChange={(e) => setFilterDateFrom(e.target.value)}
-  className="owner-date-input h-7 text-[10px] w-[130px] bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 rounded-md cursor-pointer hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200"
-  style={{ minHeight: '28px', padding: '4px 4px 4px 6px' }}
-/>
-                    </div>
-                    <span className="text-[9px] text-slate-400 font-bold">→</span>
-                    <div className="relative">
-                      <Input
-  type="date"
-  value={filterDateTo}
-  onChange={(e) => setFilterDateTo(e.target.value)}  
-  className="owner-date-input h-7 text-[10px] w-[130px] bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 rounded-md cursor-pointer hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200"
-  style={{ minHeight: '28px', padding: '4px 4px 4px 6px' }}
-/>
-                    </div>
+                    <Label htmlFor="owner-date-from" className="sr-only">From date</Label>
+                    <Input
+                      id="owner-date-from"
+                      type="date"
+                      value={filterDateFrom}
+                      onChange={(e) => setFilterDateFrom(e.target.value)}
+                      className="owner-date-input h-8 text-xs w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 rounded-md cursor-pointer hover:border-indigo-400 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/20 transition-colors duration-150"
+                    />
+                    <span className="text-xs text-slate-400 font-bold flex-shrink-0" aria-hidden="true">→</span>
+                    <Label htmlFor="owner-date-to" className="sr-only">To date</Label>
+                    <Input
+                      id="owner-date-to"
+                      type="date"
+                      value={filterDateTo}
+                      onChange={(e) => setFilterDateTo(e.target.value)}
+                      className="owner-date-input h-8 text-xs w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 rounded-md cursor-pointer hover:border-indigo-400 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/20 transition-colors duration-150"
+                    />
                   </div>
-                )}
-                {isDateFilterActive && (
-                  <button
-                    onClick={clearDateFilter}
-                    className="text-[8px] text-rose-400 hover:text-rose-500 transition-colors ml-0.5"
-                  >
-                    ✕
-                  </button>
                 )}
               </div>
 
               {/* Employee Filter */}
-              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 rounded-md px-2 py-1 border border-slate-200 dark:border-slate-700">
-                <span className="text-[8px] font-semibold text-slate-400 dark:text-slate-500">Emp:</span>
+              <div className="flex flex-col gap-1.5 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Employee</span>
+                  {isEmployeeFilterActive && (
+                    <button
+                      onClick={clearEmployeeFilter}
+                      aria-label="Clear employee filter"
+                      className="text-slate-400 hover:text-rose-500 transition-colors"
+                    >
+                      <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
                 <Select value={filterEmployee} onValueChange={setFilterEmployee}>
-                  <SelectTrigger className="h-6 text-[9px] w-[90px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                  <SelectTrigger aria-label="Filter by employee" className="h-8 text-xs w-full sm:w-[130px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all" className="text-[10px]">All</SelectItem>
+                    <SelectItem value="all" className="text-xs">All employees</SelectItem>
                     {uniqueEmployees.map((emp) => (
-                      <SelectItem key={emp} value={emp} className="text-[10px]">{emp}</SelectItem>
+                      <SelectItem key={emp} value={emp} className="text-xs">{emp}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {isEmployeeFilterActive && (
-                  <button
-                    onClick={clearEmployeeFilter}
-                    className="text-[7px] text-rose-400 hover:text-rose-500 transition-colors"
-                  >
-                    ✕
-                  </button>
-                )}
               </div>
 
               {/* Client Filter */}
-              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 rounded-md px-2 py-1 border border-slate-200 dark:border-slate-700">
-                <span className="text-[8px] font-semibold text-slate-400 dark:text-slate-500">Client:</span>
+              <div className="flex flex-col gap-1.5 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Client</span>
+                  {isClientFilterActive && (
+                    <button
+                      onClick={clearClientFilter}
+                      aria-label="Clear client filter"
+                      className="text-slate-400 hover:text-rose-500 transition-colors"
+                    >
+                      <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
                 <Select value={filterClient} onValueChange={handleClientFilterChange}>
-                  <SelectTrigger className="h-6 text-[9px] w-[80px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                  <SelectTrigger aria-label="Filter by client" className="h-8 text-xs w-full sm:w-[120px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all" className="text-[10px]">All</SelectItem>
+                    <SelectItem value="all" className="text-xs">All clients</SelectItem>
                     {uniqueClients.map((c) => (
-                      <SelectItem key={c} value={c} className="text-[10px]">{c}</SelectItem>
+                      <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {isClientFilterActive && (
-                  <button
-                    onClick={clearClientFilter}
-                    className="text-[7px] text-rose-400 hover:text-rose-500 transition-colors"
-                  >
-                    ✕
-                  </button>
-                )}
               </div>
 
               {/* Project Filter */}
-              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 rounded-md px-2 py-1 border border-slate-200 dark:border-slate-700">
-                <span className="text-[8px] font-semibold text-slate-400 dark:text-slate-500">Proj:</span>
+              <div className="flex flex-col gap-1.5 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Project</span>
+                  {isProjectFilterActive && (
+                    <button
+                      onClick={clearProjectFilter}
+                      aria-label="Clear project filter"
+                      className="text-slate-400 hover:text-rose-500 transition-colors"
+                    >
+                      <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
                 <Select value={filterProject} onValueChange={setFilterProject}>
-                  <SelectTrigger className="h-6 text-[9px] w-[90px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                  <SelectTrigger aria-label="Filter by project" className="h-8 text-xs w-full sm:w-[130px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all" className="text-[10px]">All</SelectItem>
+                    <SelectItem value="all" className="text-xs">All projects</SelectItem>
                     {uniqueProjects.map((p) => (
-                      <SelectItem key={p} value={p} className="text-[10px]">{p}</SelectItem>
+                      <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {isProjectFilterActive && (
-                  <button
-                    onClick={clearProjectFilter}
-                    className="text-[7px] text-rose-400 hover:text-rose-500 transition-colors"
-                  >
-                    ✕
-                  </button>
-                )}
               </div>
 
               {/* Clear All */}
               {hasFilter && (
                 <button
                   onClick={clearFilters}
-                  className="flex items-center gap-0.5 h-6 px-2 text-[8px] font-medium text-rose-500 hover:text-rose-600 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded transition-all duration-200"
+                  className="flex items-center justify-center gap-1 h-8 px-3 text-xs font-medium text-rose-600 dark:text-rose-400 hover:text-rose-700 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-lg transition-colors duration-150 self-start sm:self-end"
                 >
-                  <XCircle className="h-2.5 w-2.5" />
-                  Clear
+                  <XCircle className="h-3 w-3" aria-hidden="true" />
+                  Clear all
                 </button>
               )}
             </div>
 
             {/* Active Filter Pills */}
             {hasFilter && (
-              <div className="flex flex-wrap gap-1 mt-1.5 pt-1.5 border-t border-slate-200 dark:border-slate-700">
+              <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2.5 border-t border-slate-200 dark:border-slate-700">
                 {dateFilterMode === "single" && filterDate !== "all" && (
-                  <span className="filter-pill inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[7px] font-semibold bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-950/40 dark:to-purple-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                    <Calendar className="h-2 w-2" />
+                  <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-950/40 dark:to-purple-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                    <Calendar className="h-2.5 w-2.5" aria-hidden="true" />
                     {fmt(filterDate)}
-                    <button onClick={clearDateFilter} className="ml-0.5 hover:text-rose-500">✕</button>
+                    <button onClick={clearDateFilter} aria-label="Clear date filter" className="ml-0.5 hover:text-rose-500">✕</button>
                   </span>
                 )}
                 {dateFilterMode === "range" && (filterDateFrom || filterDateTo) && (
-                  <span className="filter-pill inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[7px] font-semibold bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-950/40 dark:to-purple-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                    <Calendar className="h-2 w-2" />
+                  <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-950/40 dark:to-purple-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                    <Calendar className="h-2.5 w-2.5" aria-hidden="true" />
                     {filterDateFrom ? fmt(filterDateFrom) : "…"} → {filterDateTo ? fmt(filterDateTo) : "…"}
-                    <button onClick={clearDateFilter} className="ml-0.5 hover:text-rose-500">✕</button>
+                    <button onClick={clearDateFilter} aria-label="Clear date range filter" className="ml-0.5 hover:text-rose-500">✕</button>
                   </span>
                 )}
                 {filterEmployee !== "all" && (
-                  <span className="filter-pill inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[7px] font-semibold bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-950/40 dark:to-pink-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                    <User className="h-2 w-2" />
+                  <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-950/40 dark:to-pink-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    <User className="h-2.5 w-2.5" aria-hidden="true" />
                     {filterEmployee}
-                    <button onClick={clearEmployeeFilter} className="ml-0.5 hover:text-rose-500">✕</button>
+                    <button onClick={clearEmployeeFilter} aria-label="Clear employee filter" className="ml-0.5 hover:text-rose-500">✕</button>
                   </span>
                 )}
                 {filterClient !== "all" && (
-                  <span className="filter-pill inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[7px] font-semibold bg-gradient-to-r from-emerald-100 to-teal-100 dark:from-emerald-950/40 dark:to-teal-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                    <Briefcase className="h-2 w-2" />
+                  <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-emerald-100 to-teal-100 dark:from-emerald-950/40 dark:to-teal-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                    <Briefcase className="h-2.5 w-2.5" aria-hidden="true" />
                     {filterClient}
-                    <button onClick={clearClientFilter} className="ml-0.5 hover:text-rose-500">✕</button>
+                    <button onClick={clearClientFilter} aria-label="Clear client filter" className="ml-0.5 hover:text-rose-500">✕</button>
                   </span>
                 )}
                 {filterProject !== "all" && (
-                  <span className="filter-pill inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[7px] font-semibold bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-950/40 dark:to-orange-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                    <Tag className="h-2 w-2" />
+                  <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-950/40 dark:to-orange-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                    <Tag className="h-2.5 w-2.5" aria-hidden="true" />
                     {filterProject}
-                    <button onClick={clearProjectFilter} className="ml-0.5 hover:text-rose-500">✕</button>
+                    <button onClick={clearProjectFilter} aria-label="Clear project filter" className="ml-0.5 hover:text-rose-500">✕</button>
                   </span>
                 )}
               </div>
@@ -2580,44 +2511,44 @@ const OwnerView = () => {
           </div>
         )}
 
-        {/* Table - Compact */}
+        {/* Table */}
         {loading ? (
           <div className="flex justify-center py-8">
             <FullSpinner />
           </div>
         ) : error ? (
-          <div className="rounded-lg border border-red-100 bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/20 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+          <div role="alert" className="rounded-lg border border-red-100 dark:border-red-900/60 bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/20 px-3 py-2 text-xs text-red-600 dark:text-red-400">
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-3 w-3" />
+              <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
               <span className="font-medium">{error}</span>
             </div>
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-8">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center mx-auto mb-2">
-              <Filter className="h-6 w-6 text-slate-300 dark:text-slate-500" />
+              <Filter className="h-6 w-6 text-slate-400 dark:text-slate-500" aria-hidden="true" />
             </div>
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
               {hasFilter ? "No records match filters" : "No reports yet"}
             </p>
             {hasFilter && (
-              <button onClick={clearFilters} className="mt-1 text-[9px] text-indigo-500 hover:underline">
+              <button onClick={clearFilters} className="mt-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
                 Clear filters
               </button>
             )}
           </div>
         ) : (
-          <div data-work-report-table="" className="overflow-x-auto rounded-lg border border-slate-200/50 dark:border-slate-700/50">
-            <Table>
+          <div data-work-report-table="" className="overflow-x-auto rounded-lg border border-slate-200/50 dark:border-slate-700/50 custom-scrollbar">
+            <Table className="min-w-[760px]">
               <TableHeader>
                 <TableRow className="bg-gradient-to-r from-slate-50/80 to-slate-100/80 dark:from-slate-800/60 dark:to-slate-800/40">
-                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Date</TableHead>
-                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Employee</TableHead>
-                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Client</TableHead>
-                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Project</TableHead>
-                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Type</TableHead>
-                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Time</TableHead>
-                  <TableHead className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5">Description</TableHead>
+                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide py-2">Date</TableHead>
+                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide py-2">Employee</TableHead>
+                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide py-2">Client</TableHead>
+                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide py-2">Project</TableHead>
+                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide py-2">Type</TableHead>
+                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide py-2">Time</TableHead>
+                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide py-2">Description</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -2665,9 +2596,9 @@ const OwnerView = () => {
                     className={`entry-row table-row-animate ${weekend ? "weekend-row" : ""}`}
                     style={{ animationDelay: `${index * 0.02}s` }}
                   >
-                    <TableCell className="text-[10px] whitespace-nowrap font-semibold text-slate-700 dark:text-slate-300 py-1">
+                    <TableCell className="text-xs whitespace-nowrap font-semibold text-slate-700 dark:text-slate-300 py-2">
                       {fmt(r.date)}
-                      {!r.date && <span className="ml-1 text-[7px] text-amber-500">(auto)</span>}
+                      {!r.date && <span className="ml-1 text-[10px] text-amber-500">(auto)</span>}
                       {weekend && (
                         <span className="weekend-badge">
                           <span className="weekend-dot" />
@@ -2675,28 +2606,28 @@ const OwnerView = () => {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-[10px] font-semibold py-1">
+                    <TableCell className="text-xs font-semibold py-2">
                       <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                         {r.employeeName || "—"}
                       </span>
                     </TableCell>
-                    <TableCell className="text-[10px] text-slate-600 dark:text-slate-400 py-1">{r.client || "—"}</TableCell>
-                    <TableCell className="text-[10px] text-slate-600 dark:text-slate-400 py-1">{r.project || "—"}</TableCell>
-                    <TableCell className="py-1">
+                    <TableCell className="text-xs text-slate-600 dark:text-slate-400 py-2">{r.client || "—"}</TableCell>
+                    <TableCell className="text-xs text-slate-600 dark:text-slate-400 py-2">{r.project || "—"}</TableCell>
+                    <TableCell className="py-2">
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-[8px] font-semibold ${WORK_TYPE_COLORS[r.workType as WorkType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                        className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${WORK_TYPE_COLORS[r.workType as WorkType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
                           }`}
                       >
                         {WORK_TYPE_LABELS[r.workType as WorkType] ?? r.workType}
                       </span>
                     </TableCell>
-                    <TableCell className="text-[10px] font-bold py-1">
+                    <TableCell className="text-xs font-bold py-2">
                       <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                         {r.time}h
                       </span>
                     </TableCell>
                     <TableCell
-                      className="text-[10px] max-w-[150px] truncate text-slate-500 dark:text-slate-400 py-1"
+                      className="text-xs max-w-[180px] truncate text-slate-500 dark:text-slate-400 py-2"
                       title={r.description}
                     >
                       {r.description || "—"}
@@ -2709,25 +2640,25 @@ const OwnerView = () => {
           </div>
         )}
 
-        {/* Compact Footer */}
+        {/* Footer summary */}
         {!loading && !error && filtered.length > 0 && (
-          <div className="mt-2 flex items-center justify-between text-[9px] text-slate-400 dark:text-slate-500">
-            <div className="flex items-center gap-3">
+          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="flex items-center gap-1">
-                <div className="h-1 w-1 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500" />
+                <div className="h-1 w-1 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500" aria-hidden="true" />
                 {filtered.length} records
               </span>
               <span className="flex items-center gap-1">
-                <Users className="h-2.5 w-2.5" />
+                <Users className="h-3 w-3" aria-hidden="true" />
                 {uniqueFilteredEmployees} employees
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="flex items-center gap-1">
-                <Clock className="h-2.5 w-2.5" />
+                <Clock className="h-3 w-3" aria-hidden="true" />
                 {totalFilteredHours.toFixed(1)}h
               </span>
-              <span className="px-1.5 py-0.5 rounded-full bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border border-indigo-200 dark:border-indigo-800 text-[8px] font-semibold text-indigo-600 dark:text-indigo-400">
+              <span className="px-1.5 py-0.5 rounded-full bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border border-indigo-200 dark:border-indigo-800 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
                 {(totalFilteredHours / filtered.length).toFixed(1)}h/rec
               </span>
             </div>
@@ -2759,14 +2690,7 @@ const WorkReport = () => {
 
   return (
     <>
-      <PageHeader
-        title="Work Reports"
-      // description={
-      //   role === "OWNER"
-      //     ? "View all employee work reports."
-      //     : "Submit and review your daily work reports."
-      // }
-      />
+      <PageHeader title="Work Reports" />
       {role === "OWNER" ? <OwnerView /> : <EmployeeView />}
     </>
   );

@@ -205,15 +205,15 @@ function FileAttachment({ attachment, isMine }: { attachment: Attachment; isMine
   const getFileIcon = () => {
     const ext = attachment.originalName.split('.').pop()?.toLowerCase();
     if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext || '')) {
-      return <Image size={20} />;
+      return <Image size={18} aria-hidden="true" />;
     }
     if (['mp4', 'webm', 'mov', 'avi'].includes(ext || '')) {
-      return <Video size={20} />;
+      return <Video size={18} aria-hidden="true" />;
     }
     if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext || '')) {
-      return <FileArchive size={20} />;
+      return <FileArchive size={18} aria-hidden="true" />;
     }
-    return <File size={20} />;
+    return <File size={18} aria-hidden="true" />;
   };
 
   const formatFileSize = (bytes: number) => {
@@ -267,16 +267,32 @@ function FileAttachment({ attachment, isMine }: { attachment: Attachment; isMine
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleView();
+    }
+  };
+
   return (
-    <div className={`file-attachment ${isMine ? 'mine' : 'theirs'}`} onClick={handleView}>
+    <div
+      className={`file-attachment ${isMine ? 'mine' : 'theirs'}`}
+      onClick={handleView}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${attachment.originalName}, ${formatFileSize(attachment.fileSize)}`}
+    >
       <div className="file-icon">{getFileIcon()}</div>
       <div className="file-info">
         <div className="file-name">{attachment.originalName}</div>
         <div className="file-size">{formatFileSize(attachment.fileSize)}</div>
       </div>
       <button
+        type="button"
         className="file-download"
         title="Download"
+        aria-label={`Download ${attachment.originalName}`}
         onClick={(e) => { e.stopPropagation(); handleDownload(); }}
       >
         📥
@@ -336,33 +352,40 @@ function EmojiPicker({
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
+    const escHandler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("keydown", escHandler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", escHandler);
+    };
   }, [onClose]);
 
   return (
     <div
       ref={ref}
-      style={{
-        position: "absolute", bottom: "calc(100% + 8px)", [align]: 0, zIndex: 60,
-        width: 264, maxHeight: 300, overflowY: "auto",
-        background: "var(--card, #fff)", border: "1px solid rgba(0,0,0,0.12)",
-        borderRadius: 12, boxShadow: "0 10px 28px rgba(0,0,0,0.2)", padding: 10,
-      }}
+      role="menu"
+      aria-label="Choose an emoji"
+      className="emoji-picker"
+      style={{ [align]: 0 } as React.CSSProperties}
     >
       {EMOJI_CATEGORIES.map((cat) => (
-        <div key={cat.label} style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, opacity: 0.5, letterSpacing: 0.4, textTransform: "uppercase", margin: "4px 2px" }}>
+        <div key={cat.label} className="emoji-picker-category">
+          <div className="emoji-picker-label">
             {cat.label}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1 }}>
+          <div className="emoji-picker-grid">
             {cat.emojis.map((e) => (
               <button
                 key={e}
                 type="button"
+                role="menuitem"
+                aria-label={`React with ${e}`}
+                className="emoji-picker-btn"
                 onMouseDown={(ev) => ev.preventDefault()}
                 onClick={() => onSelect(e)}
-                style={{ fontSize: 19, background: "none", border: "none", cursor: "pointer", borderRadius: 6, padding: 4, lineHeight: 1 }}
               >
                 {e}
               </button>
@@ -389,8 +412,15 @@ function ReactionControl({
     const handler = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setMode("closed");
     };
+    const escHandler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMode("closed");
+    };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("keydown", escHandler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", escHandler);
+    };
   }, [mode]);
 
   const handleSelect = (emoji: string) => {
@@ -399,45 +429,38 @@ function ReactionControl({
   };
 
   return (
-    <div ref={wrapRef} className="msg-react-control" style={{ position: "relative", display: "inline-flex" }}>
+    <div ref={wrapRef} className="msg-react-control">
       <button
         type="button"
         className="msg-react-trigger"
         title="React"
+        aria-label="Add reaction"
+        aria-haspopup="true"
+        aria-expanded={mode !== "closed"}
         onClick={() => setMode((m) => (m === "closed" ? "quick" : "closed"))}
-        style={{
-          background: "none", border: "none", cursor: "pointer",
-          padding: 2, borderRadius: "50%", opacity: mode === "closed" ? 0 : 1,
-          transition: "opacity .15s", display: "flex", alignItems: "center", justifyContent: "center",
-          color: "inherit",
-        }}
       >
-        <Smile size={13} />
+        <Smile size={13} aria-hidden="true" />
       </button>
 
       {mode === "quick" && (
-        <div
-          style={{
-            position: "absolute", bottom: "calc(100% + 4px)", [align]: 0, zIndex: 50,
-            display: "flex", alignItems: "center", gap: 2,
-            background: "var(--card, #fff)", border: "1px solid rgba(0,0,0,0.12)",
-            borderRadius: 999, boxShadow: "0 4px 14px rgba(0,0,0,0.2)", padding: "3px 5px",
-          }}
-        >
+        <div className="quick-reactions" style={{ [align]: 0 } as React.CSSProperties} role="menu" aria-label="Quick reactions">
           {QUICK_REACTIONS.map((e) => (
             <button
               key={e}
               type="button"
+              role="menuitem"
+              aria-label={`React with ${e}`}
+              className="quick-reaction-btn"
               onClick={() => handleSelect(e)}
-              style={{ fontSize: 17, background: "none", border: "none", cursor: "pointer", padding: 2, lineHeight: 1 }}
             >
               {e}
             </button>
           ))}
           <button
             type="button"
+            className="quick-reaction-more"
+            aria-label="More emoji"
             onClick={() => setMode("full")}
-            style={{ fontSize: 13, background: "none", border: "none", cursor: "pointer", padding: "2px 5px", opacity: 0.6 }}
           >
             +
           </button>
@@ -464,7 +487,7 @@ function ReactionPills({
   if (entries.length === 0) return null;
 
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: "4px 2px 0" }}>
+    <div className="reaction-pills">
       {entries.map(([emoji, usersList]) => {
         const mine = usersList.includes(currentUser);
         return (
@@ -473,15 +496,12 @@ function ReactionPills({
             type="button"
             onClick={() => onToggle(emoji)}
             title={usersList.join(", ")}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 3,
-              fontSize: 12, padding: "1px 6px", borderRadius: 999, cursor: "pointer",
-              border: mine ? "1px solid #6366f1" : "1px solid rgba(0,0,0,0.14)",
-              background: mine ? "rgba(99,102,241,0.14)" : "rgba(0,0,0,0.045)",
-            }}
+            aria-pressed={mine}
+            aria-label={`${emoji} reaction, ${usersList.length} ${usersList.length === 1 ? "person" : "people"}${mine ? ", including you" : ""}. Toggle reaction`}
+            className={`reaction-pill ${mine ? "mine" : ""}`}
           >
-            <span>{emoji}</span>
-            <span style={{ opacity: 0.7 }}>{usersList.length}</span>
+            <span aria-hidden="true">{emoji}</span>
+            <span className="reaction-pill-count">{usersList.length}</span>
           </button>
         );
       })}
@@ -498,14 +518,20 @@ function ReplyPreviewBar({ target, onCancel }: { target: ReplyTarget; onCancel: 
       ? "📎 Attachment"
       : "";
   return (
-    <div className="msg-reply-preview-bar">
-      <Reply size={14} className="msg-reply-preview-icon" />
+    <div className="msg-reply-preview-bar" role="status">
+      <Reply size={14} className="msg-reply-preview-icon" aria-hidden="true" />
       <div className="msg-reply-preview-text">
-        <span className="msg-reply-preview-sender">{formatDisplayName(target.sender)}</span>
+        <span className="msg-reply-preview-sender">Replying to {formatDisplayName(target.sender)}</span>
         <span className="msg-reply-preview-content">{preview}</span>
       </div>
-      <button type="button" className="msg-reply-preview-cancel" onClick={onCancel} title="Cancel reply">
-        <X size={14} />
+      <button
+        type="button"
+        className="msg-reply-preview-cancel"
+        onClick={onCancel}
+        title="Cancel reply"
+        aria-label="Cancel reply"
+      >
+        <X size={14} aria-hidden="true" />
       </button>
     </div>
   );
@@ -530,6 +556,7 @@ function ReplyQuoteBlock({
       className={`msg-reply-quote ${isMine ? "mine" : "theirs"}`}
       onClick={() => onJump(replyToId)}
       title="Jump to original message"
+      aria-label={`Jump to original message from ${formatDisplayName(sender || "")}: ${preview}`}
     >
       <span className="msg-reply-quote-sender">{formatDisplayName(sender || "")}</span>
       <span className="msg-reply-quote-content">{preview}</span>
@@ -550,7 +577,7 @@ function PollBubble({
 
   let poll: PollData;
   try { poll = JSON.parse(msg.pollData); }
-  catch { return <div className="msg-bubble theirs">[Invalid poll]</div>; }
+  catch { return <div className="msg-bubble theirs">Sorry, this poll couldn't be displayed.</div>; }
 
   const totalVotes = Object.values(poll.votes).reduce((s, a) => s + a.length, 0);
   const myVote = Object.entries(poll.votes).find(([, voters]) => voters.includes(currentUser))?.[0];
@@ -567,8 +594,11 @@ function PollBubble({
   };
 
   return (
-    <div className="poll-card">
-      <div className="poll-question">📊 {poll.question}</div>
+    <div className="poll-card" role="group" aria-label={`Poll: ${poll.question}`}>
+      <div className="poll-question">
+        <BarChart2 size={15} aria-hidden="true" />
+        <span>{poll.question}</span>
+      </div>
       {poll.options.map((opt) => {
         const count = poll.votes[opt]?.length ?? 0;
         const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
@@ -579,10 +609,12 @@ function PollBubble({
             className={`poll-option ${isMyVote ? "voted" : ""}`}
             onClick={() => handleVote(opt)}
             disabled={voting}
+            aria-pressed={isMyVote}
+            aria-label={`${opt}: ${pct}% (${count} vote${count !== 1 ? "s" : ""})${isMyVote ? ", your vote" : ""}`}
           >
-            <div className="poll-option-bar" style={{ width: `${pct}%` }} />
+            <div className="poll-option-bar" style={{ width: `${pct}%` }} aria-hidden="true" />
             <span className="poll-option-label">
-              {isMyVote && <Check size={11} style={{ marginRight: 4, flexShrink: 0 }} />}
+              {isMyVote && <Check size={11} aria-hidden="true" style={{ marginRight: 4, flexShrink: 0 }} />}
               {opt}
             </span>
             <span className="poll-option-pct">{pct}% ({count})</span>
@@ -1165,6 +1197,9 @@ export default function Messages() {
       e.preventDefault();
       handleSend();
     }
+    if (e.key === "Escape" && replyingTo) {
+      cancelReply();
+    }
   };
 
   const openChat = (target: ChatTarget) => {
@@ -1339,6 +1374,24 @@ export default function Messages() {
     }
   }, [hasMoreConv, convLoading, convPage, fetchConversation, conversation.length]);
 
+  // Shared Escape-to-close handling for confirmation / creation modals.
+  const useEscapeToClose = (isOpen: boolean, onClose: () => void, disabled: boolean) => {
+    useEffect(() => {
+      if (!isOpen) return;
+      const handler = (e: KeyboardEvent) => {
+        if (e.key === "Escape" && !disabled) onClose();
+      };
+      document.addEventListener("keydown", handler);
+      return () => document.removeEventListener("keydown", handler);
+    }, [isOpen, onClose, disabled]);
+  };
+
+  useEscapeToClose(showGroupModal, () => setShowGroupModal(false), savingGroup);
+  useEscapeToClose(!!deleteGroupTarget, () => setDeleteGroupTarget(null), deletingGroup);
+  useEscapeToClose(!!deleteMessageTarget, () => setDeleteMessageTarget(null), deletingMessage);
+  useEscapeToClose(!!deleteConversationTarget, () => setDeleteConversationTarget(null), deletingConversation);
+  useEscapeToClose(showPollModal, () => setShowPollModal(false), false);
+
   // ── UI helpers ───────────────────────────────────────────────────────────────
   const filteredUsers = users.filter(
     (u) =>
@@ -1368,23 +1421,72 @@ export default function Messages() {
   return (
     <div className="msg-container">
       <style>{`
+        :root {
+          --msg-radius-sm: 6px;
+          --msg-radius-md: 10px;
+          --msg-radius-lg: 16px;
+          --msg-radius-pill: 999px;
+          --msg-space-1: 4px;
+          --msg-space-2: 8px;
+          --msg-space-3: 12px;
+          --msg-space-4: 16px;
+          --msg-space-5: 20px;
+          --msg-accent: #2563eb;
+          --msg-accent-hover: #1d4ed8;
+          --msg-accent-soft: rgba(37, 99, 235, 0.12);
+          --msg-danger: #ef4444;
+          --msg-danger-hover: #dc2626;
+          --msg-danger-soft: rgba(239, 68, 68, 0.12);
+          --msg-purple: #6366f1;
+          --msg-purple-soft: rgba(99, 102, 241, 0.12);
+          --msg-warn: #f59e0b;
+          --msg-focus-ring: 0 0 0 2px hsl(var(--background)), 0 0 0 4px var(--msg-accent);
+          --msg-transition-fast: .15s ease;
+        }
+
         .msg-container {
-  display:flex; flex-direction:column;
-  height:calc(100vh - 110px); max-height:860px; min-height:480px;
-  width:100%;
-  flex: 1 1 auto;
-  min-width: 0;
-  align-self: stretch;  /* don't shrink to content if parent is flex/grid */
-  background:hsl(var(--background));
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  border-radius:12px; overflow:hidden;
-  box-shadow:0 20px 35px -10px rgba(0,0,0,0.15);
-  box-sizing:border-box;
-}
-        .msg-ws-banner { background:#f59e0b; color:#000; padding:6px; text-align:center; font-size:12px; font-weight:500; }
+          display:flex; flex-direction:column;
+          height:calc(100vh - 110px); max-height:860px; min-height:480px;
+          width:100%;
+          flex: 1 1 auto;
+          min-width: 0;
+          align-self: stretch;
+          background:hsl(var(--background));
+          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+          border-radius:var(--msg-radius-lg); overflow:hidden;
+          box-shadow:0 20px 35px -10px rgba(0,0,0,0.15);
+          box-sizing:border-box;
+        }
+
+        /* Reset + a11y helpers */
+        .msg-container *, .msg-container *::before, .msg-container *::after { box-sizing:border-box; }
+        .msg-container button { font-family:inherit; }
+        .msg-container button:focus-visible,
+        .msg-container input:focus-visible,
+        .msg-container [tabindex]:focus-visible {
+          outline:none;
+          box-shadow:var(--msg-focus-ring);
+          border-radius: var(--msg-radius-sm);
+        }
+        .sr-only {
+          position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+          overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .msg-container *, .msg-container *::before, .msg-container *::after {
+            animation-duration: 0.001ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.001ms !important;
+          }
+        }
+
+        .msg-ws-banner {
+          background:var(--msg-warn); color:#1c1300; padding:8px 12px; text-align:center;
+          font-size:12.5px; font-weight:600; display:flex; align-items:center; justify-content:center; gap:6px;
+        }
         .msg-main { display:flex; flex:1; min-height:0; }
         .msg-sidebar {
-          width:280px; flex-shrink:0; display:flex; flex-direction:column;
+          width:300px; flex-shrink:0; display:flex; flex-direction:column;
           background:hsl(var(--card)); border-right:1px solid hsl(var(--border));
         }
         .msg-sidebar-header { padding:16px 16px 12px; border-bottom:1px solid hsl(var(--border)); }
@@ -1394,45 +1496,47 @@ export default function Messages() {
         }
         .msg-badge {
           display:inline-flex; align-items:center; justify-content:center;
-          background:#ef4444; color:#fff; font-size:10px; font-weight:700;
-          min-width:18px; height:18px; border-radius:9px; padding:0 5px;
+          background:var(--msg-danger); color:#fff; font-size:10px; font-weight:700;
+          min-width:18px; height:18px; border-radius:var(--msg-radius-pill); padding:0 5px;
         }
         .msg-search { position:relative; }
         .msg-search input {
-          width:100%; padding:8px 12px 8px 34px; border-radius:8px;
+          width:100%; padding:9px 12px 9px 34px; border-radius:var(--msg-radius-md);
           border:1px solid hsl(var(--border)); background:hsl(var(--background));
           color:hsl(var(--foreground)); font-size:13px; outline:none;
-          box-sizing:border-box; transition:border-color .15s;
+          box-sizing:border-box; transition:border-color var(--msg-transition-fast), box-shadow var(--msg-transition-fast);
         }
-        .msg-search input:focus { border-color:hsl(var(--primary)); }
+        .msg-search input:focus { border-color:var(--msg-accent); }
         .msg-search-icon { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:hsl(var(--muted-foreground)); pointer-events:none; }
         .msg-section-label {
           font-size:10.5px; font-weight:700; text-transform:uppercase;
-          letter-spacing:.08em; color:hsl(var(--muted-foreground)); padding:12px 16px 6px;
+          letter-spacing:.08em; color:hsl(var(--muted-foreground)); padding:14px 16px 6px;
           display:flex; align-items:center; justify-content:space-between;
         }
         .msg-section-label button {
           display:flex; align-items:center; gap:3px; font-size:10.5px; font-weight:700;
-          text-transform:uppercase; letter-spacing:.08em; color:hsl(var(--primary));
-          background:none; border:none; cursor:pointer; padding:2px 4px; border-radius:4px;
+          text-transform:uppercase; letter-spacing:.08em; color:var(--msg-accent);
+          background:none; border:none; cursor:pointer; padding:3px 6px; border-radius:var(--msg-radius-sm);
+          transition:background var(--msg-transition-fast);
         }
         .msg-section-label button:hover { background:hsl(var(--accent)); }
         .msg-sidebar-list {
           flex:1; overflow-y:auto; padding-bottom:8px;
         }
         .msg-contact {
-          display:flex; align-items:center; gap:10px; padding:9px 14px;
-          cursor:pointer; transition:background .12s; border-radius:6px;
+          display:flex; align-items:center; gap:10px; padding:10px 14px;
+          cursor:pointer; transition:background var(--msg-transition-fast); border-radius:var(--msg-radius-sm);
           margin:1px 6px; position:relative;
         }
         .msg-contact:hover { background:hsl(var(--accent)); }
-        .msg-contact.active { background:hsl(var(--primary)/.1); outline:1px solid hsl(var(--primary)/.25); }
+        .msg-contact:focus-visible { box-shadow:var(--msg-focus-ring); }
+        .msg-contact.active { background:var(--msg-accent-soft); outline:1px solid rgba(37,99,235,.3); }
         .msg-avatar {
           width:36px; height:36px; border-radius:50%;
           display:flex; align-items:center; justify-content:center;
           font-size:13px; font-weight:700; color:#fff; flex-shrink:0; position:relative;
         }
-        .msg-avatar-broadcast { border-radius:10px; }
+        .msg-avatar-broadcast { border-radius:var(--msg-radius-md); }
         .msg-contact-info { flex:1; min-width:0; }
         .msg-contact-name {
           font-size:13.5px; font-weight:600; color:hsl(var(--foreground));
@@ -1443,19 +1547,20 @@ export default function Messages() {
           font-size:12px; color:hsl(var(--muted-foreground));
           white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px;
         }
-        .msg-contact-preview.unread { color:hsl(var(--foreground)); font-weight:500; }
+        .msg-contact-preview.unread { color:hsl(var(--foreground)); font-weight:600; }
         .msg-contact-time { font-size:10.5px; color:hsl(var(--muted-foreground)); flex-shrink:0; }
-        .msg-unread-dot { width:8px; height:8px; border-radius:50%; background:#3b82f6; flex-shrink:0; }
-        .msg-role-tag { font-size:10px; font-weight:600; padding:1px 6px; border-radius:10px; flex-shrink:0; }
-        .msg-group-actions { display:flex; gap:2px; opacity:0; transition:opacity .15s; }
-        .msg-contact:hover .msg-group-actions { opacity:1; }
+        .msg-unread-dot { width:8px; height:8px; border-radius:50%; background:var(--msg-accent); flex-shrink:0; }
+        .msg-role-tag { font-size:10px; font-weight:600; padding:1px 6px; border-radius:var(--msg-radius-pill); flex-shrink:0; }
+        .msg-group-actions { display:flex; gap:2px; opacity:0; transition:opacity var(--msg-transition-fast); }
+        .msg-contact:hover .msg-group-actions,
+        .msg-contact:focus-within .msg-group-actions { opacity:1; }
         .msg-icon-btn {
-          width:22px; height:22px; border-radius:4px; border:none; background:transparent;
+          width:26px; height:26px; border-radius:var(--msg-radius-sm); border:none; background:transparent;
           color:hsl(var(--muted-foreground)); cursor:pointer; display:flex;
-          align-items:center; justify-content:center; transition:background .1s, color .1s;
+          align-items:center; justify-content:center; transition:background var(--msg-transition-fast), color var(--msg-transition-fast);
         }
         .msg-icon-btn:hover { background:hsl(var(--muted)); color:hsl(var(--foreground)); }
-        .msg-icon-btn.danger:hover { background:#fee2e2; color:#ef4444; }
+        .msg-icon-btn.danger:hover { background:var(--msg-danger-soft); color:var(--msg-danger); }
         .msg-chat { flex:1; display:flex; flex-direction:column; min-width:0; background:hsl(var(--background)); }
         .msg-chat-header {
           display:flex; align-items:center; gap:12px; padding:14px 20px;
@@ -1465,200 +1570,295 @@ export default function Messages() {
         .msg-chat-header-info p { font-size:12px; color:hsl(var(--muted-foreground)); margin:0; }
         .msg-online-dot { width:10px; height:10px; background:#10b981; border-radius:50%; position:absolute; bottom:1px; right:1px; border:2px solid hsl(var(--card)); }
         .msg-messages {
-          flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:2px;
+          flex:1; overflow-y:auto; overflow-x:hidden; padding:20px; display:flex; flex-direction:column; gap:2px;
         }
         .msg-day-divider { display:flex; align-items:center; gap:12px; margin:16px 0 8px; }
         .msg-day-divider::before,.msg-day-divider::after { content:''; flex:1; height:1px; background:hsl(var(--border)); }
-        .msg-day-divider span { font-size:11px; color:hsl(var(--muted-foreground)); white-space:nowrap; font-weight:500; padding:0 4px; }
-        .msg-bubble-group { display:flex; flex-direction:column; margin:6px 0; }
+        .msg-day-divider span { font-size:11px; color:hsl(var(--muted-foreground)); white-space:nowrap; font-weight:600; padding:0 4px; }
+        .msg-bubble-group { display:flex; flex-direction:column; margin:6px 0; max-width:100%; }
         .msg-bubble-group.mine { align-items:flex-end; }
         .msg-bubble-group.theirs { align-items:flex-start; }
         .msg-bubble-group.broadcast-msg { align-items:flex-start; }
         .msg-sender-label { font-size:11.5px; font-weight:600; color:hsl(var(--muted-foreground)); margin-bottom:4px; padding:0 6px; }
-        .msg-bubble { max-width:68%; padding:9px 14px; border-radius:18px; font-size:14px; line-height:1.5; word-break:break-word; }
-        .msg-bubble.mine { background:#2563eb; color:#fff; border-bottom-right-radius:4px; }
+        .msg-bubble {
+          max-width:min(68%, 560px); padding:10px 14px; border-radius:var(--msg-radius-lg); font-size:14px;
+          line-height:1.5; word-break:break-word; overflow-wrap:anywhere;
+        }
+        .msg-bubble.mine { background:var(--msg-accent); color:#fff; border-bottom-right-radius:4px; }
         .msg-bubble.theirs { background:hsl(var(--muted)); color:hsl(var(--foreground)); border-bottom-left-radius:4px; }
         .msg-bubble.broadcast { background:linear-gradient(135deg,#fff7ed,#fef3c7); border:1px solid #fcd34d; color:#92400e; border-bottom-left-radius:4px; }
-        .msg-bubble-meta { display:flex; align-items:center; gap:4px; margin-top:3px; padding:0 4px; }
+        .msg-bubble-meta { display:flex; align-items:center; gap:5px; margin-top:4px; padding:0 4px; min-height:20px; }
         .msg-bubble-meta span { font-size:10.5px; color:hsl(var(--muted-foreground)); }
-        .msg-bubble-meta.mine span { color:rgba(255,255,255,.65); }
-        .msg-bubble-wrap:hover .msg-react-trigger { opacity:1 !important; }
+        .msg-bubble-meta.mine span { color:hsl(var(--muted-foreground)); }
+        .msg-bubble-wrap:hover .msg-react-trigger,
+        .msg-bubble-wrap:focus-within .msg-react-trigger,
+        .msg-bubble-wrap:hover .msg-reply-trigger,
+        .msg-bubble-wrap:focus-within .msg-reply-trigger,
+        .msg-bubble-wrap:hover .msg-delete-trigger,
+        .msg-bubble-wrap:focus-within .msg-delete-trigger { opacity:1 !important; }
         .msg-react-trigger { color:hsl(var(--muted-foreground)); }
         .msg-react-trigger:hover { color:hsl(var(--foreground)); }
         .msg-loading-more {
-          text-align:center; padding:10px; font-size:12px;
+          display:flex; align-items:center; justify-content:center; gap:8px;
+          text-align:center; padding:12px; font-size:12.5px;
           color:hsl(var(--muted-foreground));
         }
         .msg-loading-spinner {
           display:inline-block; width:16px; height:16px;
           border:2px solid hsl(var(--border));
-          border-top-color:#2563eb; border-radius:50%;
-          animation: spin 0.6s linear infinite;
-          margin-right:8px;
+          border-top-color:var(--msg-accent); border-radius:50%;
+          animation: msg-spin 0.6s linear infinite;
+          flex-shrink:0;
         }
         .file-attachment {
-          display:flex; align-items:center; gap:10px; padding:8px 12px;
-          border-radius:12px; cursor:pointer; transition:all .2s;
-          margin-top:6px; background:rgba(0,0,0,0.05);
+          display:flex; align-items:center; gap:10px; padding:9px 12px;
+          border-radius:var(--msg-radius-md); cursor:pointer; transition:transform var(--msg-transition-fast), box-shadow var(--msg-transition-fast);
+          margin-top:6px; background:rgba(0,0,0,0.05); max-width:320px;
         }
-        .file-attachment.mine { background:rgba(255,255,255,0.15); }
+        .file-attachment.mine { background:rgba(255,255,255,0.16); }
         .file-attachment.theirs { background:rgba(0,0,0,0.05); }
-        .file-attachment:hover { transform:translateY(-1px); box-shadow:0 2px 6px rgba(0,0,0,0.1); }
-        .file-icon { font-size:24px; flex-shrink:0; }
+        .file-attachment:hover { transform:translateY(-1px); box-shadow:0 2px 8px rgba(0,0,0,0.12); }
+        .file-icon { flex-shrink:0; display:flex; color:inherit; opacity:.85; }
         .file-info { flex:1; min-width:0; }
-        .file-name { font-size:12px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .file-size { font-size:10px; opacity:0.7; margin-top:2px; }
+        .file-name { font-size:12.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .file-size { font-size:10.5px; opacity:0.7; margin-top:2px; }
         .file-download {
-          background:none; border:none; cursor:pointer; font-size:16px;
-          padding:4px; border-radius:6px; transition:background .2s;
+          background:none; border:none; cursor:pointer; font-size:15px;
+          padding:5px; border-radius:var(--msg-radius-sm); transition:background var(--msg-transition-fast); flex-shrink:0;
+          line-height:1;
         }
         .file-download:hover { background:rgba(0,0,0,0.1); }
         .selected-files {
           display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;
-          padding:8px; background:hsl(var(--muted)); border-radius:8px;
+          padding:8px; background:hsl(var(--muted)); border-radius:var(--msg-radius-md);
         }
         .selected-file {
-          display:flex; align-items:center; gap:6px; padding:4px 8px;
-          background:hsl(var(--background)); border-radius:6px;
-          font-size:11px; border:1px solid hsl(var(--border));
+          display:flex; align-items:center; gap:6px; padding:5px 8px;
+          background:hsl(var(--background)); border-radius:var(--msg-radius-sm);
+          font-size:11.5px; border:1px solid hsl(var(--border)); max-width:220px;
         }
+        .selected-file span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .selected-file button {
-          background:none; border:none; cursor:pointer; padding:0;
-          display:flex; align-items:center; color:#ef4444;
+          background:none; border:none; cursor:pointer; padding:2px;
+          display:flex; align-items:center; color:var(--msg-danger); border-radius:50%; flex-shrink:0;
         }
+        .selected-file button:hover { background:var(--msg-danger-soft); }
         .uploading-indicator {
-          display:flex; align-items:center; gap:8px; padding:4px 8px;
-          font-size:12px; color:hsl(var(--muted-foreground));
+          display:flex; align-items:center; gap:8px; padding:6px 8px;
+          font-size:12.5px; color:hsl(var(--muted-foreground));
         }
         .uploading-spinner {
           width:14px; height:14px; border:2px solid hsl(var(--border));
-          border-top-color:#2563eb; border-radius:50%;
-          animation: spin 0.6s linear infinite;
+          border-top-color:var(--msg-accent); border-radius:50%;
+          animation: msg-spin 0.6s linear infinite; flex-shrink:0;
         }
-        @keyframes spin {
+        @keyframes msg-spin {
           to { transform: rotate(360deg); }
         }
         .msg-input-area { padding:14px 20px 16px; border-top:1px solid hsl(var(--border)); background:hsl(var(--card)); width:100%; box-sizing:border-box; }
-        .msg-input-toolbar { display:flex; gap:6px; margin-bottom:8px; }
+        .msg-input-toolbar { display:flex; gap:6px; margin-bottom:10px; }
         .msg-toolbar-btn {
-          display:flex; align-items:center; gap:5px; padding:4px 10px;
-          border:1px solid hsl(var(--border)); border-radius:6px; background:hsl(var(--background));
-          color:hsl(var(--muted-foreground)); font-size:12px; cursor:pointer;
-          transition:border-color .15s, color .15s;
+          display:flex; align-items:center; gap:5px; padding:6px 11px;
+          border:1px solid hsl(var(--border)); border-radius:var(--msg-radius-sm); background:hsl(var(--background));
+          color:hsl(var(--muted-foreground)); font-size:12.5px; cursor:pointer;
+          transition:border-color var(--msg-transition-fast), color var(--msg-transition-fast), background var(--msg-transition-fast);
         }
-        .msg-toolbar-btn:hover { border-color:hsl(var(--primary)); color:hsl(var(--primary)); }
+        .msg-toolbar-btn:hover:not(:disabled) { border-color:var(--msg-accent); color:var(--msg-accent); }
+        .msg-toolbar-btn:disabled { opacity:.5; cursor:not-allowed; }
         .msg-input-row {
-          display:flex; align-items:flex-end; gap:8px;
+          display:flex; align-items:center; gap:8px;
           background:hsl(var(--background)); border:1.5px solid hsl(var(--border));
-          border-radius:12px; padding:6px 6px 6px 16px; transition:border-color .15s;
+          border-radius:var(--msg-radius-lg); padding:6px 6px 6px 16px; transition:border-color var(--msg-transition-fast);
           width:100%; max-width:100%; box-sizing:border-box;
         }
-        .msg-input-row:focus-within { border-color:hsl(var(--primary)); }
-        .msg-input-row input { flex:1 1 auto; min-width:0; border:none; background:transparent; color:hsl(var(--foreground)); font-size:14px; outline:none; padding:6px 0; }
-        .msg-input-row input::placeholder { color:hsl(var(--muted-foreground)); }
-        .msg-send-btn {
-          width:36px; height:36px; min-width:36px; border-radius:9px; border:none; background:#2563eb; color:#fff;
-          display:flex; align-items:center; justify-content:center; cursor:pointer;
-          flex-shrink:0; transition:background .15s, transform .1s;
+        .msg-input-row:focus-within { border-color:var(--msg-accent); }
+        .msg-input-row input {
+          flex:1 1 auto; min-width:0; border:none; background:transparent; color:hsl(var(--foreground));
+          font-size:14px; outline:none; padding:8px 0;
         }
-        .msg-send-btn:hover:not(:disabled) { background:#1d4ed8; transform:scale(1.05); }
+        .msg-input-row input::placeholder { color:hsl(var(--muted-foreground)); }
+        .msg-input-row input:disabled { opacity:.6; }
+        .msg-send-btn {
+          width:38px; height:38px; min-width:38px; border-radius:var(--msg-radius-md); border:none; background:var(--msg-accent); color:#fff;
+          display:flex; align-items:center; justify-content:center; cursor:pointer;
+          flex-shrink:0; transition:background var(--msg-transition-fast), transform var(--msg-transition-fast);
+        }
+        .msg-send-btn:hover:not(:disabled) { background:var(--msg-accent-hover); transform:scale(1.05); }
+        .msg-send-btn:active:not(:disabled) { transform:scale(0.96); }
         .msg-send-btn:disabled { opacity:.5; cursor:not-allowed; }
         .msg-empty {
           flex:1; display:flex; flex-direction:column; align-items:center;
           justify-content:center; gap:12px; color:hsl(var(--muted-foreground));
           padding:40px; text-align:center;
         }
-        .msg-empty-icon { width:64px; height:64px; border-radius:20px; background:hsl(var(--muted)); display:flex; align-items:center; justify-content:center; margin-bottom:8px; }
-        .msg-empty h3 { font-size:16px; font-weight:600; color:hsl(var(--foreground)); margin:0 0 4px; }
+        .msg-empty-icon { width:64px; height:64px; border-radius:var(--msg-radius-lg); background:hsl(var(--muted)); display:flex; align-items:center; justify-content:center; margin-bottom:8px; }
+        .msg-empty h3 { font-size:16px; font-weight:700; color:hsl(var(--foreground)); margin:0 0 4px; }
         .msg-empty p { font-size:13.5px; margin:0; max-width:280px; line-height:1.5; }
-        .msg-broadcast-info { background:linear-gradient(135deg,#fff7ed,#fef3c7); border:1px solid #fcd34d; border-radius:10px; padding:12px 16px; margin:16px 20px 0; font-size:13px; color:#92400e; display:flex; align-items:center; gap:8px; }
-        .poll-card {
-          max-width:68%; background:hsl(var(--card)); border:1px solid hsl(var(--border));
-          border-radius:14px; padding:14px 16px; margin:4px 0;
+        .msg-inbox-error {
+          padding:12px 14px; color:var(--msg-danger); font-size:13px;
+          background:var(--msg-danger-soft); margin:8px; border-radius:var(--msg-radius-md);
+          display:flex; align-items:flex-start; gap:8px;
         }
-        .poll-question { font-size:13.5px; font-weight:700; color:hsl(var(--foreground)); margin-bottom:10px; }
+        .msg-inbox-error button {
+          background:none; border:none; color:var(--msg-accent); cursor:pointer;
+          text-decoration:underline; font-size:13px; padding:0; font-weight:600;
+        }
+        .msg-broadcast-info {
+          background:linear-gradient(135deg,#fff7ed,#fef3c7); border:1px solid #fcd34d; border-radius:var(--msg-radius-md);
+          padding:12px 16px; margin:16px 20px 0; font-size:13px; color:#92400e; display:flex; align-items:center; gap:8px;
+        }
+        .poll-card {
+          max-width:min(68%, 420px); background:hsl(var(--card)); border:1px solid hsl(var(--border));
+          border-radius:var(--msg-radius-lg); padding:14px 16px; margin:4px 0;
+        }
+        .poll-question {
+          font-size:13.5px; font-weight:700; color:hsl(var(--foreground)); margin-bottom:12px;
+          display:flex; align-items:flex-start; gap:8px; line-height:1.4;
+        }
         .poll-option {
           position:relative; overflow:hidden; width:100%; text-align:left;
-          padding:7px 10px; margin-bottom:6px; border-radius:8px;
+          padding:8px 10px; margin-bottom:6px; border-radius:var(--msg-radius-sm);
           border:1.5px solid hsl(var(--border)); background:hsl(var(--background));
           font-size:13px; cursor:pointer; display:flex; align-items:center;
-          justify-content:space-between; gap:8px; transition:border-color .15s;
+          justify-content:space-between; gap:8px; transition:border-color var(--msg-transition-fast);
+          color:hsl(var(--foreground));
         }
-        .poll-option:hover { border-color:hsl(var(--primary)); }
-        .poll-option.voted { border-color:#2563eb; background:#eff6ff; color:#1e40af; }
-        .poll-option-bar { position:absolute; left:0; top:0; bottom:0; background:#2563eb22; z-index:0; border-radius:7px; transition:width .3s; }
+        .poll-option:hover:not(:disabled) { border-color:var(--msg-accent); }
+        .poll-option:disabled { cursor:default; }
+        .poll-option.voted { border-color:var(--msg-accent); background:var(--msg-accent-soft); color:var(--msg-accent-hover); }
+        .poll-option-bar { position:absolute; left:0; top:0; bottom:0; background:var(--msg-accent-soft); z-index:0; border-radius:7px; transition:width .3s; }
         .poll-option-label { position:relative; z-index:1; display:flex; align-items:center; flex:1; }
         .poll-option-pct { position:relative; z-index:1; font-size:11px; color:hsl(var(--muted-foreground)); flex-shrink:0; }
-        .poll-footer { font-size:11px; color:hsl(var(--muted-foreground)); margin-top:6px; }
+        .poll-footer { font-size:11px; color:hsl(var(--muted-foreground)); margin-top:8px; }
         .modal-overlay {
-          position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.45);
+          position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.5);
           display:flex; align-items:center; justify-content:center; padding:16px;
-          animation: modalFadeIn .18s ease;
+          animation: msg-modalFadeIn .18s ease;
         }
         .modal-box {
           background:hsl(var(--background)); border:1px solid hsl(var(--border));
-          border-radius:16px; padding:24px; width:100%; max-width:460px;
-          max-height:80vh; overflow-y:auto; box-shadow:0 25px 50px -12px rgba(0,0,0,.25);
-          animation: modalScaleIn .22s cubic-bezier(.16,1,.3,1);
+          border-radius:var(--msg-radius-lg); padding:24px; width:100%; max-width:460px;
+          max-height:85vh; overflow-y:auto; box-shadow:0 25px 50px -12px rgba(0,0,0,.35);
+          animation: msg-modalScaleIn .22s cubic-bezier(.16,1,.3,1);
         }
-        @keyframes modalFadeIn { from{ opacity:0; } to{ opacity:1; } }
-        @keyframes modalScaleIn { from{ opacity:0; transform:scale(.93) translateY(10px); } to{ opacity:1; transform:scale(1) translateY(0); } }
-        .modal-box-danger { border-color:rgba(239,68,68,.25); }
+        @keyframes msg-modalFadeIn { from{ opacity:0; } to{ opacity:1; } }
+        @keyframes msg-modalScaleIn { from{ opacity:0; transform:scale(.95) translateY(10px); } to{ opacity:1; transform:scale(1) translateY(0); } }
+        .modal-box-danger { border-color:rgba(239,68,68,.3); }
         .modal-danger-icon {
           display:inline-flex; align-items:center; justify-content:center;
-          color:#ef4444; font-size:18px; width:26px; height:26px; border-radius:50%;
-          background:rgba(239,68,68,.12); animation: dangerPulse 1.6s ease-in-out infinite;
+          color:var(--msg-danger); font-size:18px; width:28px; height:28px; border-radius:50%;
+          background:var(--msg-danger-soft); animation: msg-dangerPulse 1.6s ease-in-out infinite; flex-shrink:0;
         }
-        @keyframes dangerPulse { 0%,100%{ transform:scale(1); box-shadow:0 0 0 0 rgba(239,68,68,.28); } 50%{ transform:scale(1.08); box-shadow:0 0 0 5px rgba(239,68,68,0); } }
+        @keyframes msg-dangerPulse { 0%,100%{ transform:scale(1); box-shadow:0 0 0 0 rgba(239,68,68,.28); } 50%{ transform:scale(1.08); box-shadow:0 0 0 5px rgba(239,68,68,0); } }
         .modal-message-preview {
-          background:hsl(var(--muted)); border-left:3px solid #ef4444; padding:9px 12px;
-          border-radius:6px; font-size:13px; color:hsl(var(--foreground)); font-style:italic;
+          background:hsl(var(--muted)); border-left:3px solid var(--msg-danger); padding:10px 12px;
+          border-radius:var(--msg-radius-sm); font-size:13px; color:hsl(var(--foreground)); font-style:italic;
           word-break:break-word; max-height:90px; overflow-y:auto;
         }
         .modal-btn:disabled { opacity:.6; cursor:not-allowed; }
-        .modal-btn.danger { background:#ef4444; color:#fff; }
-        .modal-btn.danger:hover:not(:disabled) { background:#dc2626; }
+        .modal-btn.danger { background:var(--msg-danger); color:#fff; }
+        .modal-btn.danger:hover:not(:disabled) { background:var(--msg-danger-hover); }
         /* Per-message delete trigger — mirrors .msg-react-trigger's hover reveal */
         .msg-delete-trigger {
-          background:none; border:none; cursor:pointer; padding:2px; opacity:0;
+          background:none; border:none; cursor:pointer; padding:3px; opacity:0;
           border-radius:50%; display:flex; align-items:center; justify-content:center;
-          color:inherit; transition:opacity .15s ease, color .15s ease, transform .15s ease;
+          color:inherit; transition:opacity var(--msg-transition-fast), color var(--msg-transition-fast), transform var(--msg-transition-fast);
         }
-        .msg-bubble-wrap:hover .msg-delete-trigger { opacity:.75; }
-        .msg-delete-trigger:hover { opacity:1 !important; color:#ef4444; transform:scale(1.18); }
+        .msg-delete-trigger:hover { opacity:1 !important; color:var(--msg-danger); transform:scale(1.18); }
         .msg-delete-trigger:active { transform:scale(.92); }
         /* Fade + scale-out animation played just before a deleted message unmounts */
-        .msg-item-removing { animation: msgRemove .22s ease forwards; pointer-events:none; }
-        @keyframes msgRemove { to { opacity:0; transform:scale(.9) translateY(-6px); } }
+        .msg-item-removing { animation: msg-remove .22s ease forwards; pointer-events:none; }
+        @keyframes msg-remove { to { opacity:0; transform:scale(.9) translateY(-6px); } }
         /* Header delete-conversation button */
-        .msg-header-delete-btn { width:32px; height:32px; border-radius:8px; }
+        .msg-header-delete-btn { width:34px; height:34px; border-radius:var(--msg-radius-sm); }
         .msg-header-delete-btn:hover { transform:scale(1.06); }
-        .modal-title { font-size:16px; font-weight:700; color:hsl(var(--foreground)); margin:0 0 18px; display:flex; align-items:center; justify-content:space-between; }
-        .modal-label { font-size:12px; font-weight:600; color:hsl(var(--muted-foreground)); margin-bottom:4px; display:block; }
+        .modal-title { font-size:16px; font-weight:700; color:hsl(var(--foreground)); margin:0 0 18px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+        .modal-label { font-size:12px; font-weight:600; color:hsl(var(--muted-foreground)); margin-bottom:5px; display:block; }
         .modal-input {
-          width:100%; padding:8px 12px; border:1px solid hsl(var(--border));
-          border-radius:8px; background:hsl(var(--background));
+          width:100%; padding:9px 12px; border:1px solid hsl(var(--border));
+          border-radius:var(--msg-radius-sm); background:hsl(var(--background));
           color:hsl(var(--foreground)); font-size:14px; outline:none;
-          box-sizing:border-box; transition:border-color .15s; margin-bottom:14px;
+          box-sizing:border-box; transition:border-color var(--msg-transition-fast); margin-bottom:14px;
         }
-        .modal-input:focus { border-color:hsl(var(--primary)); }
-        .modal-members-list { max-height:180px; overflow-y:auto; border:1px solid hsl(var(--border)); border-radius:8px; margin-bottom:14px; }
-        .modal-member-item { display:flex; align-items:center; gap:10px; padding:8px 12px; cursor:pointer; transition:background .12s; }
+        .modal-input:focus { border-color:var(--msg-accent); }
+        .modal-members-list { max-height:200px; overflow-y:auto; border:1px solid hsl(var(--border)); border-radius:var(--msg-radius-sm); margin-bottom:14px; }
+        .modal-member-item { display:flex; align-items:center; gap:10px; padding:9px 12px; cursor:pointer; transition:background var(--msg-transition-fast); }
         .modal-member-item:hover { background:hsl(var(--accent)); }
-        .modal-member-item input[type=checkbox] { width:14px; height:14px; accent-color:#2563eb; flex-shrink:0; }
-        .modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:4px; }
-        .modal-btn { padding:8px 18px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; border:none; transition:background .15s; }
-        .modal-btn.primary { background:#2563eb; color:#fff; }
-        .modal-btn.primary:hover { background:#1d4ed8; }
+        .modal-member-item input[type=checkbox] { width:15px; height:15px; accent-color:var(--msg-accent); flex-shrink:0; }
+        .modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:6px; flex-wrap:wrap; }
+        .modal-btn { padding:9px 18px; border-radius:var(--msg-radius-sm); font-size:14px; font-weight:600; cursor:pointer; border:none; transition:background var(--msg-transition-fast); }
+        .modal-btn.primary { background:var(--msg-accent); color:#fff; }
+        .modal-btn.primary:hover:not(:disabled) { background:var(--msg-accent-hover); }
         .modal-btn.secondary { background:hsl(var(--muted)); color:hsl(var(--foreground)); }
-        .modal-btn.secondary:hover { background:hsl(var(--accent)); }
+        .modal-btn.secondary:hover:not(:disabled) { background:hsl(var(--accent)); }
         .poll-option-row { display:flex; gap:6px; align-items:center; margin-bottom:8px; }
         .poll-option-row input { flex:1; }
-        .poll-option-row button { width:28px; height:28px; border-radius:6px; border:1px solid hsl(var(--border)); background:hsl(var(--background)); color:#ef4444; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; }
-        .add-option-btn { display:flex; align-items:center; gap:6px; padding:6px 12px; border:1.5px dashed hsl(var(--border)); border-radius:8px; background:none; color:hsl(var(--muted-foreground)); font-size:13px; cursor:pointer; width:100%; justify-content:center; transition:border-color .15s, color .15s; margin-bottom:14px; }
-        .add-option-btn:hover { border-color:hsl(var(--primary)); color:hsl(var(--primary)); }
-        .msg-back-btn { display:none; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; border:none; background:hsl(var(--muted)); color:hsl(var(--foreground)); cursor:pointer; flex-shrink:0; transition:background .15s; }
+        .poll-option-row button {
+          width:30px; height:30px; border-radius:var(--msg-radius-sm); border:1px solid hsl(var(--border));
+          background:hsl(var(--background)); color:var(--msg-danger); cursor:pointer; font-size:16px;
+          display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background var(--msg-transition-fast);
+        }
+        .poll-option-row button:hover { background:var(--msg-danger-soft); }
+        .add-option-btn {
+          display:flex; align-items:center; gap:6px; padding:8px 12px; border:1.5px dashed hsl(var(--border));
+          border-radius:var(--msg-radius-sm); background:none; color:hsl(var(--muted-foreground)); font-size:13px;
+          cursor:pointer; width:100%; justify-content:center; transition:border-color var(--msg-transition-fast), color var(--msg-transition-fast); margin-bottom:14px;
+        }
+        .add-option-btn:hover { border-color:var(--msg-accent); color:var(--msg-accent); }
+        .poll-duplicate-warning { color:var(--msg-danger); font-size:12px; margin-top:-4px; margin-bottom:8px; }
+        .msg-back-btn {
+          display:none; align-items:center; justify-content:center; width:34px; height:34px;
+          border-radius:var(--msg-radius-sm); border:none; background:hsl(var(--muted)); color:hsl(var(--foreground));
+          cursor:pointer; flex-shrink:0; transition:background var(--msg-transition-fast);
+        }
         .msg-back-btn:hover { background:hsl(var(--accent)); }
+
+        /* Emoji picker */
+        .emoji-picker {
+          position:absolute; bottom:calc(100% + 8px); z-index:60;
+          width:264px; max-height:300px; overflow-y:auto;
+          background:hsl(var(--card)); border:1px solid hsl(var(--border));
+          border-radius:var(--msg-radius-md); box-shadow:0 10px 28px rgba(0,0,0,0.25); padding:10px;
+        }
+        .emoji-picker-category { margin-bottom:8px; }
+        .emoji-picker-label {
+          font-size:10px; font-weight:700; opacity:0.6; letter-spacing:0.4px;
+          text-transform:uppercase; margin:4px 2px;
+        }
+        .emoji-picker-grid { display:grid; grid-template-columns:repeat(7, 1fr); gap:1px; }
+        .emoji-picker-btn {
+          font-size:19px; background:none; border:none; cursor:pointer; border-radius:var(--msg-radius-sm);
+          padding:4px; line-height:1; transition:background var(--msg-transition-fast);
+        }
+        .emoji-picker-btn:hover { background:hsl(var(--accent)); }
+        .msg-react-control { position:relative; display:inline-flex; }
+        .msg-react-trigger {
+          background:none; border:none; cursor:pointer; padding:2px; border-radius:50%;
+          display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity var(--msg-transition-fast);
+        }
+        .quick-reactions {
+          position:absolute; bottom:calc(100% + 4px); z-index:50;
+          display:flex; align-items:center; gap:2px;
+          background:hsl(var(--card)); border:1px solid hsl(var(--border));
+          border-radius:var(--msg-radius-pill); box-shadow:0 4px 14px rgba(0,0,0,0.25); padding:4px 6px;
+        }
+        .quick-reaction-btn, .quick-reaction-more {
+          font-size:17px; background:none; border:none; cursor:pointer; padding:3px; line-height:1;
+          border-radius:50%; transition:background var(--msg-transition-fast);
+        }
+        .quick-reaction-btn:hover, .quick-reaction-more:hover { background:hsl(var(--accent)); }
+        .quick-reaction-more { font-size:13px; opacity:0.65; padding:3px 6px; }
+        .reaction-pills { display:flex; flex-wrap:wrap; gap:4px; margin:5px 2px 0; }
+        .reaction-pill {
+          display:inline-flex; align-items:center; gap:3px;
+          font-size:12px; padding:2px 7px; border-radius:var(--msg-radius-pill); cursor:pointer;
+          border:1px solid hsl(var(--border)); background:hsl(var(--muted));
+          transition:background var(--msg-transition-fast), border-color var(--msg-transition-fast); color:hsl(var(--foreground));
+        }
+        .reaction-pill.mine { border-color:var(--msg-accent); background:var(--msg-accent-soft); }
+        .reaction-pill:hover { border-color:var(--msg-accent); }
+        .reaction-pill-count { opacity:0.7; }
+
         @media (max-width:640px) {
           .msg-main { position:relative; overflow:hidden; }
           .msg-sidebar { position:absolute; inset:0; width:100%; border-right:none; z-index:1; transform:translateX(0); transition:transform .28s cubic-bezier(.4,0,.2,1); }
@@ -1666,30 +1866,36 @@ export default function Messages() {
           .msg-chat { position:absolute; inset:0; width:100%; z-index:2; transform:translateX(100%); transition:transform .28s cubic-bezier(.4,0,.2,1); }
           .msg-chat.mobile-visible { transform:translateX(0); }
           .msg-back-btn { display:flex; }
-          .msg-bubble,.poll-card { max-width:82%; }
+          .msg-bubble,.poll-card { max-width:85%; }
           .msg-input-area { padding:10px 12px 12px; }
           .msg-input-row { padding:4px 4px 4px 12px; gap:6px; }
-          .msg-send-btn { width:32px; height:32px; min-width:32px; }
-          .msg-toolbar-btn { padding:4px 8px; }
+          .msg-send-btn { width:34px; height:34px; min-width:34px; }
+          .msg-toolbar-btn { padding:5px 9px; }
+          .msg-messages { padding:14px; }
+          .modal-box { padding:18px; max-height:90vh; }
+        }
+
+        @media (min-width:641px) and (max-width:1024px) {
+          .msg-sidebar { width:250px; }
+          .msg-bubble,.poll-card { max-width:80%; }
         }
 
         /* ── Reply-to-message ──────────────────────────────────────────── */
         .msg-reply-trigger {
           background:none; border:none; cursor:pointer; padding:2px; border-radius:50%;
           display:flex; align-items:center; justify-content:center;
-          color:hsl(var(--muted-foreground)); opacity:0; transition:opacity .15s;
+          color:hsl(var(--muted-foreground)); opacity:0; transition:opacity var(--msg-transition-fast), color var(--msg-transition-fast);
         }
-        .msg-bubble-wrap:hover .msg-reply-trigger { opacity:1; }
-        .msg-reply-trigger:hover { color:hsl(var(--foreground)); }
+        .msg-reply-trigger:hover { color:hsl(var(--foreground)); background:hsl(var(--muted)); }
 
         .msg-reply-preview-bar {
           display:flex; align-items:center; gap:8px;
-          background:hsl(var(--muted)); border-left:3px solid #6366f1;
-          border-radius:8px; padding:6px 10px; margin-bottom:8px;
+          background:hsl(var(--muted)); border-left:3px solid var(--msg-purple);
+          border-radius:var(--msg-radius-sm); padding:7px 10px; margin-bottom:8px;
         }
-        .msg-reply-preview-icon { color:#6366f1; flex-shrink:0; }
+        .msg-reply-preview-icon { color:var(--msg-purple); flex-shrink:0; }
         .msg-reply-preview-text { display:flex; flex-direction:column; gap:1px; min-width:0; flex:1; }
-        .msg-reply-preview-sender { font-size:12px; font-weight:600; color:#6366f1; }
+        .msg-reply-preview-sender { font-size:12px; font-weight:600; color:var(--msg-purple); }
         .msg-reply-preview-content {
           font-size:12.5px; color:hsl(var(--muted-foreground));
           overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -1697,19 +1903,20 @@ export default function Messages() {
         .msg-reply-preview-cancel {
           background:none; border:none; cursor:pointer; flex-shrink:0;
           color:hsl(var(--muted-foreground)); display:flex; align-items:center; justify-content:center;
-          padding:3px; border-radius:50%;
+          padding:4px; border-radius:50%; transition:background var(--msg-transition-fast), color var(--msg-transition-fast);
         }
-        .msg-reply-preview-cancel:hover { color:#ef4444; }
+        .msg-reply-preview-cancel:hover { color:var(--msg-danger); background:var(--msg-danger-soft); }
 
         .msg-reply-quote {
           display:flex; flex-direction:column; gap:1px; text-align:left;
           width:100%; max-width:100%; box-sizing:border-box;
-          background:rgba(99,102,241,0.1); border-left:3px solid #6366f1;
-          border-radius:6px; padding:4px 8px; margin-bottom:4px;
-          cursor:pointer; font:inherit;
+          background:var(--msg-purple-soft); border-left:3px solid var(--msg-purple);
+          border-radius:var(--msg-radius-sm); padding:5px 8px; margin-bottom:5px;
+          cursor:pointer; font:inherit; transition:filter var(--msg-transition-fast);
         }
-        .msg-reply-quote.mine { background:rgba(255,255,255,0.18); border-left-color:rgba(255,255,255,0.8); }
-        .msg-reply-quote-sender { font-size:11.5px; font-weight:600; color:#6366f1; }
+        .msg-reply-quote:hover { filter:brightness(0.97); }
+        .msg-reply-quote.mine { background:rgba(255,255,255,0.2); border-left-color:rgba(255,255,255,0.85); }
+        .msg-reply-quote-sender { font-size:11.5px; font-weight:600; color:var(--msg-purple); }
         .msg-reply-quote.mine .msg-reply-quote-sender { color:rgba(255,255,255,0.95); }
         .msg-reply-quote-content {
           font-size:12px; color:hsl(var(--muted-foreground));
@@ -1717,14 +1924,19 @@ export default function Messages() {
         }
         .msg-reply-quote.mine .msg-reply-quote-content { color:rgba(255,255,255,0.85); }
 
-        .msg-item-highlighted .msg-bubble-group { animation:msgHighlightPulse 1.5s ease-out; }
-        @keyframes msgHighlightPulse {
-          0% { background-color:rgba(99,102,241,0.25); border-radius:12px; }
+        .msg-item-highlighted .msg-bubble-group { animation:msg-highlightPulse 1.5s ease-out; border-radius:var(--msg-radius-md); }
+        @keyframes msg-highlightPulse {
+          0% { background-color:var(--msg-purple-soft); border-radius:12px; }
           100% { background-color:transparent; }
         }
       `}</style>
 
-      {!connected && <div className="msg-ws-banner">Connecting to server…</div>}
+      {!connected && (
+        <div className="msg-ws-banner" role="status">
+          <span className="msg-loading-spinner" style={{ borderTopColor: "#1c1300", borderColor: "rgba(0,0,0,0.25)" }} aria-hidden="true" />
+          Connecting to server…
+        </div>
+      )}
 
       <div className="msg-main">
         {/* ── Sidebar ──────────────────────────────────────────────────────── */}
@@ -1732,11 +1944,12 @@ export default function Messages() {
           className={`msg-sidebar${mobileChatOpen ? " mobile-hidden" : ""}`}
           ref={inboxScrollRef}
           onScroll={handleInboxScroll}
+          aria-hidden={mobileChatOpen}
         >
           <div className="msg-sidebar-header">
             <div className="msg-sidebar-title">
               <span>Messages</span>
-              {totalUnread > 0 && <span className="msg-badge">{totalUnread}</span>}
+              {totalUnread > 0 && <span className="msg-badge" aria-label={`${totalUnread} unread messages`}>{totalUnread}</span>}
               {inboxTotalElements > 0 && (
                 <span style={{ fontSize: 11, fontWeight: 400, color: 'hsl(var(--muted-foreground))' }}>
                   ({inboxTotalElements})
@@ -1744,8 +1957,10 @@ export default function Messages() {
               )}
             </div>
             <div className="msg-search">
-              <Search size={13} className="msg-search-icon" />
+              <Search size={13} className="msg-search-icon" aria-hidden="true" />
+              <label htmlFor="msg-contact-search" className="sr-only">Search people or groups</label>
               <input
+                id="msg-contact-search"
                 placeholder="Search people or groups…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -1755,9 +1970,9 @@ export default function Messages() {
 
           <div className="msg-sidebar-list">
             {inboxError && (
-              <div style={{ padding: '12px 16px', color: '#ef4444', fontSize: 13, background: '#fee2e2', margin: '4px 8px', borderRadius: 8 }}>
-                ⚠️ {inboxError}
-                <button onClick={() => fetchInbox(0, true)} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', textDecoration: 'underline' }}>
+              <div className="msg-inbox-error" role="alert">
+                <span>⚠️ {inboxError}</span>
+                <button type="button" onClick={() => fetchInbox(0, true)}>
                   Retry
                 </button>
               </div>
@@ -1766,13 +1981,18 @@ export default function Messages() {
             {/* Broadcast (owner only) */}
             {role === "OWNER" && !search && (
               <>
-                <div className="msg-section-label">Channels</div>
+                <div className="msg-section-label" id="msg-channels-label">Channels</div>
                 <div
                   className={`msg-contact ${chatTarget?.type === "broadcast" ? "active" : ""}`}
                   onClick={() => openChat({ type: "broadcast" })}
+                  role="button"
+                  tabIndex={0}
+                  aria-labelledby="msg-channels-label"
+                  aria-current={chatTarget?.type === "broadcast" ? "true" : undefined}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChat({ type: "broadcast" }); } }}
                 >
                   <div className="msg-avatar msg-avatar-broadcast" style={{ background: "linear-gradient(135deg,#f59e0b,#ef4444)" }}>
-                    <Megaphone size={15} color="#fff" />
+                    <Megaphone size={15} color="#fff" aria-hidden="true" />
                   </div>
                   <div className="msg-contact-info">
                     <div className="msg-contact-name">Everyone</div>
@@ -1786,7 +2006,7 @@ export default function Messages() {
             {!search || filteredGroups.length > 0 ? (
               <div className="msg-section-label">
                 <span>Groups</span>
-                <button onClick={openCreateGroup}><Plus size={11} /> New</button>
+                <button type="button" onClick={openCreateGroup}><Plus size={11} aria-hidden="true" /> New</button>
               </div>
             ) : null}
 
@@ -1798,9 +2018,13 @@ export default function Messages() {
                   key={g.id}
                   className={`msg-contact ${isActive ? "active" : ""}`}
                   onClick={() => openChat({ type: "group", group: g })}
+                  role="button"
+                  tabIndex={0}
+                  aria-current={isActive ? "true" : undefined}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChat({ type: "group", group: g }); } }}
                 >
                   <div className="msg-avatar msg-avatar-broadcast" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", fontSize: 12 }}>
-                    <Users size={15} color="#fff" />
+                    <Users size={15} color="#fff" aria-hidden="true" />
                   </div>
                   <div className="msg-contact-info">
                     <div className="msg-contact-name">{formatDisplayName(g.name)}</div>
@@ -1809,8 +2033,8 @@ export default function Messages() {
                   <div className="msg-group-actions">
                     {g.createdBy === name && (
                       <>
-                        <button className="msg-icon-btn" title="Edit" onClick={(e) => openEditGroup(g, e)}><Settings size={13} /></button>
-                        <button className="msg-icon-btn danger" title="Delete" onClick={(e) => deleteGroup(g, e)}><Trash2 size={13} /></button>
+                        <button className="msg-icon-btn" title="Edit group" aria-label={`Edit ${formatDisplayName(g.name)}`} onClick={(e) => openEditGroup(g, e)}><Settings size={13} aria-hidden="true" /></button>
+                        <button className="msg-icon-btn danger" title="Delete group" aria-label={`Delete ${formatDisplayName(g.name)}`} onClick={(e) => deleteGroup(g, e)}><Trash2 size={13} aria-hidden="true" /></button>
                       </>
                     )}
                   </div>
@@ -1819,11 +2043,11 @@ export default function Messages() {
             })}
 
             {/* Direct messages */}
-            <div className="msg-section-label">Direct Messages</div>
+            <div className="msg-section-label" id="msg-dm-label">Direct Messages</div>
 
             {filteredUsers.length === 0 && search && (
               <div style={{ padding: "20px 16px", fontSize: 13, color: "hsl(var(--muted-foreground))", textAlign: "center" }}>
-                No users found
+                No users found for "{search}"
               </div>
             )}
 
@@ -1837,6 +2061,11 @@ export default function Messages() {
                   key={u.id}
                   className={`msg-contact ${isSelected ? "active" : ""}`}
                   onClick={() => openChat({ type: "user", username: u.username })}
+                  role="button"
+                  tabIndex={0}
+                  aria-current={isSelected ? "true" : undefined}
+                  aria-label={`${formatDisplayName(u.username)}${isUnread ? ", unread message" : ""}`}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChat({ type: "user", username: u.username }); } }}
                 >
                   <UserAvatar username={u.username} size={36} className="msg-avatar" style={{ background: undefined }} />
                   <div className="msg-contact-info">
@@ -1847,8 +2076,6 @@ export default function Messages() {
                       {lastMsg && <span className="msg-contact-time">{fmtDate(lastMsg.sentAt)}</span>}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2 }}>
-                      {/* hide the role */}
-                      {/* <span className="msg-role-tag" style={{ background: rc + "18", color: rc, border: `1px solid ${rc}30` }}>{u.role}</span> */}
                       {lastMsg && (
                         <span className={`msg-contact-preview ${isUnread ? "unread" : ""}`} style={{ flex: 1, marginTop: 0 }}>
                           {lastMsg.senderUsername === name ? "You: " : ""}{lastMsg.content}
@@ -1856,15 +2083,15 @@ export default function Messages() {
                       )}
                     </div>
                   </div>
-                  {isUnread && <div className="msg-unread-dot" />}
+                  {isUnread && <div className="msg-unread-dot" aria-hidden="true" />}
                 </div>
               );
             })}
 
             {inboxLoading && (
-              <div className="msg-loading-more">
-                <span className="msg-loading-spinner" />
-                Loading more...
+              <div className="msg-loading-more" role="status">
+                <span className="msg-loading-spinner" aria-hidden="true" />
+                Loading more…
               </div>
             )}
           </div>
@@ -1874,7 +2101,7 @@ export default function Messages() {
         <div className={`msg-chat${mobileChatOpen ? " mobile-visible" : ""}`}>
           {!chatTarget ? (
             <div className="msg-empty">
-              <div className="msg-empty-icon"><Users size={28} color="hsl(var(--muted-foreground))" /></div>
+              <div className="msg-empty-icon"><Users size={28} color="hsl(var(--muted-foreground))" aria-hidden="true" /></div>
               <h3>Your Messages</h3>
               <p>Select a person or group from the sidebar to start a conversation.</p>
             </div>
@@ -1882,9 +2109,9 @@ export default function Messages() {
           ) : chatTarget.type === "broadcast" ? (
             <>
               <div className="msg-chat-header">
-                <button className="msg-back-btn" onClick={handleBack}><ArrowLeft size={16} /></button>
+                <button className="msg-back-btn" onClick={handleBack} aria-label="Back to conversation list"><ArrowLeft size={16} aria-hidden="true" /></button>
                 <div className="msg-avatar msg-avatar-broadcast" style={{ background: "linear-gradient(135deg,#f59e0b,#ef4444)", width: 40, height: 40, borderRadius: 12 }}>
-                  <Megaphone size={18} color="#fff" />
+                  <Megaphone size={18} color="#fff" aria-hidden="true" />
                 </div>
                 <div className="msg-chat-header-info">
                   <h3>Everyone</h3>
@@ -1892,13 +2119,13 @@ export default function Messages() {
                 </div>
               </div>
               <div className="msg-broadcast-info">
-                <Megaphone size={16} />
+                <Megaphone size={16} aria-hidden="true" />
                 <span>Messages sent here are delivered as notifications to all team members.</span>
               </div>
-              <div className="msg-messages">
+              <div className="msg-messages" role="log" aria-label="Broadcast messages">
                 {broadcasts.length === 0 ? (
                   <div className="msg-empty" style={{ flex: 1 }}>
-                    <div className="msg-empty-icon" style={{ background: "#fff7ed", border: "1px solid #fcd34d" }}><Hash size={26} color="#f59e0b" /></div>
+                    <div className="msg-empty-icon" style={{ background: "#fff7ed", border: "1px solid #fcd34d" }}><Hash size={26} color="#f59e0b" aria-hidden="true" /></div>
                     <h3>No broadcasts yet</h3>
                     <p>Your first message will be sent as a notification to everyone on the team.</p>
                   </div>
@@ -1922,11 +2149,24 @@ export default function Messages() {
                 <div ref={messagesEndRef} />
               </div>
               <div className="msg-input-area">
+                {selectedFiles.length > 0 && (
+                  <div className="selected-files">
+                    {selectedFiles.map((file, idx) => (
+                      <div key={idx} className="selected-file">
+                        <span>{file.name}</span>
+                        <button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeSelectedFile(idx)}>
+                          <XCircle size={12} aria-hidden="true" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="msg-input-row">
-                  <input ref={inputRef} placeholder="Send a message to everyone…" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={handleKeyDown} disabled={sending || uploading} />
+                  <label htmlFor="broadcast-input" className="sr-only">Send a message to everyone</label>
+                  <input id="broadcast-input" ref={inputRef} placeholder="Send a message to everyone…" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={handleKeyDown} disabled={sending || uploading} />
                   <div style={{ position: "relative" }}>
-                    <button className="msg-toolbar-btn" onClick={() => setShowComposeEmoji((v) => !v)} disabled={uploading} title="Emoji">
-                      <Smile size={13} />
+                    <button className="msg-toolbar-btn" onClick={() => setShowComposeEmoji((v) => !v)} disabled={uploading} title="Emoji" aria-label="Insert emoji" aria-haspopup="true" aria-expanded={showComposeEmoji}>
+                      <Smile size={13} aria-hidden="true" />
                     </button>
                     {showComposeEmoji && (
                       <EmojiPicker
@@ -1936,11 +2176,11 @@ export default function Messages() {
                       />
                     )}
                   </div>
-                  <button className="msg-toolbar-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                    <Paperclip size={13} />
+                  <button className="msg-toolbar-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading} aria-label="Attach files">
+                    <Paperclip size={13} aria-hidden="true" />
                   </button>
-                  <button className="msg-send-btn" onClick={handleSend} disabled={(!newMessage.trim() && selectedFiles.length === 0) || sending || uploading}>
-                    {uploading ? <div className="uploading-spinner" /> : <Send size={15} />}
+                  <button className="msg-send-btn" onClick={handleSend} disabled={(!newMessage.trim() && selectedFiles.length === 0) || sending || uploading} aria-label="Send message">
+                    {uploading ? <div className="uploading-spinner" aria-hidden="true" /> : <Send size={15} aria-hidden="true" />}
                   </button>
                 </div>
               </div>
@@ -1949,34 +2189,34 @@ export default function Messages() {
           ) : chatTarget.type === "group" ? (
             <>
               <div className="msg-chat-header">
-                <button className="msg-back-btn" onClick={handleBack}><ArrowLeft size={16} /></button>
+                <button className="msg-back-btn" onClick={handleBack} aria-label="Back to conversation list"><ArrowLeft size={16} aria-hidden="true" /></button>
                 <div className="msg-avatar msg-avatar-broadcast" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", width: 40, height: 40, borderRadius: 12 }}>
-                  <Users size={18} color="#fff" />
+                  <Users size={18} color="#fff" aria-hidden="true" />
                 </div>
                 <div className="msg-chat-header-info" style={{ flex: 1 }}>
                   <h3>{formatDisplayName(chatTarget.group.name)}</h3>
                   <p>{chatTarget.group.members ? chatTarget.group.members.split(",").filter(Boolean).length : 0} members</p>
                 </div>
                 {canManageGroup && (
-                  <button className="msg-icon-btn" title="Edit group" style={{ marginLeft: "auto" }}
+                  <button className="msg-icon-btn" title="Edit group" aria-label="Edit group" style={{ marginLeft: "auto" }}
                     onClick={(e) => openEditGroup(chatTarget.group, e)}>
-                    <Settings size={16} />
+                    <Settings size={16} aria-hidden="true" />
                   </button>
                 )}
               </div>
 
-              <div className="msg-messages" onScroll={handleConvScroll} ref={convScrollRef}>
+              <div className="msg-messages" onScroll={handleConvScroll} ref={convScrollRef} role="log" aria-label={`Conversation with ${formatDisplayName(chatTarget.group.name)}`}>
                 {convLoading && groupMessages.length > 0 && (
-                  <div className="msg-loading-more">
-                    <span className="msg-loading-spinner" />
-                    Loading older messages...
+                  <div className="msg-loading-more" role="status">
+                    <span className="msg-loading-spinner" aria-hidden="true" />
+                    Loading older messages…
                   </div>
                 )}
 
                 {groupMessages.length === 0 && !convLoading ? (
                   <div className="msg-empty" style={{ flex: 1 }}>
                     <div className="msg-empty-icon" style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
-                      <Users size={28} color="#8b5cf6" />
+                      <Users size={28} color="#8b5cf6" aria-hidden="true" />
                     </div>
                     <h3>{formatDisplayName(chatTarget.group.name)}</h3>
                     <p>This is the beginning of this group chat. Say hello!</p>
@@ -2045,9 +2285,10 @@ export default function Messages() {
                                   type="button"
                                   className="msg-reply-trigger"
                                   title="Reply"
+                                  aria-label={`Reply to ${formatDisplayName(msg.senderUsername)}`}
                                   onClick={() => startReply(msg)}
                                 >
-                                  <Reply size={12} />
+                                  <Reply size={12} aria-hidden="true" />
                                 </button>
                                 <ReactionControl align={isMine ? "right" : "left"} onReact={(emoji) => toggleGroupReaction(msg, emoji)} />
                               </>
@@ -2064,7 +2305,7 @@ export default function Messages() {
               <div className="msg-input-area">
                 <div className="msg-input-toolbar">
                   <button className="msg-toolbar-btn" onClick={openPollModal}>
-                    <BarChart2 size={13} /> Poll
+                    <BarChart2 size={13} aria-hidden="true" /> Poll
                   </button>
                 </div>
                 {replyingTo && <ReplyPreviewBar target={replyingTo} onCancel={cancelReply} />}
@@ -2073,21 +2314,23 @@ export default function Messages() {
                     {selectedFiles.map((file, idx) => (
                       <div key={idx} className="selected-file">
                         <span>{file.name}</span>
-                        <button onClick={() => removeSelectedFile(idx)}>
-                          <XCircle size={12} />
+                        <button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeSelectedFile(idx)}>
+                          <XCircle size={12} aria-hidden="true" />
                         </button>
                       </div>
                     ))}
                   </div>
                 )}
                 {uploading && (
-                  <div className="uploading-indicator">
-                    <div className="uploading-spinner" />
-                    <span>Uploading files...</span>
+                  <div className="uploading-indicator" role="status">
+                    <div className="uploading-spinner" aria-hidden="true" />
+                    <span>Uploading files…</span>
                   </div>
                 )}
                 <div className="msg-input-row">
+                  <label htmlFor="group-msg-input" className="sr-only">{`Message ${formatDisplayName(chatTarget.group.name)}`}</label>
                   <input
+                    id="group-msg-input"
                     ref={inputRef}
                     placeholder={`Message ${formatDisplayName(chatTarget.group.name)}…`}
                     value={newMessage}
@@ -2096,8 +2339,8 @@ export default function Messages() {
                     disabled={sending || uploading}
                   />
                   <div style={{ position: "relative" }}>
-                    <button className="msg-toolbar-btn" onClick={() => setShowComposeEmoji((v) => !v)} disabled={uploading} title="Emoji">
-                      <Smile size={13} />
+                    <button className="msg-toolbar-btn" onClick={() => setShowComposeEmoji((v) => !v)} disabled={uploading} title="Emoji" aria-label="Insert emoji" aria-haspopup="true" aria-expanded={showComposeEmoji}>
+                      <Smile size={13} aria-hidden="true" />
                     </button>
                     {showComposeEmoji && (
                       <EmojiPicker
@@ -2107,11 +2350,11 @@ export default function Messages() {
                       />
                     )}
                   </div>
-                  <button className="msg-toolbar-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                    <Paperclip size={13} />
+                  <button className="msg-toolbar-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading} aria-label="Attach files">
+                    <Paperclip size={13} aria-hidden="true" />
                   </button>
-                  <button className="msg-send-btn" onClick={handleSend} disabled={(!newMessage.trim() && selectedFiles.length === 0) || sending || uploading}>
-                    {uploading ? <div className="uploading-spinner" /> : <Send size={15} />}
+                  <button className="msg-send-btn" onClick={handleSend} disabled={(!newMessage.trim() && selectedFiles.length === 0) || sending || uploading} aria-label="Send message">
+                    {uploading ? <div className="uploading-spinner" aria-hidden="true" /> : <Send size={15} aria-hidden="true" />}
                   </button>
                 </div>
               </div>
@@ -2120,7 +2363,7 @@ export default function Messages() {
           ) : (
             <>
               <div className="msg-chat-header">
-                <button className="msg-back-btn" onClick={handleBack}><ArrowLeft size={16} /></button>
+                <button className="msg-back-btn" onClick={handleBack} aria-label="Back to conversation list"><ArrowLeft size={16} aria-hidden="true" /></button>
                 <UserAvatar
                   username={chatTarget.username}
                   size={40}
@@ -2133,18 +2376,19 @@ export default function Messages() {
                 <button
                   className="msg-icon-btn danger msg-header-delete-btn"
                   title="Delete conversation"
+                  aria-label={`Delete conversation with ${formatDisplayName(chatTarget.username)}`}
                   style={{ marginLeft: "auto" }}
                   onClick={requestDeleteConversation}
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={16} aria-hidden="true" />
                 </button>
               </div>
 
-              <div className="msg-messages" onScroll={handleConvScroll} ref={convScrollRef}>
+              <div className="msg-messages" onScroll={handleConvScroll} ref={convScrollRef} role="log" aria-label={`Conversation with ${formatDisplayName(chatTarget.username)}`}>
                 {convLoading && conversation.length > 0 && (
-                  <div className="msg-loading-more">
-                    <span className="msg-loading-spinner" />
-                    Loading older messages...
+                  <div className="msg-loading-more" role="status">
+                    <span className="msg-loading-spinner" aria-hidden="true" />
+                    Loading older messages…
                   </div>
                 )}
 
@@ -2196,14 +2440,15 @@ export default function Messages() {
                           />
                           <div className={`msg-bubble-meta ${isMine ? "mine" : ""}`}>
                             <span>{fmtTime(msg.sentAt)}</span>
-                            {isMine && <span style={{ fontSize: 12 }}>{msg.readByReceiver ? "✓✓" : "✓"}</span>}
+                            {isMine && <span aria-label={msg.readByReceiver ? "Read" : "Sent"} style={{ fontSize: 12 }}>{msg.readByReceiver ? "✓✓" : "✓"}</span>}
                             <button
                               type="button"
                               className="msg-reply-trigger"
                               title="Reply"
+                              aria-label={`Reply to ${formatDisplayName(msg.senderUsername)}`}
                               onClick={() => startReply(msg)}
                             >
-                              <Reply size={12} />
+                              <Reply size={12} aria-hidden="true" />
                             </button>
                             <ReactionControl align={isMine ? "right" : "left"} onReact={(emoji) => toggleDmReaction(msg, emoji)} />
                             {isMine && (
@@ -2211,9 +2456,10 @@ export default function Messages() {
                                 type="button"
                                 className="msg-delete-trigger"
                                 title="Delete message"
+                                aria-label="Delete message"
                                 onClick={(e) => requestDeleteMessage(msg, e)}
                               >
-                                <Trash2 size={12} />
+                                <Trash2 size={12} aria-hidden="true" />
                               </button>
                             )}
                           </div>
@@ -2232,21 +2478,23 @@ export default function Messages() {
                     {selectedFiles.map((file, idx) => (
                       <div key={idx} className="selected-file">
                         <span>{file.name}</span>
-                        <button onClick={() => removeSelectedFile(idx)}>
-                          <XCircle size={12} />
+                        <button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeSelectedFile(idx)}>
+                          <XCircle size={12} aria-hidden="true" />
                         </button>
                       </div>
                     ))}
                   </div>
                 )}
                 {uploading && (
-                  <div className="uploading-indicator">
-                    <div className="uploading-spinner" />
-                    <span>Uploading files...</span>
+                  <div className="uploading-indicator" role="status">
+                    <div className="uploading-spinner" aria-hidden="true" />
+                    <span>Uploading files…</span>
                   </div>
                 )}
                 <div className="msg-input-row">
+                  <label htmlFor="dm-input" className="sr-only">{`Message ${formatDisplayName(chatTarget.username)}`}</label>
                   <input
+                    id="dm-input"
                     ref={inputRef}
                     placeholder={`Message ${formatDisplayName(chatTarget.username)}…`}
                     value={newMessage}
@@ -2255,8 +2503,8 @@ export default function Messages() {
                     disabled={sending || uploading}
                   />
                   <div style={{ position: "relative" }}>
-                    <button className="msg-toolbar-btn" onClick={() => setShowComposeEmoji((v) => !v)} disabled={uploading} title="Emoji">
-                      <Smile size={13} />
+                    <button className="msg-toolbar-btn" onClick={() => setShowComposeEmoji((v) => !v)} disabled={uploading} title="Emoji" aria-label="Insert emoji" aria-haspopup="true" aria-expanded={showComposeEmoji}>
+                      <Smile size={13} aria-hidden="true" />
                     </button>
                     {showComposeEmoji && (
                       <EmojiPicker
@@ -2266,11 +2514,11 @@ export default function Messages() {
                       />
                     )}
                   </div>
-                  <button className="msg-toolbar-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                    <Paperclip size={13} />
+                  <button className="msg-toolbar-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading} aria-label="Attach files">
+                    <Paperclip size={13} aria-hidden="true" />
                   </button>
-                  <button className="msg-send-btn" onClick={handleSend} disabled={(!newMessage.trim() && selectedFiles.length === 0) || sending || uploading}>
-                    {uploading ? <div className="uploading-spinner" /> : <Send size={15} />}
+                  <button className="msg-send-btn" onClick={handleSend} disabled={(!newMessage.trim() && selectedFiles.length === 0) || sending || uploading} aria-label="Send message">
+                    {uploading ? <div className="uploading-spinner" aria-hidden="true" /> : <Send size={15} aria-hidden="true" />}
                   </button>
                 </div>
               </div>
@@ -2280,7 +2528,9 @@ export default function Messages() {
       </div>
 
       {/* Hidden file input */}
+      <label htmlFor="msg-file-input" className="sr-only">Attach files</label>
       <input
+        id="msg-file-input"
         type="file"
         ref={fileInputRef}
         style={{ display: 'none' }}
@@ -2292,25 +2542,25 @@ export default function Messages() {
       {/* ── Create / Edit Group Modal ──────────────────────────────────────── */}
       {showGroupModal && (
         <div className="modal-overlay" onClick={() => setShowGroupModal(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">
+          <div className="modal-box" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="group-modal-title">
+            <div className="modal-title" id="group-modal-title">
               <span>{editingGroup ? "Edit Group" : "Create Group"}</span>
-              <button className="msg-icon-btn" onClick={() => setShowGroupModal(false)}><X size={16} /></button>
+              <button className="msg-icon-btn" onClick={() => setShowGroupModal(false)} aria-label="Close dialog"><X size={16} aria-hidden="true" /></button>
             </div>
 
-            <label className="modal-label">Group Name *</label>
-            <input className="modal-input" placeholder="e.g. Design Team" value={groupForm.name} onChange={(e) => setGroupForm((p) => ({ ...p, name: e.target.value }))} />
+            <label className="modal-label" htmlFor="group-name-input">Group Name *</label>
+            <input id="group-name-input" className="modal-input" placeholder="e.g. Design Team" value={groupForm.name} onChange={(e) => setGroupForm((p) => ({ ...p, name: e.target.value }))} />
 
-            <label className="modal-label">Description</label>
-            <input className="modal-input" placeholder="Optional description" value={groupForm.description} onChange={(e) => setGroupForm((p) => ({ ...p, description: e.target.value }))} />
+            <label className="modal-label" htmlFor="group-desc-input">Description</label>
+            <input id="group-desc-input" className="modal-input" placeholder="Optional description" value={groupForm.description} onChange={(e) => setGroupForm((p) => ({ ...p, description: e.target.value }))} />
 
-            <label className="modal-label" style={{ marginBottom: 8 }}>
+            <label className="modal-label" style={{ marginBottom: 8 }} id="group-members-label">
               Members <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>({groupForm.members.length} selected)</span>
             </label>
-            <div className="modal-members-list">
+            <div className="modal-members-list" role="group" aria-labelledby="group-members-label">
               {users.map((u) => (
                 <div key={u.id} className="modal-member-item" onClick={() => toggleMember(u.username)}>
-                  <input type="checkbox" readOnly checked={groupForm.members.includes(u.username)} />
+                  <input type="checkbox" readOnly checked={groupForm.members.includes(u.username)} aria-label={`Add ${formatDisplayName(u.username)} to group`} />
                   <UserAvatar username={u.username} size={28} />
                   <span style={{ fontSize: 13, flex: 1 }}>{formatDisplayName(u.username)}</span>
                   <span className="msg-role-tag" style={{ background: getRoleColor(u.role) + "18", color: getRoleColor(u.role), border: `1px solid ${getRoleColor(u.role)}30`, fontSize: 10 }}>{u.role}</span>
@@ -2331,13 +2581,13 @@ export default function Messages() {
       {/* ── Delete Group Confirm Modal ──────────────────────────────────────── */}
       {deleteGroupTarget && (
         <div className="modal-overlay" onClick={() => { if (!deletingGroup) setDeleteGroupTarget(null); }}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
-            <div className="modal-title">
+          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }} role="dialog" aria-modal="true" aria-labelledby="delete-group-title">
+            <div className="modal-title" id="delete-group-title">
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ color: "#ef4444", fontSize: 20 }}>⚠</span>
+                <span style={{ color: "var(--msg-danger)", fontSize: 20 }} aria-hidden="true">⚠</span>
                 Delete Group
               </span>
-              <button className="msg-icon-btn" onClick={() => { if (!deletingGroup) setDeleteGroupTarget(null); }} disabled={deletingGroup}><X size={16} /></button>
+              <button className="msg-icon-btn" onClick={() => { if (!deletingGroup) setDeleteGroupTarget(null); }} disabled={deletingGroup} aria-label="Close dialog"><X size={16} aria-hidden="true" /></button>
             </div>
             <p style={{ fontSize: 14, color: "hsl(var(--muted-foreground))", margin: "0 0 6px" }}>
               Are you sure you want to delete
@@ -2345,18 +2595,15 @@ export default function Messages() {
             <p style={{ fontSize: 15, fontWeight: 700, color: "hsl(var(--foreground))", margin: "0 0 18px", wordBreak: "break-word" }}>
               "{formatDisplayName(deleteGroupTarget.name)}"?
             </p>
-            <p style={{ fontSize: 13, color: "#ef4444", margin: "0 0 20px" }}>
+            <p style={{ fontSize: 13, color: "var(--msg-danger)", margin: "0 0 20px" }}>
               This will permanently delete the group and all its messages. This cannot be undone.
             </p>
             <div className="modal-actions">
               <button className="modal-btn secondary" onClick={() => setDeleteGroupTarget(null)} disabled={deletingGroup}>Cancel</button>
               <button
-                className="modal-btn primary"
+                className="modal-btn danger"
                 onClick={confirmDeleteGroup}
                 disabled={deletingGroup}
-                style={{ background: "#ef4444", opacity: deletingGroup ? 0.6 : 1, cursor: deletingGroup ? "not-allowed" : "pointer" }}
-                onMouseEnter={e => { if (!deletingGroup) e.currentTarget.style.background = "#dc2626"; }}
-                onMouseLeave={e => { if (!deletingGroup) e.currentTarget.style.background = "#ef4444"; }}
               >
                 {deletingGroup ? "Deleting…" : "Delete Group"}
               </button>
@@ -2368,13 +2615,13 @@ export default function Messages() {
       {/* ── Delete Message Confirm Modal ────────────────────────────────────── */}
       {deleteMessageTarget && (
         <div className="modal-overlay" onClick={() => { if (!deletingMessage) setDeleteMessageTarget(null); }}>
-          <div className="modal-box modal-box-danger" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
-            <div className="modal-title">
+          <div className="modal-box modal-box-danger" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }} role="dialog" aria-modal="true" aria-labelledby="delete-msg-title">
+            <div className="modal-title" id="delete-msg-title">
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span className="modal-danger-icon">⚠</span>
+                <span className="modal-danger-icon" aria-hidden="true">⚠</span>
                 Delete Message
               </span>
-              <button className="msg-icon-btn" onClick={() => setDeleteMessageTarget(null)} disabled={deletingMessage}><X size={16} /></button>
+              <button className="msg-icon-btn" onClick={() => setDeleteMessageTarget(null)} disabled={deletingMessage} aria-label="Close dialog"><X size={16} aria-hidden="true" /></button>
             </div>
             <p style={{ fontSize: 14, color: "hsl(var(--muted-foreground))", margin: "0 0 10px" }}>
               Delete this message for everyone?
@@ -2382,7 +2629,7 @@ export default function Messages() {
             {deleteMessageTarget.content && (
               <div className="modal-message-preview">"{deleteMessageTarget.content}"</div>
             )}
-            <p style={{ fontSize: 13, color: "#ef4444", margin: "14px 0 20px" }}>
+            <p style={{ fontSize: 13, color: "var(--msg-danger)", margin: "14px 0 20px" }}>
               This cannot be undone.
             </p>
             <div className="modal-actions">
@@ -2398,13 +2645,13 @@ export default function Messages() {
       {/* ── Delete Conversation Confirm Modal ───────────────────────────────── */}
       {deleteConversationTarget && (
         <div className="modal-overlay" onClick={() => { if (!deletingConversation) setDeleteConversationTarget(null); }}>
-          <div className="modal-box modal-box-danger" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
-            <div className="modal-title">
+          <div className="modal-box modal-box-danger" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }} role="dialog" aria-modal="true" aria-labelledby="delete-conv-title">
+            <div className="modal-title" id="delete-conv-title">
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span className="modal-danger-icon">⚠</span>
+                <span className="modal-danger-icon" aria-hidden="true">⚠</span>
                 Delete Conversation
               </span>
-              <button className="msg-icon-btn" onClick={() => setDeleteConversationTarget(null)} disabled={deletingConversation}><X size={16} /></button>
+              <button className="msg-icon-btn" onClick={() => setDeleteConversationTarget(null)} disabled={deletingConversation} aria-label="Close dialog"><X size={16} aria-hidden="true" /></button>
             </div>
             <p style={{ fontSize: 14, color: "hsl(var(--muted-foreground))", margin: "0 0 6px" }}>
               Are you sure you want to delete your entire conversation with
@@ -2412,7 +2659,7 @@ export default function Messages() {
             <p style={{ fontSize: 15, fontWeight: 700, color: "hsl(var(--foreground))", margin: "0 0 18px", wordBreak: "break-word" }}>
               "{formatDisplayName(deleteConversationTarget)}"?
             </p>
-            <p style={{ fontSize: 13, color: "#ef4444", margin: "0 0 20px" }}>
+            <p style={{ fontSize: 13, color: "var(--msg-danger)", margin: "0 0 20px" }}>
               All messages in this chat will be permanently deleted for both of you. This cannot be undone.
             </p>
             <div className="modal-actions">
@@ -2428,23 +2675,25 @@ export default function Messages() {
       {/* ── Poll Modal ─────────────────────────────────────────────────────── */}
       {showPollModal && (
         <div className="modal-overlay" onClick={() => setShowPollModal(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">
+          <div className="modal-box" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="poll-modal-title">
+            <div className="modal-title" id="poll-modal-title">
               <span>Create Poll</span>
-              <button className="msg-icon-btn" onClick={() => setShowPollModal(false)}><X size={16} /></button>
+              <button className="msg-icon-btn" onClick={() => setShowPollModal(false)} aria-label="Close dialog"><X size={16} aria-hidden="true" /></button>
             </div>
 
-            <label className="modal-label">Question *</label>
-            <input className="modal-input" placeholder="What would you like to ask?" value={pollQuestion} onChange={(e) => setPollQuestion(e.target.value)} />
+            <label className="modal-label" htmlFor="poll-question-input">Question *</label>
+            <input id="poll-question-input" className="modal-input" placeholder="What would you like to ask?" value={pollQuestion} onChange={(e) => setPollQuestion(e.target.value)} />
 
-            <label className="modal-label">Options (min 2)</label>
+            <label className="modal-label" id="poll-options-label">Options (min 2)</label>
             {pollOptions.map((opt, i) => (
               <div className="poll-option-row" key={i}>
                 <input
                   className="modal-input"
+                  aria-label={`Poll option ${i + 1}`}
+                  aria-labelledby="poll-options-label"
                   style={{
                     marginBottom: 0,
-                    borderColor: duplicatePollOptionIndexes.has(i) ? "#ef4444" : undefined,
+                    borderColor: duplicatePollOptionIndexes.has(i) ? "var(--msg-danger)" : undefined,
                   }}
                   placeholder={`Option ${i + 1}`}
                   value={opt}
@@ -2455,20 +2704,20 @@ export default function Messages() {
                   }}
                 />
                 {pollOptions.length > 2 && (
-                  <button onClick={() => setPollOptions(pollOptions.filter((_, j) => j !== i))}>
-                    <X size={12} />
+                  <button type="button" aria-label={`Remove option ${i + 1}`} onClick={() => setPollOptions(pollOptions.filter((_, j) => j !== i))}>
+                    <X size={12} aria-hidden="true" />
                   </button>
                 )}
               </div>
             ))}
             {hasDuplicatePollOptions && (
-              <div style={{ color: "#ef4444", fontSize: 12, marginTop: -4, marginBottom: 8 }}>
+              <div className="poll-duplicate-warning" role="alert">
                 Poll options must be unique — you've repeated an option.
               </div>
             )}
             {pollOptions.length < 8 && (
               <button className="add-option-btn" onClick={() => setPollOptions([...pollOptions, ""])}>
-                <Plus size={13} /> Add Option
+                <Plus size={13} aria-hidden="true" /> Add Option
               </button>
             )}
 

@@ -1,14 +1,15 @@
-import { useEffect, useState, useRef, FormEvent, useCallback } from "react";
+import { useEffect, useState, useRef, FormEvent, useCallback, useId } from "react";
 import { format, differenceInCalendarDays } from "date-fns";
-import { CalendarRange, InfoIcon} from "lucide-react";
+import { CalendarRange, InfoIcon } from "lucide-react";
 import {
-  Calendar,
   CalendarCheck2,
   CalendarClock,
   CalendarX2,
   Clock3,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Users,
+  Eye,
 } from "lucide-react";
 import {
   Tooltip,
@@ -70,6 +71,15 @@ interface Leave {
   surplusHoursSnapshot?: number | null;
 }
 
+// One row of the owner's "All Employees" overview — every employee's
+// leave days used/remaining for the current year, in one page.
+interface EmployeeLeaveSummary {
+  employeeName: string;
+  daysUsed: number;
+  daysRemaining: number;
+  leaveLimit: number;
+  isOverLimit: boolean;
+}
 
 /* ─── Constants ─────────────────────────────────────────── */
 
@@ -109,12 +119,15 @@ const SurplusBadge = ({ leave }: { leave: Leave }) => {
   if (!leave.surplusPermission) return null;
   const isFullDay = (leave.days ?? 0) >= 1;
   const label = isFullDay ? "Full-Day Permission" : "Half-Day Permission";
+  const title = leave.surplusMonth
+    ? `Auto-generated from ${leave.surplusHoursSnapshot ?? "?"}h of approved permission used in ${leave.surplusMonth}`
+    : undefined;
   return (
     <span
-      title={leave.surplusMonth ? `Auto-generated from ${leave.surplusHoursSnapshot ?? "?"}h of approved permission used in ${leave.surplusMonth}` : undefined}
-      className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
+      title={title}
+      className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-400"
     >
-      ⚖️ {label}
+      <span aria-hidden="true">⚖️</span> {label}
     </span>
   );
 };
@@ -166,6 +179,60 @@ const getMinDate = () => {
   date.setDate(date.getDate() + MIN_DATE_OFFSET);
   return format(date, "yyyy-MM-dd");
 };
+
+/* ─── Design tokens (colors, badges) ───────────────────────
+   Centralized here so light/dark parity is easy to audit and
+   every consumer (employee + owner views) stays visually consistent. */
+
+const LEAVE_TYPE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  SICK: {
+    bg: "bg-red-50 dark:bg-red-950/40",
+    text: "text-red-700 dark:text-red-400",
+    border: "border-red-200 dark:border-red-900",
+  },
+  CASUAL: {
+    bg: "bg-blue-50 dark:bg-blue-950/40",
+    text: "text-blue-700 dark:text-blue-400",
+    border: "border-blue-200 dark:border-blue-900",
+  },
+  ANNUAL: {
+    bg: "bg-green-50 dark:bg-green-950/40",
+    text: "text-green-700 dark:text-green-400",
+    border: "border-green-200 dark:border-green-900",
+  },
+  EARNED: {
+    bg: "bg-green-50 dark:bg-green-950/40",
+    text: "text-green-700 dark:text-green-400",
+    border: "border-green-200 dark:border-green-900",
+  },
+  MATERNITY: {
+    bg: "bg-pink-50 dark:bg-pink-950/40",
+    text: "text-pink-700 dark:text-pink-400",
+    border: "border-pink-200 dark:border-pink-900",
+  },
+  PATERNITY: {
+    bg: "bg-indigo-50 dark:bg-indigo-950/40",
+    text: "text-indigo-700 dark:text-indigo-400",
+    border: "border-indigo-200 dark:border-indigo-900",
+  },
+  EMERGENCY: {
+    bg: "bg-orange-50 dark:bg-orange-950/40",
+    text: "text-orange-700 dark:text-orange-400",
+    border: "border-orange-200 dark:border-orange-900",
+  },
+  UNPAID: {
+    bg: "bg-slate-100 dark:bg-slate-800/60",
+    text: "text-slate-600 dark:text-slate-300",
+    border: "border-slate-200 dark:border-slate-700",
+  },
+};
+
+const getLeaveTypeColors = (leaveType: string) =>
+  LEAVE_TYPE_COLORS[leaveType] ?? {
+    bg: "bg-muted",
+    text: "text-foreground",
+    border: "border-border",
+  };
 
 /* ─── Enhanced Animations ────────────────────────────────── */
 
@@ -222,17 +289,9 @@ const animationStyles = `
     from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }
   }
-  @keyframes shimmer {
-    0% { background-position: -1000px 0; }
-    100% { background-position: 1000px 0; }
-  }
   @keyframes subtlePulse {
     0%,100% { transform: scale(1); }
     50%     { transform: scale(1.06); }
-  }
-  @keyframes ringRotate {
-    from { transform: rotate(-90deg); }
-    to   { transform: rotate(270deg); }
   }
   .animate-fade-slide-down {
     animation: fadeSlideDown 0.25s cubic-bezier(0.34,1.2,0.64,1) forwards;
@@ -243,37 +302,36 @@ const animationStyles = `
   .animate-slide-right {
     animation: slideInRight 0.4s ease-out;
   }
-  .animate-float-up {
-    animation: floatUp 0.5s ease-out;
-  }
   .animate-success-bounce {
     animation: successBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   }
-  .subtle-pulse {
-    animation: subtlePulse 0.5s ease-in-out;
-  }
   .card-hover {
-    transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+    transition: box-shadow 0.25s ease, transform 0.25s ease;
   }
   .card-hover:hover {
-    transform: translateY(-2px);
     box-shadow: 0 12px 24px -8px rgba(0,0,0,.08), 0 4px 8px -4px rgba(0,0,0,.04);
   }
   .btn-hover-scale {
-    transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+    transition: transform 0.15s cubic-bezier(0.4,0,0.2,1);
   }
   .btn-hover-scale:hover {
-    transform: scale(1.05);
+    transform: scale(1.03);
   }
   .btn-hover-scale:active {
-    transform: scale(0.95);
+    transform: scale(0.97);
+  }
+  .leave-card {
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  .leave-card:hover {
+    box-shadow: 0 6px 16px -6px rgba(0,0,0,.10);
   }
   .table-row-animate {
-    animation: floatUp 0.4s ease-out forwards;
+    animation: floatUp 0.35s ease-out forwards;
     opacity: 0;
   }
   .tab-transition {
-    transition: all 0.15s cubic-bezier(0.4,0,0.2,1);
+    transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
   }
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
@@ -282,11 +340,29 @@ const animationStyles = `
     background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: hsl(var(--border));
     border-radius: 3px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    background: hsl(var(--muted-foreground) / 0.4);
+  }
+  /* Respect reduced-motion preferences across the whole portal */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-slide-down,
+    .animate-fade-in-up,
+    .animate-slide-right,
+    .animate-success-bounce,
+    .table-row-animate {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    .card-hover,
+    .btn-hover-scale,
+    .leave-card,
+    .tab-transition {
+      transition: none !important;
+    }
   }
 `;
 
@@ -300,6 +376,11 @@ if (typeof document !== "undefined") {
   }
 }
 
+/* Shared focus-visible ring used on custom (non-shadcn) interactive elements
+   so keyboard users always get a clear indicator. */
+const FOCUS_RING =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
 /* =========================================================
    LEAVE OPTION COMPONENT
 ========================================================= */
@@ -311,34 +392,76 @@ const LeaveOption = ({
   title: string;
   description: string;
 }) => (
-  <div className="flex w-full items-center justify-between">
+  <div className="flex w-full items-center justify-between gap-2">
     <span>{title}</span>
     <TooltipProvider delayDuration={100}>
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
-            className="ml-2 inline-flex items-center rounded-full p-0.5 hover:bg-muted transition-colors"
+            className={`inline-flex items-center rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-primary ${FOCUS_RING}`}
             onClick={(e) => e.stopPropagation()}
-            aria-label={`Info about ${title}`}
+            aria-label={`More info about ${title}`}
           >
-            <InfoIcon className="h-4 w-4 text-muted-foreground hover:text-primary" />
+            <InfoIcon className="h-4 w-4" aria-hidden="true" />
           </button>
         </TooltipTrigger>
-        <TooltipContent
-          side="right"
-          align="center"
-          sideOffset={10}
-          className="z-[9999] max-w-xs"
-        >
+        <TooltipContent side="right" align="center" sideOffset={10} className="z-[9999] max-w-xs">
           <p className="font-medium">{title}</p>
-          <p className="text-xs text-muted-foreground whitespace-pre-line">
-            {description}
-          </p>
+          <p className="whitespace-pre-line text-xs text-muted-foreground">{description}</p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   </div>
+);
+
+/* =========================================================
+   TAB BUTTON — shared, accessible tab control
+   Used by both the employee history filter and the owner
+   pending/employee toggle so keyboard + ARIA semantics and
+   visual styling stay identical everywhere in the portal.
+========================================================= */
+
+const TabButton = ({
+  active,
+  onClick,
+  icon: Icon,
+  label,
+  count,
+  controls,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon?: React.ComponentType<{ className?: string }>;
+  label: string;
+  count?: number;
+  controls?: string;
+}) => (
+  <button
+    type="button"
+    role="tab"
+    aria-selected={active}
+    aria-controls={controls}
+    tabIndex={active ? 0 : -1}
+    onClick={onClick}
+    className={`tab-transition flex flex-1 min-w-[76px] items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${FOCUS_RING} ${
+      active
+        ? "bg-background text-foreground shadow-sm"
+        : "text-muted-foreground hover:text-foreground"
+    }`}
+  >
+    {Icon && <Icon className="h-3.5 w-3.5" aria-hidden="true" />}
+    <span>{label}</span>
+    {typeof count === "number" && count > 0 && (
+      <span
+        className={`ml-0.5 min-w-[1.1rem] rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none ${
+          active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+        }`}
+      >
+        {count}
+      </span>
+    )}
+  </button>
 );
 
 /* =========================================================
@@ -359,8 +482,8 @@ const LeaveTakenSummary = ({ leaves, leaveLimit }: { leaves: Leave[]; leaveLimit
   const isOverLimit = takenDays > leaveLimit;
   const remainingDays = leaveLimit - takenDays;
 
-  const ringColor   = isOverLimit ? "#ef4444" : "#22c55e";
-  const pulseColor  = isOverLimit ? "#ef4444" : "#22c55e";
+  const ringColor = isOverLimit ? "#ef4444" : "#22c55e";
+  const pulseColor = isOverLimit ? "#ef4444" : "#22c55e";
   const numberColor = isOverLimit ? "#ef4444" : "#22c55e";
 
   const [displayed, setDisplayed] = useState(0);
@@ -410,48 +533,65 @@ const LeaveTakenSummary = ({ leaves, leaveLimit }: { leaves: Leave[]; leaveLimit
   const circumference = 2 * Math.PI * 44;
 
   return (
-    <div ref={ref} className="flex flex-col items-center justify-center py-10 gap-6">
+    <div ref={ref} className="flex flex-col items-center justify-center gap-6 py-10">
       {isOverLimit && (
         <div
-          className="w-full max-w-sm rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-center animate-fade-slide-down"
+          role="alert"
+          className="w-full max-w-sm animate-fade-slide-down rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-center dark:border-red-900/60 dark:bg-red-950/30"
           style={{ animation: "leaveWarnPulse 1.8s ease-in-out infinite" }}
         >
-          <p className="text-sm font-bold text-red-600" style={{ animation: "leaveShake 0.5s ease-in-out 0.3s 1" }}>
-            ⚠ Leave Limit Exceeded!
+          <p
+            className="text-sm font-bold text-red-600 dark:text-red-400"
+            style={{ animation: "leaveShake 0.5s ease-in-out 0.3s 1" }}
+          >
+            <span aria-hidden="true">⚠</span> Leave limit exceeded
           </p>
-          <p className="mt-0.5 text-xs text-red-500">
-            You have taken {takenDays} days — {Math.abs(remainingDays)} day{Math.abs(remainingDays) !== 1 ? "s" : ""} over the {leaveLimit}-day limit.
+          <p className="mt-0.5 text-xs text-red-500 dark:text-red-400/80">
+            You've taken {takenDays} days — {Math.abs(remainingDays)} day
+            {Math.abs(remainingDays) !== 1 ? "s" : ""} over the {leaveLimit}-day limit.
           </p>
         </div>
       )}
 
       <div className="relative flex items-center justify-center">
         <span
-          className="absolute inline-flex h-40 w-40 rounded-full opacity-20 animate-ping"
-          style={{ background: `radial-gradient(circle, ${pulseColor} 0%, transparent 70%)`, animationDuration: "2.4s" }}
+          className="absolute inline-flex h-40 w-40 animate-ping rounded-full opacity-20"
+          style={{
+            background: `radial-gradient(circle, ${pulseColor} 0%, transparent 70%)`,
+            animationDuration: "2.4s",
+          }}
+          aria-hidden="true"
         />
-        <svg className="absolute h-44 w-44 -rotate-90" viewBox="0 0 100 100" aria-hidden>
+        <svg className="absolute h-44 w-44 -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
           <circle cx="50" cy="50" r="44" fill="none" stroke="hsl(var(--border))" strokeWidth="5" />
           <circle
-            cx="50" cy="50" r="44"
+            cx="50"
+            cy="50"
+            r="44"
             fill="none"
             stroke={ringColor}
             strokeWidth="5"
             strokeLinecap="round"
             strokeDasharray={`${circumference}`}
             strokeDashoffset={started ? `${circumference * (1 - fillRatio)}` : `${circumference}`}
-            style={{ transition: "stroke-dashoffset 0.9s cubic-bezier(0.16,1,0.3,1), stroke 0.4s ease" }}
+            style={{
+              transition: "stroke-dashoffset 0.9s cubic-bezier(0.16,1,0.3,1), stroke 0.4s ease",
+            }}
           />
         </svg>
-        <div className="relative flex flex-col items-center justify-center h-32 w-32 rounded-full bg-background shadow-inner">
+        <div
+          className="relative flex h-32 w-32 flex-col items-center justify-center rounded-full bg-background shadow-inner"
+          role="status"
+          aria-live="polite"
+        >
           <span
-            className="text-5xl font-bold tabular-nums leading-none"
+            className="text-5xl font-bold leading-none tabular-nums"
             style={{
               color: numberColor,
-              fontVariantNumeric: "tabular-nums",
               opacity: started ? 1 : 0,
               transform: started ? "scale(1)" : "scale(0.7)",
-              transition: "opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1), color 0.4s ease",
+              transition:
+                "opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1), color 0.4s ease",
             }}
           >
             {formatDays(displayed)}
@@ -462,18 +602,21 @@ const LeaveTakenSummary = ({ leaves, leaveLimit }: { leaves: Leave[]; leaveLimit
         </div>
       </div>
 
-      <div className="text-center space-y-1">
-        <p className="text-base font-semibold text-foreground">Leave Taken in {currentYear}</p>
+      <div className="space-y-1 text-center">
+        <p className="text-base font-semibold text-foreground">Leave taken in {currentYear}</p>
         {takenDays === 0 ? (
           <p className="text-sm text-muted-foreground">No approved leaves taken this year.</p>
         ) : isOverLimit ? (
-          <p className="text-sm font-semibold text-red-500">
-            {takenDays} / {leaveLimit} days — exceeded by {Math.abs(remainingDays)} day{Math.abs(remainingDays) !== 1 ? "s" : ""}
+          <p className="text-sm font-semibold text-red-500 dark:text-red-400">
+            {takenDays} / {leaveLimit} days — exceeded by {Math.abs(remainingDays)} day
+            {Math.abs(remainingDays) !== 1 ? "s" : ""}
           </p>
         ) : (
-          <p className="text-sm font-medium text-green-600">
+          <p className="text-sm font-medium text-green-600 dark:text-green-400">
             {takenDays} / {leaveLimit} days taken &mdash;{" "}
-            <span className="font-semibold">{remainingDays} day{remainingDays !== 1 ? "s" : ""} remaining</span>
+            <span className="font-semibold">
+              {remainingDays} day{remainingDays !== 1 ? "s" : ""} remaining
+            </span>
           </p>
         )}
       </div>
@@ -482,18 +625,225 @@ const LeaveTakenSummary = ({ leaves, leaveLimit }: { leaves: Leave[]; leaveLimit
 };
 
 /* =========================================================
-   APPLIED LEAVES CARDS
+   EMPTY STATE — shared
 ========================================================= */
 
-const LEAVE_TYPE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  SICK:        { bg: "bg-red-50",    text: "text-red-700",    border: "border-red-200" },
-  CASUAL:      { bg: "bg-blue-50",   text: "text-blue-700",   border: "border-blue-200" },
-  ANNUAL:      { bg: "bg-green-50",  text: "text-green-700",  border: "border-green-200" },
-  MATERNITY:   { bg: "bg-pink-50",   text: "text-pink-700",   border: "border-pink-200" },
-  PATERNITY:   { bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-200" },
-  EMERGENCY:   { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200" },
-  UNPAID:      { bg: "bg-slate-100", text: "text-slate-600",  border: "border-slate-200" },
+const EmptyState = ({
+  icon: Icon = CalendarX2,
+  message,
+}: {
+  icon?: React.ComponentType<{ className?: string }>;
+  message: string;
+}) => (
+  <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground animate-fade-in-up">
+    <Icon className="h-8 w-8 opacity-30" aria-hidden="true" />
+    <p className="text-sm">{message}</p>
+  </div>
+);
+
+/* =========================================================
+   ERROR STATE — shared
+========================================================= */
+
+const ErrorState = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
+  <div
+    role="alert"
+    className="animate-fade-in-up rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+  >
+    <div className="flex items-center gap-2">
+      <AlertCircle className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+      <span>{message}</span>
+    </div>
+    <button
+      type="button"
+      onClick={onRetry}
+      className={`mt-2 flex items-center gap-1 rounded text-xs text-destructive hover:underline ${FOCUS_RING}`}
+    >
+      <RefreshCw className="h-3 w-3" aria-hidden="true" />
+      Try again
+    </button>
+  </div>
+);
+
+/* =========================================================
+   LEAVE CARD — shared card used across employee + owner views
+   Consolidates what used to be three near-identical card
+   layouts (employee history, owner pending queue, owner's
+   view of a single employee's history) into one component so
+   spacing, color, and a11y stay in sync everywhere.
+========================================================= */
+
+interface LeaveCardProps {
+  leave: Leave;
+  index?: number;
+  showEmployee?: boolean;
+  onRequestChange?: (l: Leave) => void;
+  onCancelReapproval?: (l: Leave) => void;
+  cancelingId?: string | number | null;
+  onApprove?: (l: Leave) => void;
+  onReject?: (l: Leave) => void;
+  actingId?: string | number | null;
+}
+
+const LeaveCard = ({
+  leave: l,
+  index = 0,
+  showEmployee = false,
+  onRequestChange,
+  onCancelReapproval,
+  cancelingId,
+  onApprove,
+  onReject,
+  actingId,
+}: LeaveCardProps) => {
+  const colors = getLeaveTypeColors(l.leaveType);
+  const isSingleDay = l.fromDate === l.toDate;
+  const isReapproval = l.status?.toUpperCase() === "REAPPROVAL_PENDING";
+  const isBusy = actingId === l.id;
+  const isCanceling = cancelingId === l.id;
+
+  return (
+    <div
+      className="leave-card table-row-animate rounded-xl border border-border/60 bg-card p-4 shadow-sm"
+      style={{ animationDelay: `${Math.min(index, 12) * 0.04}s` }}
+    >
+      {/* Top row: (optional avatar+name) + type badge + days + status */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        {showEmployee && (
+          <>
+            <div
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400"
+              aria-hidden="true"
+            >
+              {(l.employeeName || "?")[0]?.toUpperCase()}
+            </div>
+            <span className="text-sm font-semibold text-foreground">{l.employeeName || "—"}</span>
+          </>
+        )}
+        <span
+          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${colors.bg} ${colors.text} ${colors.border}`}
+        >
+          {l.leaveType}
+        </span>
+        <SurplusBadge leave={l} />
+        <div className="ml-auto flex items-center gap-2">
+          <span className="inline-flex items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-xs font-bold text-foreground">
+            <Clock3 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+            {formatDurationBadge(l.days ?? calcDays(l.fromDate, l.toDate))}
+          </span>
+          <StatusBadge status={l.status} />
+        </div>
+      </div>
+
+      {/* Dates + reason (struck through when a reapproval is pending) */}
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
+          <CalendarCheck2 className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className={isReapproval ? "text-muted-foreground line-through opacity-70" : ""}>
+            {isSingleDay ? (
+              fmt(l.fromDate)
+            ) : (
+              <>
+                {fmt(l.fromDate)} <span className="font-normal text-muted-foreground">→</span> {fmt(l.toDate)}
+              </>
+            )}
+          </span>
+        </div>
+        {l.dateType && !isReapproval && (
+          <p className="pl-5 text-xs text-muted-foreground">{formatDateType(l.dateType, l.halfSession)}</p>
+        )}
+        {l.reason && !isReapproval && (
+          <p className="pl-5 text-xs leading-relaxed text-muted-foreground line-clamp-2" title={l.reason}>
+            {l.reason}
+          </p>
+        )}
+      </div>
+
+      {/* Reapproval: proposed changes */}
+      {isReapproval && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-950/30">
+          <p className="mb-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
+            {showEmployee ? "Requested change" : "Reapproval requested — awaiting owner's decision"}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
+            <CalendarCheck2 className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
+            {l.pendingFromDate === l.pendingToDate ? (
+              fmt(l.pendingFromDate || "")
+            ) : (
+              <>
+                {fmt(l.pendingFromDate || "")} <span aria-hidden="true">→</span> {fmt(l.pendingToDate || "")}
+              </>
+            )}
+            {l.pendingDateType && (
+              <span className="font-normal text-amber-700 dark:text-amber-400/90">
+                · {formatDateType(l.pendingDateType, l.pendingHalfSession)}
+              </span>
+            )}
+          </div>
+          {l.pendingReason && (
+            <p className="mt-1 text-xs text-amber-700 line-clamp-2 dark:text-amber-400/90" title={l.pendingReason}>
+              {showEmployee ? l.pendingReason : `New reason: ${l.pendingReason}`}
+            </p>
+          )}
+          {onCancelReapproval && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onCancelReapproval(l)}
+              disabled={isCanceling}
+              className="btn-hover-scale mt-2 h-7 text-xs"
+            >
+              {isCanceling ? <Spinner className="mr-1 h-3 w-3" /> : null}
+              Cancel request
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Employee: request a change to an approved, not-yet-started leave */}
+      {!isReapproval && onRequestChange && canRequestChange(l) && (
+        <div className="mt-3">
+          <Button size="sm" variant="outline" onClick={() => onRequestChange(l)} className="btn-hover-scale h-7 text-xs">
+            Request change
+          </Button>
+        </div>
+      )}
+
+      {/* Owner: approve / reject actions */}
+      {(onApprove || onReject) && (l.status?.toUpperCase() === "PENDING" || isReapproval) && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {onApprove && (
+            <Button
+              size="sm"
+              onClick={() => onApprove(l)}
+              disabled={isBusy}
+              className="btn-hover-scale h-7 flex-1 text-xs sm:flex-none"
+            >
+              {isBusy ? <Spinner className="mr-1 h-3 w-3" /> : null}
+              {isReapproval ? "Approve change" : "Approve"}
+            </Button>
+          )}
+          {onReject && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => onReject(l)}
+              disabled={isBusy}
+              className="btn-hover-scale h-7 flex-1 text-xs sm:flex-none"
+            >
+              {isBusy ? <Spinner className="mr-1 h-3 w-3" /> : null}
+              {isReapproval ? "Reject change" : "Reject"}
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
 };
+
+/* =========================================================
+   APPLIED LEAVES LIST
+========================================================= */
 
 const AppliedLeavesTable = ({
   leaves,
@@ -507,117 +857,127 @@ const AppliedLeavesTable = ({
   cancelingId?: string | number | null;
 }) => {
   if (leaves.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground animate-fade-in-up">
-        <CalendarX2 className="h-8 w-8 opacity-30" />
-        <p className="text-sm">No leave requests yet.</p>
-      </div>
-    );
+    return <EmptyState message="No leave requests yet." />;
   }
 
   const sortedLeaves = [...leaves].sort((a, b) => {
-    try { return new Date(b.fromDate).getTime() - new Date(a.fromDate).getTime(); }
-    catch { return 0; }
+    try {
+      return new Date(b.fromDate).getTime() - new Date(a.fromDate).getTime();
+    } catch {
+      return 0;
+    }
   });
 
   return (
     <div className="space-y-3">
-      {sortedLeaves.map((l, index) => {
-        const colors = LEAVE_TYPE_COLORS[l.leaveType] ?? { bg: "bg-muted", text: "text-foreground", border: "border-border" };
-        const isSingleDay = l.fromDate === l.toDate;
-        const isReapproval = l.status?.toUpperCase() === "REAPPROVAL_PENDING";
-        return (
-          <div
-            key={l.id}
-            className="rounded-xl border border-border/50 bg-card shadow-sm hover:shadow-md transition-shadow p-4 table-row-animate"
-            style={{ animationDelay: `${index * 0.05}s` }}
-          >
-            {/* ── Top row: type badge + days + status ── */}
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold border flex-shrink-0 ${colors.bg} ${colors.text} ${colors.border}`}>
-                  {l.leaveType}
-                </span>
-                <SurplusBadge leave={l} />
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="flex items-center gap-1 text-sm font-bold text-foreground bg-muted rounded-lg px-2.5 py-1">
-                  <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />
-                  {formatDurationBadge(l.days)}
-                </div>
-                <StatusBadge status={l.status} />
-              </div>
-            </div>
+      {sortedLeaves.map((l, index) => (
+        <LeaveCard
+          key={l.id}
+          leave={l}
+          index={index}
+          onRequestChange={onRequestChange}
+          onCancelReapproval={onCancelReapproval}
+          cancelingId={cancelingId}
+        />
+      ))}
+    </div>
+  );
+};
 
-            {/* ── Bottom row: dates + reason ── */}
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground flex-wrap">
-                <CalendarCheck2 className="h-3.5 w-3.5 flex-shrink-0" style={{ color: 'var(--foreground)' }} />
-                {isSingleDay
-                  ? fmt(l.fromDate)
-                  : <>{fmt(l.fromDate)} <span className="text-muted-foreground font-normal">→</span> {fmt(l.toDate)}</>
-                }
-              </div>
-              {l.dateType && (
-                <p className="text-xs text-muted-foreground">{formatDateType(l.dateType, l.halfSession)}</p>
-              )}
-              {l.reason && (
-                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
-                  {l.reason}
-                </p>
-              )}
-            </div>
+/* =========================================================
+   ALL-EMPLOYEES SUMMARY TABLE
+   Shows every employee's leave days used/remaining for the
+   current year on a single page, so an owner doesn't have to select
+   employees one at a time just to see where everyone stands.
+========================================================= */
 
-            {/* ── Reapproval: show the employee's proposed changes ── */}
-            {isReapproval && (
-              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <p className="mb-1.5 text-xs font-semibold text-amber-700">
-                  Reapproval requested — awaiting owner's decision
-                </p>
-                <div className="flex items-center gap-2 text-xs text-amber-800 flex-wrap">
-                  <span className="line-through opacity-60">
-                    {l.fromDate === l.toDate ? fmt(l.fromDate) : `${fmt(l.fromDate)} → ${fmt(l.toDate)}`}
-                  </span>
-                  <span>→</span>
-                  <span className="font-semibold">
-                    {l.pendingFromDate === l.pendingToDate
-                      ? fmt(l.pendingFromDate || "")
-                      : `${fmt(l.pendingFromDate || "")} → ${fmt(l.pendingToDate || "")}`}
-                  </span>
-                </div>
-                {l.pendingReason && l.pendingReason !== l.reason && (
-                  <p className="mt-1 text-xs text-amber-700 line-clamp-2">New reason: {l.pendingReason}</p>
-                )}
-                {onCancelReapproval && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onCancelReapproval(l)}
-                    disabled={cancelingId === l.id}
-                    className="btn-hover-scale mt-2 h-7 text-xs"
+const EmployeeSummaryTable = ({
+  summaries,
+  onView,
+}: {
+  summaries: EmployeeLeaveSummary[];
+  onView: (employeeName: string) => void;
+}) => {
+  return (
+    <div className="custom-scrollbar overflow-x-auto rounded-lg border border-border">
+      <table className="w-full min-w-[640px] text-sm">
+        <caption className="sr-only">Leave days used and remaining for every employee this year</caption>
+        <thead>
+          <tr className="border-b border-border bg-muted/40 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <th scope="col" className="px-4 py-2.5">Employee</th>
+            <th scope="col" className="px-4 py-2.5">Days used</th>
+            <th scope="col" className="px-4 py-2.5">Days remaining</th>
+            <th scope="col" className="px-4 py-2.5">Status</th>
+            <th scope="col" className="px-4 py-2.5">
+              <span className="sr-only">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {summaries.map(({ employeeName, daysUsed, daysRemaining, leaveLimit, isOverLimit }) => {
+            const pct = Math.min((daysUsed / (leaveLimit || 1)) * 100, 100);
+            return (
+              <tr key={employeeName} className="border-b border-border/60 last:border-0 hover:bg-muted/30">
+                <td className="px-4 py-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div
+                      className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400"
+                      aria-hidden="true"
+                    >
+                      {employeeName[0]?.toUpperCase() ?? "?"}
+                    </div>
+                    <span className="truncate font-medium text-foreground">{employeeName}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-foreground">
+                      {formatDays(daysUsed)} / {leaveLimit}d
+                    </span>
+                    <div className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-muted sm:block">
+                      <div className={`h-full rounded-full ${isOverLimit ? "bg-red-500" : "bg-green-500"}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      isOverLimit
+                        ? "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400"
+                        : daysRemaining <= 5
+                        ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
+                        : "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
+                    }`}
                   >
-                    {cancelingId === l.id ? <Spinner className="h-3 w-3 mr-1" /> : null}Cancel Request
+                    {isOverLimit ? `${Math.abs(daysRemaining)}d over` : `${formatDays(daysRemaining)}d left`}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  {isOverLimit ? (
+                    <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-400">
+                      ⚠ Exceeded
+                    </span>
+                  ) : daysRemaining <= 5 ? (
+                    <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
+                      Low balance
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-950/50 dark:text-green-400">
+                      ✓ On track
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <Button size="sm" variant="outline" className="btn-hover-scale h-7 text-xs" onClick={() => onView(employeeName)}>
+                    <Eye className="mr-1 h-3 w-3" aria-hidden="true" />
+                    View
                   </Button>
-                )}
-              </div>
-            )}
-
-            {/* ── Request a change to an approved, not-yet-started leave ── */}
-            {!isReapproval && onRequestChange && canRequestChange(l) && (
-              <div className="mt-3">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => onRequestChange(l)}
-                  className="btn-hover-scale h-7 text-xs"
-                >
-                  Request Change
-                </Button>
-              </div>
-            )}
-          </div>
-        );
-      })}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 };
@@ -628,6 +988,7 @@ const AppliedLeavesTable = ({
 
 const EmployeeView = () => {
   const { name } = useAuth();
+  const historyPanelId = useId();
 
   const [leaveType, setLeaveType] = useState("SICK");
   const [dateMode, setDateMode] = useState<"single" | "range" | "half">("single");
@@ -639,7 +1000,10 @@ const EmployeeView = () => {
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [historyTab, setHistoryTab] = useState<"pending" | "all" | "approved" | "rejected">("pending"); // NEW
+  const [historyTab, setHistoryTab] = useState<"pending" | "all" | "approved" | "rejected">("pending");
+  // "yyyy-MM", defaults to the current month — mirrors the owner's month
+  // filter so employees can browse their own history by month too.
+  const [historyMonth, setHistoryMonth] = useState<string>(() => format(new Date(), "yyyy-MM"));
   const [leaveLimit, setLeaveLimit] = useState<number>(DEFAULT_LEAVE_LIMIT);
 
   // ── Reapproval state ──────────────────────────────────────────
@@ -651,9 +1015,10 @@ const EmployeeView = () => {
   const [reReason, setReReason] = useState("");
   const [reSubmitting, setReSubmitting] = useState(false);
   const [cancelingId, setCancelingId] = useState<string | number | null>(null);
-  
+
   const initialLoadDoneRef = useRef(false);
   const loadingLockRef = useRef(false);
+  const modalCloseButtonRef = useRef<HTMLButtonElement>(null);
 
   // ── Load leaves ──────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -682,7 +1047,7 @@ const EmployeeView = () => {
     }
   }, [load]);
 
-  // ── Leave limit (as before) ─────────────────────────────────
+  // ── Leave limit ─────────────────────────────────────────────
   const fetchLeaveLimit = useCallback(async () => {
     if (!name) return;
     try {
@@ -713,7 +1078,7 @@ const EmployeeView = () => {
     };
   }, [fetchLeaveLimit]);
 
-  // ── Form helpers (unchanged) ────────────────────────────────
+  // ── Form helpers ─────────────────────────────────────────────
   const resetForm = () => {
     setFromDate("");
     setToDate("");
@@ -743,7 +1108,7 @@ const EmployeeView = () => {
     e.preventDefault();
     const validationError = validateForm();
     if (validationError) {
-      toast({ title: "Validation Error", description: validationError, variant: "destructive" });
+      toast({ title: "Validation error", description: validationError, variant: "destructive" });
       return;
     }
     setSubmitting(true);
@@ -754,7 +1119,7 @@ const EmployeeView = () => {
     else if (dateMode === "half") days = 0.5;
     else days = 1;
     try {
-      const { data } = await api.post<Leave>("/leaves/request", {
+      await api.post<Leave>("/leaves/request", {
         employeeName: name,
         leaveType,
         fromDate,
@@ -765,25 +1130,27 @@ const EmployeeView = () => {
         reason: reason.trim(),
       });
       toast({
-        title: "Successfully Applied for Leave",
+        title: "Leave request submitted",
         description: "Your leave request has been submitted successfully.",
         className: "border-green-500 bg-green-500 text-white animate-success-bounce",
       });
       resetForm();
       await load();
     } catch (err) {
-      toast({ title: "Failed to apply", description: getErrorMessage(err) || "An unexpected error occurred.", variant: "destructive" });
+      toast({
+        title: "Couldn't submit request",
+        description: getErrorMessage(err) || "An unexpected error occurred.",
+        variant: "destructive",
+      });
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ── Reapproval handlers (unchanged) ─────────────────────────
+  // ── Reapproval handlers ─────────────────────────────────────
   const openReapproval = (l: Leave) => {
     setReapprovalTarget(l);
-    const mode =
-      l.dateType === "HALF_DAY" ? "half" :
-      l.dateType === "RANGE" ? "range" : "single";
+    const mode = l.dateType === "HALF_DAY" ? "half" : l.dateType === "RANGE" ? "range" : "single";
     setReDateMode(mode as "single" | "range" | "half");
     setReHalfSession((l.halfSession as "FIRST_HALF" | "SECOND_HALF") || "FIRST_HALF");
     setReFromDate(l.fromDate ? l.fromDate.slice(0, 10) : "");
@@ -795,6 +1162,19 @@ const EmployeeView = () => {
     if (reSubmitting) return;
     setReapprovalTarget(null);
   };
+
+  // Close the reapproval modal on Escape and move focus to the close button
+  // when it opens, for a properly accessible dialog experience.
+  useEffect(() => {
+    if (!reapprovalTarget) return;
+    modalCloseButtonRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeReapproval();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reapprovalTarget]);
 
   const validateReapproval = (): string | null => {
     if (!reFromDate) return "Please select a date.";
@@ -814,7 +1194,7 @@ const EmployeeView = () => {
     if (!reapprovalTarget) return;
     const validationError = validateReapproval();
     if (validationError) {
-      toast({ title: "Validation Error", description: validationError, variant: "destructive" });
+      toast({ title: "Validation error", description: validationError, variant: "destructive" });
       return;
     }
     setReSubmitting(true);
@@ -825,7 +1205,7 @@ const EmployeeView = () => {
     else if (reDateMode === "half") newDays = 0.5;
     else newDays = 1;
     try {
-      const { data } = await api.post<Leave>(`/leaves/${reapprovalTarget.id}/reapproval`, {
+      await api.post<Leave>(`/leaves/${reapprovalTarget.id}/reapproval`, {
         fromDate: reFromDate,
         toDate: effectiveToDate,
         dateType: newDateType,
@@ -835,14 +1215,18 @@ const EmployeeView = () => {
         reason: reReason.trim(),
       });
       toast({
-        title: "Change Requested",
+        title: "Change requested",
         description: "Your reapproval request has been sent for the owner's review.",
         className: "border-green-500 bg-green-500 text-white animate-success-bounce",
       });
       setReapprovalTarget(null);
       await load();
     } catch (err) {
-      toast({ title: "Failed to request change", description: getErrorMessage(err) || "An unexpected error occurred.", variant: "destructive" });
+      toast({
+        title: "Couldn't request change",
+        description: getErrorMessage(err) || "An unexpected error occurred.",
+        variant: "destructive",
+      });
     } finally {
       setReSubmitting(false);
     }
@@ -852,59 +1236,68 @@ const EmployeeView = () => {
     setCancelingId(l.id);
     try {
       await api.delete(`/leaves/${l.id}/reapproval`);
-      toast({ title: "Request Withdrawn", description: "Your reapproval request has been cancelled." });
+      toast({ title: "Request withdrawn", description: "Your reapproval request has been cancelled." });
       await load();
     } catch (err) {
-      toast({ title: "Failed to cancel", description: getErrorMessage(err) || "An unexpected error occurred.", variant: "destructive" });
+      toast({
+        title: "Couldn't cancel request",
+        description: getErrorMessage(err) || "An unexpected error occurred.",
+        variant: "destructive",
+      });
     } finally {
       setCancelingId(null);
     }
   };
 
+  // ── Leaves scoped to the selected month ───────────────────────
+  const monthFilteredLeaves = leaves.filter((l) => l.fromDate?.slice(0, 7) === historyMonth);
+
   // ── Counts for tab badges ────────────────────────────────────
-  const pendingCount = leaves.filter((l) => l.status?.toUpperCase() === "PENDING").length;
-  const allCount = leaves.length;
-  const approvedCount = leaves.filter((l) => l.status?.toUpperCase() === "APPROVED").length;
-  const rejectedCount = leaves.filter((l) => l.status?.toUpperCase() === "REJECTED").length;
-  const reapprovalCount = leaves.filter((l) => l.status?.toUpperCase() === "REAPPROVAL_PENDING").length;
+  const pendingCount = monthFilteredLeaves.filter((l) => l.status?.toUpperCase() === "PENDING").length;
+  const allCount = monthFilteredLeaves.length;
+  const approvedCount = monthFilteredLeaves.filter((l) => l.status?.toUpperCase() === "APPROVED").length;
+  const rejectedCount = monthFilteredLeaves.filter((l) => l.status?.toUpperCase() === "REJECTED").length;
+  const reapprovalCount = monthFilteredLeaves.filter((l) => l.status?.toUpperCase() === "REAPPROVAL_PENDING").length;
 
   // ── Filtered leaves based on selected tab ────────────────────
   const getFilteredLeaves = () => {
     switch (historyTab) {
       case "pending":
-        return leaves.filter((l) => l.status?.toUpperCase() === "PENDING");
+        return monthFilteredLeaves.filter((l) => l.status?.toUpperCase() === "PENDING");
       case "approved":
-        return leaves.filter((l) => l.status?.toUpperCase() === "APPROVED");
+        return monthFilteredLeaves.filter((l) => l.status?.toUpperCase() === "APPROVED");
       case "rejected":
-        return leaves.filter((l) => l.status?.toUpperCase() === "REJECTED");
+        return monthFilteredLeaves.filter((l) => l.status?.toUpperCase() === "REJECTED");
       case "all":
       default:
-        return leaves;
+        return monthFilteredLeaves;
     }
   };
   const filteredLeaves = getFilteredLeaves();
 
+  const durationLabel =
+    fromDate && toDate ? `${calcDays(fromDate, toDate)} day${calcDays(fromDate, toDate) !== 1 ? "s" : ""}` : null;
+
   // ── Render ────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* APPLY FORM – unchanged */}
-      <section className="rounded-xl border border-border bg-card p-4 md:p-6 shadow-sm card-hover overflow-visible animate-fade-in-up">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="p-1.5 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg">
-            <CalendarCheck2 className="h-4 w-4 text-white" />
+      {/* APPLY FORM */}
+      <section className="animate-fade-in-up card-hover overflow-visible rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <div className="rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 p-1.5">
+            <CalendarCheck2 className="h-4 w-4 text-white" aria-hidden="true" />
           </div>
-          <h2 className="text-base font-semibold">Apply for Leave</h2>
+          <h2 className="text-base font-semibold">Apply for leave</h2>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2 overflow-visible">
-          {/* ... form fields (unchanged) ... */}
+        <form onSubmit={handleSubmit} className="grid gap-4 overflow-visible sm:grid-cols-2" noValidate>
           <div className="space-y-2 overflow-visible">
-            <Label>Leave Type</Label>
+            <Label htmlFor="leave-type">Leave type</Label>
             <Select value={leaveType} onValueChange={setLeaveType}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="leave-type" className="w-full">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="overflow-visible z-50">
+              <SelectContent className="z-50 overflow-visible">
                 <SelectItem value="CASUAL">
                   <LeaveOption title="Casual Leave (CL)" description={`Short personal leave\nFor urgent or unexpected work`} />
                 </SelectItem>
@@ -919,23 +1312,26 @@ const EmployeeView = () => {
           </div>
 
           <div className="space-y-2 overflow-visible">
-            <Label>Date Type</Label>
+            <Label htmlFor="date-type">Date type</Label>
             <Select value={dateMode} onValueChange={(val) => setDateMode(val as "single" | "range" | "half")}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent className="overflow-visible z-50">
-                <SelectItem value="single">Single Date</SelectItem>
-                <SelectItem value="range">Date Range</SelectItem>
-                <SelectItem value="half">Half Day</SelectItem>
+              <SelectTrigger id="date-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="z-50 overflow-visible">
+                <SelectItem value="single">Single date</SelectItem>
+                <SelectItem value="range">Date range</SelectItem>
+                <SelectItem value="half">Half day</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="from">{dateMode === "range" ? "From Date" : "Date"}</Label>
+            <Label htmlFor="from">{dateMode === "range" ? "From date" : "Date"}</Label>
             <Input
               id="from"
               type="date"
               required
+              min={getMinDate()}
               value={fromDate}
               onChange={(e) => {
                 setFromDate(e.target.value);
@@ -948,17 +1344,19 @@ const EmployeeView = () => {
 
           {dateMode === "range" && (
             <div className="space-y-2">
-              <Label htmlFor="to">To Date</Label>
+              <Label htmlFor="to">To date</Label>
               <Input
                 id="to"
                 type="date"
                 required
+                min={fromDate || getMinDate()}
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
+                aria-describedby={durationLabel ? "duration-hint" : undefined}
               />
-              {fromDate && toDate && (
-                <p className="text-xs text-muted-foreground">
-                  Duration: {calcDays(fromDate, toDate)} day{calcDays(fromDate, toDate) !== 1 ? "s" : ""}
+              {durationLabel && (
+                <p id="duration-hint" className="text-xs text-muted-foreground">
+                  Duration: {durationLabel}
                 </p>
               )}
             </div>
@@ -966,35 +1364,48 @@ const EmployeeView = () => {
 
           {dateMode === "half" && (
             <div className="space-y-2">
-              <Label>Half Day Session</Label>
+              <Label htmlFor="half-session">Half day session</Label>
               <Select value={halfSession} onValueChange={(val) => setHalfSession(val as "FIRST_HALF" | "SECOND_HALF")}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="half-session">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIRST_HALF">First Half (Morning)</SelectItem>
-                  <SelectItem value="SECOND_HALF">Second Half (Afternoon)</SelectItem>
+                  <SelectItem value="FIRST_HALF">First half (morning)</SelectItem>
+                  <SelectItem value="SECOND_HALF">Second half (afternoon)</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">Duration: 0.5 day</p>
             </div>
           )}
 
-          <div className="space-y-2 md:col-span-2">
+          <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="reason">Reason</Label>
             <Textarea
               id="reason"
               required
               rows={3}
               maxLength={500}
+              minLength={10}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Please provide a detailed reason for your leave request..."
+              aria-describedby="reason-count"
             />
-            <p className="text-xs text-muted-foreground text-right">{reason.length}/500 characters</p>
+            <p id="reason-count" className="text-right text-xs text-muted-foreground">
+              {reason.length}/500 characters
+            </p>
           </div>
 
-          <div className="md:col-span-2 flex gap-2">
+          <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row">
             <Button type="submit" disabled={submitting} className="btn-hover-scale">
-              {submitting ? (<><Spinner className="text-primary-foreground mr-2" />Submitting...</>) : "Submit Request"}
+              {submitting ? (
+                <>
+                  <Spinner className="mr-2 text-primary-foreground" />
+                  Submitting...
+                </>
+              ) : (
+                "Submit request"
+              )}
             </Button>
             <Button type="button" variant="outline" onClick={resetForm} disabled={submitting} className="btn-hover-scale">
               Reset
@@ -1004,126 +1415,79 @@ const EmployeeView = () => {
       </section>
 
       {/* LEAVE HISTORY */}
-      <section className="rounded-xl border border-border bg-card shadow-sm card-hover overflow-hidden animate-slide-right">
-
+      <section className="animate-slide-right card-hover overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         {/* Header */}
-        <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 md:px-6">
+        <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 sm:px-6">
           <div>
-            <h2 className="text-base font-semibold leading-tight">Leave History</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {leaves.length} total request{leaves.length !== 1 ? "s" : ""}
+            <h2 className="text-base font-semibold leading-tight">Leave history</h2>
+            <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+              <span>
+                {monthFilteredLeaves.length} request{monthFilteredLeaves.length !== 1 ? "s" : ""} in {format(new Date(`${historyMonth}-01`), "MMMM yyyy")}
+              </span>
               {pendingCount > 0 && (
-                <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+                <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
                   {pendingCount} pending
                 </span>
               )}
               {approvedCount > 0 && (
-                <span className="ml-1.5 inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
                   {approvedCount} approved
                 </span>
               )}
               {rejectedCount > 0 && (
-                <span className="ml-1.5 inline-flex items-center rounded-full bg-rose-100 px-1.5 py-0.5 text-[11px] font-medium text-rose-700">
+                <span className="inline-flex items-center rounded-full bg-rose-100 px-1.5 py-0.5 text-[11px] font-medium text-rose-700 dark:bg-rose-950/50 dark:text-rose-400">
                   {rejectedCount} rejected
                 </span>
               )}
               {reapprovalCount > 0 && (
-                <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+                <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
                   {reapprovalCount} reapproval pending
                 </span>
               )}
             </p>
           </div>
 
-          {/* ── NEW: Four filter tabs ── */}
-          <div className="inline-flex w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
-  <button
-    type="button"
-    onClick={() => setHistoryTab("pending")}
-    className={`flex flex-1 min-w-[60px] items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
-      historyTab === "pending" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-    }`}
-  >
-    <CalendarClock className="h-3.5 w-3.5" />
-    Pending
-    {pendingCount > 0 && (
-      <span className="ml-0.5 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
-        {pendingCount}
-      </span>
-    )}
-  </button>
-  <button
-    type="button"
-    onClick={() => setHistoryTab("all")}
-    className={`flex flex-1 min-w-[60px] items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
-      historyTab === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-    }`}
-  >
-    <CalendarRange className="h-3.5 w-3.5" />
-    All
-    {allCount > 0 && (
-      <span className="ml-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
-        {allCount}
-      </span>
-    )}
-  </button>
-  <button
-    type="button"
-    onClick={() => setHistoryTab("approved")}
-    className={`flex flex-1 min-w-[60px] items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
-      historyTab === "approved" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-    }`}
-  >
-    <CalendarCheck2 className="h-3.5 w-3.5" />
-    Approved
-    {approvedCount > 0 && (
-      <span className="ml-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
-        {approvedCount}
-      </span>
-    )}
-  </button>
-  <button
-    type="button"
-    onClick={() => setHistoryTab("rejected")}
-    className={`flex flex-1 min-w-[60px] items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
-      historyTab === "rejected" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-    }`}
-  >
-    <CalendarX2 className="h-3.5 w-3.5" />
-    Rejected
-    {rejectedCount > 0 && (
-      <span className="ml-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
-        {rejectedCount}
-      </span>
-    )}
-  </button>
-</div>
+          {/* Month picker */}
+          <div className="w-full max-w-[180px] space-y-1.5">
+            <Label htmlFor="employee-history-month" className="text-xs">Month</Label>
+            <Input
+              id="employee-history-month"
+              type="month"
+              value={historyMonth}
+              onChange={(e) => setHistoryMonth(e.target.value)}
+              className="h-9"
+            />
+          </div>
+
+          {/* Filter tabs */}
+          <div role="tablist" aria-label="Filter leave history" className="inline-flex w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
+            <TabButton active={historyTab === "pending"} onClick={() => setHistoryTab("pending")} icon={CalendarClock} label="Pending" count={pendingCount} controls={historyPanelId} />
+            <TabButton active={historyTab === "all"} onClick={() => setHistoryTab("all")} icon={CalendarRange} label="All" count={allCount} controls={historyPanelId} />
+            <TabButton active={historyTab === "approved"} onClick={() => setHistoryTab("approved")} icon={CalendarCheck2} label="Approved" count={approvedCount} controls={historyPanelId} />
+            <TabButton active={historyTab === "rejected"} onClick={() => setHistoryTab("rejected")} icon={CalendarX2} label="Rejected" count={rejectedCount} controls={historyPanelId} />
+          </div>
         </div>
 
         {/* Body */}
-        <div className="p-4 md:p-6">
+        <div id={historyPanelId} role="tabpanel" className="p-4 sm:p-6">
           {loading ? (
-            <div className="flex justify-center py-8"><FullSpinner /></div>
+            <div className="flex justify-center py-8">
+              <FullSpinner />
+            </div>
           ) : error ? (
-            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive animate-fade-in-up">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4" />
-                <span>{error}</span>
-              </div>
-              <button onClick={load} className="mt-2 flex items-center gap-1 text-xs text-destructive hover:underline">
-                <RefreshCw className="h-3 w-3" />Try again
-              </button>
-            </div>
+            <ErrorState message={error} onRetry={load} />
           ) : filteredLeaves.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground animate-fade-in-up">
-              <CalendarX2 className="h-8 w-8 opacity-30" />
-              <p className="text-sm">
-                {historyTab === "pending" && "No pending leave requests."}
-                {historyTab === "all" && "You haven't applied for any leave yet."}
-                {historyTab === "approved" && "No approved leaves yet."}
-                {historyTab === "rejected" && "No rejected leaves."}
-              </p>
-            </div>
+            <EmptyState
+              message={
+                historyTab === "pending"
+                  ? `No pending leave requests in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                  : historyTab === "all"
+                  ? `No leave requests in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                  : historyTab === "approved"
+                  ? `No approved leaves in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                  : `No rejected leaves in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+              }
+            />
           ) : (
             <AppliedLeavesTable
               leaves={filteredLeaves}
@@ -1135,28 +1499,35 @@ const EmployeeView = () => {
         </div>
       </section>
 
-      {/* ── Reapproval Modal (unchanged) ────────────────────────── */}
+      {/* Reapproval Modal */}
       {reapprovalTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 animate-fade-slide-down"
+          className="animate-fade-slide-down fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
           onClick={closeReapproval}
+          role="presentation"
         >
           <div
-            className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl max-h-[85vh] overflow-y-auto custom-scrollbar"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reapproval-title"
+            className="custom-scrollbar max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold">Request a Change</h3>
+                <h3 id="reapproval-title" className="text-base font-semibold">
+                  Request a change
+                </h3>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   Propose new details for your approved leave. It'll go back to your manager for reapproval.
                 </p>
               </div>
               <button
+                ref={modalCloseButtonRef}
                 type="button"
                 onClick={closeReapproval}
-                className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                aria-label="Close"
+                className={`rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground ${FOCUS_RING}`}
+                aria-label="Close dialog"
               >
                 ✕
               </button>
@@ -1172,21 +1543,23 @@ const EmployeeView = () => {
               · {formatDateType(reapprovalTarget.dateType, reapprovalTarget.halfSession)}
             </div>
 
-            <form onSubmit={submitReapproval} className="grid gap-4 md:grid-cols-2">
+            <form onSubmit={submitReapproval} className="grid gap-4 sm:grid-cols-2" noValidate>
               <div className="space-y-2">
-                <Label>Date Type</Label>
+                <Label htmlFor="re-date-type">Date type</Label>
                 <Select value={reDateMode} onValueChange={(val) => setReDateMode(val as "single" | "range" | "half")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="re-date-type">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="single">Single Date</SelectItem>
-                    <SelectItem value="range">Date Range</SelectItem>
-                    <SelectItem value="half">Half Day</SelectItem>
+                    <SelectItem value="single">Single date</SelectItem>
+                    <SelectItem value="range">Date range</SelectItem>
+                    <SelectItem value="half">Half day</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="re-from">{reDateMode === "range" ? "New From Date" : "New Date"}</Label>
+                <Label htmlFor="re-from">{reDateMode === "range" ? "New from date" : "New date"}</Label>
                 <Input
                   id="re-from"
                   type="date"
@@ -1203,14 +1576,8 @@ const EmployeeView = () => {
 
               {reDateMode === "range" && (
                 <div className="space-y-2">
-                  <Label htmlFor="re-to">New To Date</Label>
-                  <Input
-                    id="re-to"
-                    type="date"
-                    required
-                    value={reToDate}
-                    onChange={(e) => setReToDate(e.target.value)}
-                  />
+                  <Label htmlFor="re-to">New to date</Label>
+                  <Input id="re-to" type="date" required min={reFromDate} value={reToDate} onChange={(e) => setReToDate(e.target.value)} />
                   {reFromDate && reToDate && (
                     <p className="text-xs text-muted-foreground">
                       Duration: {calcDays(reFromDate, reToDate)} day{calcDays(reFromDate, reToDate) !== 1 ? "s" : ""}
@@ -1221,34 +1588,47 @@ const EmployeeView = () => {
 
               {reDateMode === "half" && (
                 <div className="space-y-2">
-                  <Label>Half Day Session</Label>
+                  <Label htmlFor="re-half-session">Half day session</Label>
                   <Select value={reHalfSession} onValueChange={(val) => setReHalfSession(val as "FIRST_HALF" | "SECOND_HALF")}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="re-half-session">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="FIRST_HALF">First Half (Morning)</SelectItem>
-                      <SelectItem value="SECOND_HALF">Second Half (Afternoon)</SelectItem>
+                      <SelectItem value="FIRST_HALF">First half (morning)</SelectItem>
+                      <SelectItem value="SECOND_HALF">Second half (afternoon)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               )}
 
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="re-reason">Reason for the change</Label>
                 <Textarea
                   id="re-reason"
                   required
                   rows={3}
                   maxLength={500}
+                  minLength={10}
                   value={reReason}
                   onChange={(e) => setReReason(e.target.value)}
                   placeholder="Explain why you need to change your approved leave..."
+                  aria-describedby="re-reason-count"
                 />
-                <p className="text-xs text-muted-foreground text-right">{reReason.length}/500 characters</p>
+                <p id="re-reason-count" className="text-right text-xs text-muted-foreground">
+                  {reReason.length}/500 characters
+                </p>
               </div>
 
-              <div className="md:col-span-2 flex gap-2">
+              <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row">
                 <Button type="submit" disabled={reSubmitting} className="btn-hover-scale">
-                  {reSubmitting ? (<><Spinner className="text-primary-foreground mr-2" />Submitting...</>) : "Submit for Reapproval"}
+                  {reSubmitting ? (
+                    <>
+                      <Spinner className="mr-2 text-primary-foreground" />
+                      Submitting...
+                    </>
+                  ) : (
+                    "Submit for reapproval"
+                  )}
                 </Button>
                 <Button type="button" variant="outline" onClick={closeReapproval} disabled={reSubmitting} className="btn-hover-scale">
                   Cancel
@@ -1267,17 +1647,23 @@ const EmployeeView = () => {
 ========================================================= */
 
 const OwnerView = () => {
-  const [ownerTab, setOwnerTab] = useState<"pending" | "employee">("pending");
+  const [ownerTab, setOwnerTab] = useState<"pending" | "summary" | "employee">("pending");
+  const ownerPanelId = useId();
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | number | null>(null);
+
   const [employeeNames, setEmployeeNames] = useState<string[]>([]);
   const [namesLoading, setNamesLoading] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string>("");
   const [empLeaves, setEmpLeaves] = useState<Leave[]>([]);
   const [empLoading, setEmpLoading] = useState(false);
   const [empError, setEmpError] = useState<string | null>(null);
+  // Pending / All / Approved / Rejected sub-filter within the selected
+  // employee's history — mirrors the employee's own history tabs, but
+  // scoped to the one employee the owner picked.
+  const [empHistoryTab, setEmpHistoryTab] = useState<"pending" | "all" | "approved" | "rejected">("all");
   // Selected employee's annual leave limit (24 vs 18 days, based on date
   // of joining), fetched alongside their leave history.
   const [empLeaveLimit, setEmpLeaveLimit] = useState<number>(DEFAULT_LEAVE_LIMIT);
@@ -1287,19 +1673,27 @@ const OwnerView = () => {
   // so an owner can see how many leaves were approved/rejected/pending for
   // this employee in a specific month.
   const [empMonth, setEmpMonth] = useState<string>(() => format(new Date(), "yyyy-MM"));
-  const [empMonthCounts, setEmpMonthCounts] = useState<{ approved: number; rejected: number; pending: number; approvedDays: number } | null>(null);
+  const [empMonthCounts, setEmpMonthCounts] = useState<{
+    approved: number;
+    rejected: number;
+    pending: number;
+    approvedDays: number;
+  } | null>(null);
   const [empMonthLoading, setEmpMonthLoading] = useState(false);
-  
-  // ✅ Add refs to prevent double loading
+
+  // ── All-employees summary tab ─────────────────────────────────────────
+  const [summaries, setSummaries] = useState<EmployeeLeaveSummary[]>([]);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
   const initialLoadDoneRef = useRef(false);
   const loadingLockRef = useRef(false);
   const empLoadingLockRef = useRef(false);
   const namesLoadedRef = useRef(false);
+  const summaryLoadingLockRef = useRef(false);
 
-  // ✅ Fixed: Remove loading from dependencies
   const load = useCallback(async () => {
     if (loadingLockRef.current) return;
-    
     loadingLockRef.current = true;
     setLoading(true);
     setError(null);
@@ -1312,21 +1706,18 @@ const OwnerView = () => {
       setLoading(false);
       loadingLockRef.current = false;
     }
-  }, []); // ✅ Empty deps
+  }, []);
 
-  // ✅ Fixed: Run only once on mount
-  useEffect(() => { 
+  useEffect(() => {
     if (!initialLoadDoneRef.current) {
       initialLoadDoneRef.current = true;
       load();
     }
   }, [load]);
 
-  // ✅ Fixed: Remove employeeNames from dependencies
   const loadEmployeeNames = useCallback(async () => {
     if (namesLoadedRef.current) return;
     if (empLoadingLockRef.current) return;
-    
     empLoadingLockRef.current = true;
     setNamesLoading(true);
     try {
@@ -1335,35 +1726,61 @@ const OwnerView = () => {
       namesLoadedRef.current = true;
     } catch {
       setEmployeeNames([]);
-      toast({ title: "Failed to load employees", description: "Could not load employee list.", variant: "destructive" });
+      toast({ title: "Couldn't load employees", description: "The employee list failed to load.", variant: "destructive" });
     } finally {
       setNamesLoading(false);
       empLoadingLockRef.current = false;
     }
-  }, []); // ✅ Empty deps
+  }, []);
 
-  // ✅ Fixed: Only load when tab changes to employee
   useEffect(() => {
-    if (ownerTab === "employee" && !namesLoadedRef.current) {
+    if ((ownerTab === "employee" || ownerTab === "summary") && !namesLoadedRef.current) {
       loadEmployeeNames();
     }
   }, [ownerTab, loadEmployeeNames]);
 
-  // ✅ Fixed: Remove empLoading from dependencies
+  const loadSummaries = useCallback(async () => {
+    if (summaryLoadingLockRef.current) return;
+    summaryLoadingLockRef.current = true;
+    setSummaryLoading(true);
+    setSummaryError(null);
+    try {
+      const { data } = await api.get<EmployeeLeaveSummary[]>("/leaves/summary", {
+        headers: { "Cache-Control": "no-cache" },
+      });
+      setSummaries(data);
+    } catch (err) {
+      setSummaryError(getErrorMessage(err));
+    } finally {
+      setSummaryLoading(false);
+      summaryLoadingLockRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (ownerTab === "summary") {
+      loadSummaries();
+    }
+  }, [ownerTab, loadSummaries]);
+
+  // Jumping from the "All employees" summary straight to an employee's full history.
+  const viewEmployeeFromSummary = (empName: string) => {
+    setOwnerTab("employee");
+    loadEmployeeNames();
+    handleEmployeeSelect(empName);
+  };
+
   const loadEmpLeaves = useCallback(async (empName: string) => {
     if (!empName) return;
     if (empLoadingLockRef.current) return;
-    
     empLoadingLockRef.current = true;
     setEmpLoading(true);
     setEmpError(null);
     setEmpLeaves([]);
     try {
       const [{ data }, limitRes] = await Promise.all([
-        api.get<Leave[]>("/leaves/employee-details", { params: { employeeName: empName } }),
-        api
-          .get<{ leaveLimit: number }>("/leaves/leave-limit", { params: { employeeName: empName } })
-          .catch(() => null), // non-fatal — fall back to the default limit
+        api.get<Leave[]>("/leaves/employee", { params: { employeeName: empName } }),
+        api.get<{ leaveLimit: number }>("/leaves/leave-limit", { params: { employeeName: empName } }).catch(() => null), // non-fatal — fall back to the default limit
       ]);
       setEmpLeaves(data);
       setEmpLeaveLimit(limitRes ? limitRes.data.leaveLimit : DEFAULT_LEAVE_LIMIT);
@@ -1373,10 +1790,11 @@ const OwnerView = () => {
       setEmpLoading(false);
       empLoadingLockRef.current = false;
     }
-  }, []); // ✅ Empty deps
+  }, []);
 
   const handleEmployeeSelect = (name: string) => {
     setSelectedEmployee(name);
+    setEmpHistoryTab("all");
     loadEmpLeaves(name);
   };
 
@@ -1422,11 +1840,14 @@ const OwnerView = () => {
     try {
       await api.put(`/leaves/${id}/${action}`);
       toast({
-        title: action === "APPROVED" ? "Leave Approved" : "Leave Rejected",
-        description: action === "APPROVED" ? "The leave request has been approved successfully." : "The leave request has been rejected.",
-        className: action === "APPROVED" ? "border-green-500 bg-green-500 text-white animate-success-bounce" : "border-red-500 bg-red-500 text-white",
+        title: action === "APPROVED" ? "Leave approved" : "Leave rejected",
+        description:
+          action === "APPROVED" ? "The leave request has been approved successfully." : "The leave request has been rejected.",
+        className:
+          action === "APPROVED" ? "border-green-500 bg-green-500 text-white animate-success-bounce" : "border-red-500 bg-red-500 text-white",
       });
       await load();
+      if (selectedEmployee) await loadEmpLeaves(selectedEmployee);
     } catch (err) {
       toast({ title: "Action failed", description: getErrorMessage(err) || "An unexpected error occurred.", variant: "destructive" });
     } finally {
@@ -1434,358 +1855,242 @@ const OwnerView = () => {
     }
   };
 
-  return (
-    <section className="rounded-xl border border-border bg-card shadow-sm card-hover overflow-hidden animate-fade-in-up">
+  const currentYear = new Date().getFullYear();
+  const empTakenDays = empLeaves
+    .filter((l) => l.status?.toUpperCase() === "APPROVED" && new Date(l.fromDate).getFullYear() === currentYear)
+    .reduce((sum, l) => sum + (l.days || 0), 0);
+  const empIsOver = empTakenDays > empLeaveLimit;
+  const empRemaining = empLeaveLimit - empTakenDays;
 
+  const sortedEmpLeaves = [...empLeaves]
+    .filter((l) => l.fromDate?.slice(0, 7) === empMonth)
+    .sort((a, b) => {
+      try {
+        return new Date(b.fromDate).getTime() - new Date(a.fromDate).getTime();
+      } catch {
+        return 0;
+      }
+    });
+
+  // ── Pending / All / Approved / Rejected counts + filter, scoped to the
+  // selected employee's month-filtered records ──
+  const empPendingCount = sortedEmpLeaves.filter((l) => l.status?.toUpperCase() === "PENDING" || l.status?.toUpperCase() === "REAPPROVAL_PENDING").length;
+  const empApprovedTabCount = sortedEmpLeaves.filter((l) => l.status?.toUpperCase() === "APPROVED").length;
+  const empRejectedTabCount = sortedEmpLeaves.filter((l) => l.status?.toUpperCase() === "REJECTED").length;
+  const filteredEmpLeaves = sortedEmpLeaves.filter((l) => {
+    const status = l.status?.toUpperCase();
+    if (empHistoryTab === "pending") return status === "PENDING" || status === "REAPPROVAL_PENDING";
+    if (empHistoryTab === "approved") return status === "APPROVED";
+    if (empHistoryTab === "rejected") return status === "REJECTED";
+    return true;
+  });
+
+  return (
+    <section className="animate-fade-in-up card-hover overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       {/* Header */}
-      <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 md:px-6">
+      <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 sm:px-6">
         <div>
-          <h2 className="text-base font-semibold leading-tight">Leave Management</h2>
+          <h2 className="text-base font-semibold leading-tight">Leave management</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {ownerTab === "pending"
               ? `${leaves.length} pending request${leaves.length !== 1 ? "s" : ""}`
+              : ownerTab === "summary"
+              ? "Leave days used and remaining for every employee this year"
               : selectedEmployee
               ? `Showing history for ${selectedEmployee}`
               : "Select an employee to view their leave history"}
           </p>
         </div>
 
-        {/* Tab toggle — full width on mobile */}
-        <div className="inline-flex w-full sm:w-auto items-center rounded-lg border border-border bg-muted/40 p-1">
-          <button
-            type="button"
-            onClick={() => setOwnerTab("pending")}
-            className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium tab-transition ${
-              ownerTab === "pending" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Pending
-            {leaves.length > 0 && (
-              <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
-                ownerTab === "pending" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-              }`}>
-                {leaves.length}
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setOwnerTab("employee")}
-            className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium tab-transition ${
-              ownerTab === "employee" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Employee History
-          </button>
+        {/* Tab toggle */}
+        <div role="tablist" aria-label="Leave management sections" className="inline-flex w-full items-center rounded-lg border border-border bg-muted/40 p-1 sm:w-auto">
+          <TabButton active={ownerTab === "pending"} onClick={() => setOwnerTab("pending")} icon={CalendarClock} label="Pending" count={leaves.length} controls={ownerPanelId} />
+          <TabButton active={ownerTab === "summary"} onClick={() => setOwnerTab("summary")} icon={Users} label="All employees" controls={ownerPanelId} />
+          <TabButton active={ownerTab === "employee"} onClick={() => setOwnerTab("employee")} icon={Users} label="Employee history" controls={ownerPanelId} />
         </div>
       </div>
 
-      <div className="p-4 md:p-6">
-
+      <div id={ownerPanelId} role="tabpanel" className="p-4 sm:p-6">
         {/* ══ PENDING TAB ══ */}
         {ownerTab === "pending" && (
           <>
             {loading ? (
-              <div className="flex justify-center py-8"><FullSpinner /></div>
+              <div className="flex justify-center py-8">
+                <FullSpinner />
+              </div>
             ) : error ? (
-              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive animate-fade-in-up">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4" /><span>{error}</span>
-                </div>
-                <button onClick={load} className="mt-2 flex items-center gap-1 text-xs text-destructive hover:underline">
-                  <RefreshCw className="h-3 w-3" />Try again
-                </button>
-              </div>
+              <ErrorState message={error} onRetry={load} />
             ) : leaves.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground animate-fade-in-up">
-            <CalendarCheck2 className="h-8 w-8 opacity-30" style={{ color: 'var(--foreground)' }} /> 
-                <p className="text-sm">No pending leave requests.</p>
-              </div>
+              <EmptyState icon={CalendarCheck2} message="No pending leave requests." />
             ) : (
               <div className="space-y-3">
-                {leaves.map((l, index) => {
-                  const colors = LEAVE_TYPE_COLORS[l.leaveType] ?? { bg: "bg-muted", text: "text-foreground", border: "border-border" };
-                  const isReapproval = l.status?.toUpperCase() === "REAPPROVAL_PENDING";
-                  return (
-                    <div
-                      key={l.id}
-                      className="rounded-xl border border-border/50 bg-card p-4 shadow-sm hover:shadow-md transition-shadow table-row-animate"
-                      style={{ animationDelay: `${index * 0.05}s` }}
-                    >
-                      {/* ── Row 1: avatar + name + type badge + days ── */}
-                      <div className="flex items-center gap-3 flex-wrap mb-2">
-                        <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 font-bold text-indigo-600 text-sm">
-                          {(l.employeeName || "?")[0].toUpperCase()}
-                        </div>
-                        <span className="font-semibold text-sm text-foreground">{l.employeeName || "—"}</span>
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border ${colors.bg} ${colors.text} ${colors.border}`}>
-                          {l.leaveType}
-                        </span>
-                        <SurplusBadge leave={l} />
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-foreground bg-muted rounded-lg px-2 py-0.5">
-                          <Clock3 className="h-3 w-3 text-muted-foreground" />
-                          {formatDurationBadge(l.days ?? calcDays(l.fromDate, l.toDate))}
-                        </span>
-                      </div>
-
-                      {/* ── Row 2: dates + reason ── */}
-                      <div className="mb-3 space-y-1 pl-0">
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
-                          <CalendarCheck2 className="h-3 w-3 flex-shrink-0" style={{ color: 'var(--foreground)' }} />
-                          {isReapproval && <span className="line-through opacity-60">{fmt(l.fromDate)}{l.fromDate !== l.toDate && <> → {fmt(l.toDate)}</>}</span>}
-                          {!isReapproval && (
-                            <>
-                              {fmt(l.fromDate)}
-                              {l.fromDate !== l.toDate && <><span>→</span>{fmt(l.toDate)}</>}
-                            </>
-                          )}
-                        </div>
-                        {l.reason && !isReapproval && (
-                          <p className="text-xs text-muted-foreground line-clamp-1" title={l.reason}>{l.reason}</p>
-                        )}
-                      </div>
-
-                      {/* ── Reapproval: show what the employee wants to change it to ── */}
-                      {isReapproval && (
-                        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                          <p className="mb-1.5 text-xs font-semibold text-amber-700">Requested change</p>
-                          <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-800 flex-wrap">
-                         <CalendarCheck2 className="h-3 w-3 flex-shrink-0" style={{ color: 'var(--foreground)' }} />
-                            {l.pendingFromDate === l.pendingToDate
-                              ? fmt(l.pendingFromDate || "")
-                              : <>{fmt(l.pendingFromDate || "")} <span>→</span> {fmt(l.pendingToDate || "")}</>}
-                            {l.pendingDateType && (
-                              <span className="font-normal text-amber-700">· {formatDateType(l.pendingDateType, l.pendingHalfSession)}</span>
-                            )}
-                          </div>
-                          {l.pendingReason && (
-                            <p className="mt-1 text-xs text-amber-700 line-clamp-2" title={l.pendingReason}>{l.pendingReason}</p>
-                          )}
-                        </div>
-                      )}
-
-                      {/* ── Row 3: status + action buttons ── */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <StatusBadge status={l.status} />
-                        {(l.status?.toUpperCase() === "PENDING" || isReapproval) && (
-                          <>
-                            <Button
-                              size="sm"
-                              onClick={() => act(l.id, "APPROVED")}
-                              disabled={actingId === l.id}
-                              className="btn-hover-scale h-7 text-xs flex-1 sm:flex-none"
-                            >
-                              {actingId === l.id ? <Spinner className="h-3 w-3 mr-1" /> : null}
-                              {isReapproval ? "Approve Change" : "Approve"}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => act(l.id, "REJECTED")}
-                              disabled={actingId === l.id}
-                              className="btn-hover-scale h-7 text-xs flex-1 sm:flex-none"
-                            >
-                              {actingId === l.id ? <Spinner className="h-3 w-3 mr-1" /> : null}
-                              {isReapproval ? "Reject Change" : "Reject"}
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                {leaves.map((l, index) => (
+                  <LeaveCard key={l.id} leave={l} index={index} showEmployee onApprove={(leave) => act(leave.id, "APPROVED")} onReject={(leave) => act(leave.id, "REJECTED")} actingId={actingId} />
+                ))}
               </div>
+            )}
+          </>
+        )}
+
+        {/* ══ ALL EMPLOYEES SUMMARY TAB ══ */}
+        {ownerTab === "summary" && (
+          <>
+            {summaryLoading ? (
+              <div className="flex justify-center py-8">
+                <FullSpinner />
+              </div>
+            ) : summaryError ? (
+              <ErrorState message={summaryError} onRetry={loadSummaries} />
+            ) : summaries.length === 0 ? (
+              <EmptyState icon={Users} message="No employees found." />
+            ) : (
+              <EmployeeSummaryTable summaries={summaries} onView={viewEmployeeFromSummary} />
             )}
           </>
         )}
 
         {/* ══ EMPLOYEE HISTORY TAB ══ */}
         {ownerTab === "employee" && (
-          <div className="space-y-5 animate-fade-in-up">
-            <div className="flex flex-col sm:flex-row gap-4">
+          <div className="animate-fade-in-up space-y-5">
+            <div className="flex flex-col gap-4 sm:flex-row">
               <div className="w-full max-w-xs space-y-2">
-                <label className="text-sm font-medium text-foreground">Select Employee</label>
+                <Label htmlFor="owner-employee-select">Select employee</Label>
                 <Select value={selectedEmployee} onValueChange={handleEmployeeSelect} disabled={namesLoading}>
-                  <SelectTrigger>
+                  <SelectTrigger id="owner-employee-select">
                     <SelectValue placeholder={namesLoading ? "Loading..." : "Choose an employee"} />
                   </SelectTrigger>
                   <SelectContent>
                     {employeeNames.map((n) => (
-                      <SelectItem key={n} value={n}>{n}</SelectItem>
+                      <SelectItem key={n} value={n}>
+                        {n}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="w-full max-w-[180px] space-y-2">
-                <label className="text-sm font-medium text-foreground">Month</label>
-                <Input
-                  type="month"
-                  value={empMonth}
-                  onChange={(e) => setEmpMonth(e.target.value)}
-                  className="h-9"
-                />
+                <Label htmlFor="owner-month-select">Month</Label>
+                <Input id="owner-month-select" type="month" value={empMonth} onChange={(e) => setEmpMonth(e.target.value)} className="h-9" />
               </div>
             </div>
 
             {!selectedEmployee ? (
-              <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
-                <CalendarCheck2 className="h-8 w-8 opacity-30" style={{ color: 'var(--foreground)' }} />
-                <p className="text-sm">Select an employee above to view their leave history.</p>
-              </div>
+              <EmptyState icon={CalendarCheck2} message="Select an employee above to view their leave history." />
             ) : empLoading ? (
-              <div className="flex justify-center py-8"><FullSpinner /></div>
+              <div className="flex justify-center py-8">
+                <FullSpinner />
+              </div>
             ) : empError ? (
-              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4" /><span>{empError}</span>
-                </div>
-                <button onClick={() => loadEmpLeaves(selectedEmployee)} className="mt-2 flex items-center gap-1 text-xs text-destructive hover:underline">
-                  <RefreshCw className="h-3 w-3" />Try again
-                </button>
-              </div>
+              <ErrorState message={empError} onRetry={() => loadEmpLeaves(selectedEmployee)} />
             ) : empLeaves.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
-                <CalendarX2 className="h-8 w-8 opacity-30" />
-                <p className="text-sm">No leave records found for {selectedEmployee}.</p>
-              </div>
-            ) : (() => {
-              const currentYear = new Date().getFullYear();
-              const empTakenDays = empLeaves
-                .filter((l) => l.status?.toUpperCase() === "APPROVED" && new Date(l.fromDate).getFullYear() === currentYear)
-                .reduce((sum, l) => sum + (l.days || 0), 0);
-              const empIsOver = empTakenDays > empLeaveLimit;
-              const empRemaining = empLeaveLimit - empTakenDays;
-
-              const sortedEmpLeaves = [...empLeaves]
-                .filter((l) => l.fromDate?.slice(0, 7) === empMonth)
-                .sort((a, b) => {
-                  try { return new Date(b.fromDate).getTime() - new Date(a.fromDate).getTime(); }
-                  catch { return 0; }
-                });
-
-              return (
-                <div className="space-y-4">
-                  {/* Summary banner */}
-                  <div
-                    className={`rounded-lg border px-4 py-3 ${empIsOver ? "border-red-300 bg-red-50" : "border-green-300 bg-green-50"}`}
-                    style={{ animation: empIsOver ? "empWarnPulse 1.8s ease-in-out infinite, empSlideIn 0.35s ease" : "empGoodPulse 2.5s ease-in-out infinite, empSlideIn 0.35s ease" }}
-                  >
-                    <div className="flex items-start justify-between gap-3 flex-wrap">
-                      <div className="flex items-start gap-3 min-w-0">
-                        <span className="relative flex h-3 w-3 shrink-0 mt-0.5">
-                          <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${empIsOver ? "bg-red-400" : "bg-green-400"}`} />
-                          <span className={`relative inline-flex h-3 w-3 rounded-full ${empIsOver ? "bg-red-500" : "bg-green-500"}`} />
-                        </span>
-                        <div className="min-w-0">
-                          <p className={`text-sm font-bold ${empIsOver ? "text-red-600" : "text-green-700"}`} style={empIsOver ? { animation: "empShake 0.5s ease-in-out 0.4s 1" } : {}}>
-                            {empIsOver ? `⚠ ${selectedEmployee} has exceeded the leave limit!` : `✓ ${selectedEmployee} is within the leave limit`}
-                          </p>
-                          <p className={`text-xs mt-0.5 ${empIsOver ? "text-red-500" : "text-green-600"}`}>
-                            {empIsOver
-                              ? `${empTakenDays} / ${empLeaveLimit} days — ${Math.abs(empRemaining)} day${Math.abs(empRemaining) !== 1 ? "s" : ""} over limit`
-                              : `${empTakenDays} / ${empLeaveLimit} days — ${empRemaining} day${empRemaining !== 1 ? "s" : ""} remaining`}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Progress bar — always visible, full width on mobile */}
-                      <div className="flex flex-col items-end gap-1 w-full sm:w-auto">
-                        <span className={`text-xs font-semibold ${empIsOver ? "text-red-600" : "text-green-700"}`}>
-                          {empTakenDays} / {empLeaveLimit} days
-                        </span>
-                        <div className="h-2 w-full sm:w-28 rounded-full bg-white/60 overflow-hidden border border-white/40">
-                          <div
-                            className={`h-full rounded-full transition-all duration-700 ${empIsOver ? "bg-red-500" : "bg-green-500"}`}
-                            style={{ width: `${Math.min((empTakenDays / empLeaveLimit) * 100, 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Allowed / Rejected / Pending counts for the selected month */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Approved</p>
-                      <p className="text-lg font-bold text-green-600 dark:text-green-400">
-                        {empMonthLoading ? "…" : empMonthCounts?.approved ?? 0}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Rejected</p>
-                      <p className="text-lg font-bold text-red-600 dark:text-red-400">
-                        {empMonthLoading ? "…" : empMonthCounts?.rejected ?? 0}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Pending</p>
-                      <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                        {empMonthLoading ? "…" : empMonthCounts?.pending ?? 0}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Approved Days</p>
-                      <p className="text-lg font-bold text-foreground">
-                        {empMonthLoading ? "…" : empMonthCounts?.approvedDays ?? 0}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Employee leave cards */}
-                  {sortedEmpLeaves.length === 0 ? (
-                    <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
-                      <CalendarX2 className="h-8 w-8 opacity-30" />
-                      <p className="text-sm">No leave records found for {selectedEmployee} in {empMonth}.</p>
-                    </div>
-                  ) : (
-                  <div className="space-y-3">
-                    {sortedEmpLeaves.map((l, index) => {
-                      const colors = LEAVE_TYPE_COLORS[l.leaveType] ?? { bg: "bg-muted", text: "text-foreground", border: "border-border" };
-                      const isSingleDay = l.fromDate === l.toDate;
-                      return (
-                        <div
-                          key={l.id}
-                          className="rounded-xl border border-border/50 bg-card p-4 shadow-sm hover:shadow-md transition-shadow table-row-animate"
-                          style={{ animationDelay: `${index * 0.05}s` }}
+              <EmptyState message={`No leave records found for ${selectedEmployee}.`} />
+            ) : (
+              <div className="space-y-4">
+                {/* Summary banner */}
+                <div
+                  role="status"
+                  className={`rounded-lg border px-4 py-3 ${
+                    empIsOver
+                      ? "border-red-300 bg-red-50 dark:border-red-900/50 dark:bg-red-950/30"
+                      : "border-green-300 bg-green-50 dark:border-green-900/50 dark:bg-green-950/30"
+                  }`}
+                  style={{
+                    animation: empIsOver
+                      ? "empWarnPulse 1.8s ease-in-out infinite, empSlideIn 0.35s ease"
+                      : "empGoodPulse 2.5s ease-in-out infinite, empSlideIn 0.35s ease",
+                  }}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className="relative mt-0.5 flex h-3 w-3 flex-shrink-0" aria-hidden="true">
+                        <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${empIsOver ? "bg-red-400" : "bg-green-400"}`} />
+                        <span className={`relative inline-flex h-3 w-3 rounded-full ${empIsOver ? "bg-red-500" : "bg-green-500"}`} />
+                      </span>
+                      <div className="min-w-0">
+                        <p
+                          className={`text-sm font-bold ${empIsOver ? "text-red-600 dark:text-red-400" : "text-green-700 dark:text-green-400"}`}
+                          style={empIsOver ? { animation: "empShake 0.5s ease-in-out 0.4s 1" } : {}}
                         >
-                          {/* Row 1: type + days + status */}
-                          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold border flex-shrink-0 ${colors.bg} ${colors.text} ${colors.border}`}>
+                          {empIsOver ? (
+                            <>
+                              <span aria-hidden="true">⚠</span> {selectedEmployee} has exceeded the leave limit
+                            </>
+                          ) : (
+                            <>
+                              <span aria-hidden="true">✓</span> {selectedEmployee} is within the leave limit
+                            </>
+                          )}
+                        </p>
+                        <p className={`mt-0.5 text-xs ${empIsOver ? "text-red-500 dark:text-red-400/80" : "text-green-600 dark:text-green-400/80"}`}>
+                          {empIsOver
+                            ? `${empTakenDays} / ${empLeaveLimit} days — ${Math.abs(empRemaining)} day${Math.abs(empRemaining) !== 1 ? "s" : ""} over limit`
+                            : `${empTakenDays} / ${empLeaveLimit} days — ${empRemaining} day${empRemaining !== 1 ? "s" : ""} remaining`}
+                        </p>
+                      </div>
+                    </div>
 
-                                {l.leaveType}
-                              </span>
-                              <SurplusBadge leave={l} />
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className="inline-flex items-center gap-1 text-sm font-bold text-foreground bg-muted rounded-lg px-2.5 py-1">
-                                <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />{formatDurationBadge(l.days)}
-                              </span>
-                              <StatusBadge status={l.status} />
-                            </div>
-                          </div>
-
-                          {/* Row 2: dates + dateType + reason */}
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-sm font-semibold text-foreground flex-wrap">
-                             <CalendarCheck2 className="h-3.5 w-3.5 flex-shrink-0" style={{ color: 'var(--foreground)' }} />
-                              {isSingleDay ? fmt(l.fromDate) : <>{fmt(l.fromDate)} <span className="text-muted-foreground font-normal">→</span> {fmt(l.toDate)}</>}
-                            </div>
-                            {l.dateType && (
-                              <span className="text-xs text-muted-foreground">{formatDateType(l.dateType, l.halfSession)}</span>
-                            )}
-                            {l.reason && (
-                              <p className="text-xs text-muted-foreground line-clamp-2">{l.reason}</p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {/* Progress bar */}
+                    <div className="flex w-full flex-col items-end gap-1 sm:w-auto">
+                      <span className={`text-xs font-semibold ${empIsOver ? "text-red-600 dark:text-red-400" : "text-green-700 dark:text-green-400"}`}>
+                        {empTakenDays} / {empLeaveLimit} days
+                      </span>
+                      <div className="h-2 w-full overflow-hidden rounded-full border border-white/40 bg-white/60 dark:border-white/10 dark:bg-white/10 sm:w-28">
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ${empIsOver ? "bg-red-500" : "bg-green-500"}`}
+                          style={{ width: `${Math.min((empTakenDays / empLeaveLimit) * 100, 100)}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
-                  )}
                 </div>
-              );
-            })()}
+
+                {/* Approved / Rejected / Pending counts for the selected month */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Approved Request</p>
+                    <p className="text-lg font-bold text-green-600 dark:text-green-400">{empMonthLoading ? "…" : empMonthCounts?.approved ?? 0}</p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Rejected Request</p>
+                    <p className="text-lg font-bold text-red-600 dark:text-red-400">{empMonthLoading ? "…" : empMonthCounts?.rejected ?? 0}</p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Pending Request</p>
+                    <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{empMonthLoading ? "…" : empMonthCounts?.pending ?? 0}</p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Approved days</p>
+                    <p className="text-lg font-bold text-foreground">{empMonthLoading ? "…" : empMonthCounts?.approvedDays ?? 0}</p>
+                  </div>
+                </div>
+
+                {/* Pending / All / Approved / Rejected sub-filter for this employee */}
+                <div role="tablist" aria-label="Filter this employee's leave records" className="inline-flex w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
+                  <TabButton active={empHistoryTab === "pending"} onClick={() => setEmpHistoryTab("pending")} icon={CalendarClock} label="Pending" count={empPendingCount} controls={ownerPanelId} />
+                  <TabButton active={empHistoryTab === "all"} onClick={() => setEmpHistoryTab("all")} icon={CalendarRange} label="All" count={sortedEmpLeaves.length} controls={ownerPanelId} />
+                  <TabButton active={empHistoryTab === "approved"} onClick={() => setEmpHistoryTab("approved")} icon={CalendarCheck2} label="Approved" count={empApprovedTabCount} controls={ownerPanelId} />
+                  <TabButton active={empHistoryTab === "rejected"} onClick={() => setEmpHistoryTab("rejected")} icon={CalendarX2} label="Rejected" count={empRejectedTabCount} controls={ownerPanelId} />
+                </div>
+
+                {/* Employee leave cards, filtered by the sub-tab above */}
+                {filteredEmpLeaves.length === 0 ? (
+                  <EmptyState message={`No ${empHistoryTab === "all" ? "" : empHistoryTab + " "}leave records found for ${selectedEmployee} in ${empMonth}.`} />
+                ) : (
+                  <div className="space-y-3">
+                    {filteredEmpLeaves.map((l, index) => (
+                      <LeaveCard
+                        key={l.id}
+                        leave={l}
+                        index={index}
+                        onApprove={(leave) => act(leave.id, "APPROVED")}
+                        onReject={(leave) => act(leave.id, "REJECTED")}
+                        actingId={actingId}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1803,14 +2108,11 @@ const LeavePortal = () => {
     <>
       <PageHeader
         title="Leave Portal"
-        description={
-          role === "OWNER"
-            ? "Review and act on employee leave requests."
-            : "Apply for leave and track your requests."
-        }
+        description={role === "OWNER" ? "Review and act on employee leave requests." : "Apply for leave and track your requests."}
       />
       {role === "OWNER" ? <OwnerView /> : <EmployeeView />}
     </>
   );
 };
+
 export default LeavePortal;
