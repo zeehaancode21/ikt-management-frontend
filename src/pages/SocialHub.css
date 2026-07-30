@@ -33,6 +33,7 @@
 .social-hub a:focus-visible,
 .social-hub button:focus-visible,
 .social-hub input:focus-visible,
+.social-hub textarea:focus-visible,
 .social-hub [tabindex]:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
@@ -124,7 +125,8 @@
 }
 
 /* ---------------------------------------------------------------------- */
-/* Tab navigation - mirrors the Admin Console Employees/Vault toggle       */
+/* Primary tab navigation (LinkedIn / Coming Soon) — sits at the very top  */
+/* of the page, above the header.                                         */
 /* ---------------------------------------------------------------------- */
 
 .sh-tabs {
@@ -135,7 +137,8 @@
   padding: 5px;
   gap: 4px;
   border: 1px solid hsl(var(--border) / 0.5);
-  margin-bottom: 24px;
+  margin-bottom: 20px;
+  animation: slideDown 0.35s ease-out;
 }
 
 .sh-tab-btn {
@@ -205,7 +208,8 @@
 }
 
 /* LinkedIn tab: dressed in LinkedIn's own blue/white combination when
-   active, rather than the neutral theme-background pill used elsewhere. */
+   active, rather than the neutral theme-background pill used elsewhere.
+   A slow, subtle glow pulse reinforces which toggle option is selected. */
 .sh-tab-btn--linkedin.active::before {
   background: linear-gradient(135deg, #0a66c2, #084d94);
 }
@@ -213,7 +217,10 @@
 .sh-tab-btn--linkedin.active {
   color: #ffffff;
   box-shadow: 0 4px 14px -4px rgba(10, 102, 194, 0.55);
-  animation: linkedinPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: linkedinPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+             glowPulse 2.6s ease-in-out 0.35s infinite;
+  --glow-color-soft: rgba(10, 102, 194, 0.28);
+  --glow-color-strong: rgba(10, 102, 194, 0.6);
 }
 
 .sh-tab-btn--linkedin.active .sh-tab-icon {
@@ -228,6 +235,76 @@
 @keyframes linkedinPop {
   0% { transform: scale(0.96); }
   55% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+/* Generic, theme-aware glow used by every active toggle button. Relies on
+   --glow-color-soft / --glow-color-strong set per-variant so it stays
+   subtle and on-brand instead of a flat white flash. */
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 4px 14px -4px var(--glow-color-soft, hsl(var(--primary) / 0.3));
+  }
+  50% {
+    box-shadow: 0 4px 20px -2px var(--glow-color-strong, hsl(var(--primary) / 0.55)),
+                0 0 0 3px var(--glow-color-soft, hsl(var(--primary) / 0.12));
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Secondary tab navigation (AI / Prompted)                                */
+/* ---------------------------------------------------------------------- */
+
+.sh-subtabs {
+  display: inline-flex;
+  background: hsl(var(--muted) / 0.4);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid hsl(var(--border) / 0.5);
+  margin-bottom: 20px;
+  animation: slideUp 0.3s ease-out both;
+}
+
+.sh-subtab-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.sh-subtab-btn:hover:not(.active) {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / 0.6);
+}
+
+.sh-subtab-btn.active {
+  background: linear-gradient(135deg, hsl(var(--primary)), color-mix(in srgb, hsl(var(--primary)) 80%, black));
+  color: hsl(var(--primary-foreground));
+  --glow-color-soft: hsl(var(--primary) / 0.28);
+  --glow-color-strong: hsl(var(--primary) / 0.6);
+  animation: subtabPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+             glowPulse 2.6s ease-in-out 0.3s infinite;
+}
+
+.sh-subtab-icon {
+  flex-shrink: 0;
+}
+
+@keyframes subtabPop {
+  0% { transform: scale(0.95); }
+  55% { transform: scale(1.03); }
   100% { transform: scale(1); }
 }
 
@@ -539,6 +616,60 @@
 }
 
 /* ---------------------------------------------------------------------- */
+/* Custom prompt panel (Prompted mode)                                    */
+/* ---------------------------------------------------------------------- */
+
+.prompt-section {
+  background: hsl(var(--card) / 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid hsl(var(--border) / 0.6);
+  border-radius: 20px;
+  padding: 24px;
+}
+
+.prompt-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 110px;
+  padding: 14px 16px;
+  border: 1px solid hsl(var(--border) / 0.8);
+  border-radius: 14px;
+  background: hsl(var(--background) / 0.5);
+  color: hsl(var(--foreground));
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.55;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.prompt-textarea::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.prompt-textarea:hover {
+  border-color: hsl(var(--primary) / 0.5);
+}
+
+.prompt-textarea:focus {
+  outline: none;
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.03);
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.12);
+}
+
+.prompt-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.prompt-char-count {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ---------------------------------------------------------------------- */
 /* Content generator                                                      */
 /* ---------------------------------------------------------------------- */
 
@@ -590,6 +721,7 @@
   font-size: 14px;
   color: hsl(var(--foreground));
   line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .generator-actions {
@@ -598,6 +730,72 @@
   gap: 14px;
   margin-top: 18px;
   flex-wrap: wrap;
+}
+
+.sh-hidden-file-input {
+  display: none;
+}
+
+.btn-attach-image {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.attached-image-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 12px;
+  background: hsl(var(--background) / 0.5);
+}
+
+.attached-image-preview img {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid hsl(var(--border) / 0.6);
+}
+
+.attached-image-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.attached-image-name {
+  font-size: 12.5px;
+  color: hsl(var(--foreground));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remove-image-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 8px;
+  background: hsl(var(--destructive) / 0.1);
+  color: hsl(var(--destructive));
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.remove-image-btn:hover {
+  background: hsl(var(--destructive) / 0.18);
 }
 
 .generated-content {
@@ -1280,11 +1478,16 @@
   }
 
   .hub-header {
-    padding: 22px 20px;
+    padding: 20px 18px;
+    border-radius: 16px;
   }
 
   .header-content h1 {
-    font-size: 21px;
+    font-size: 20px;
+  }
+
+  .header-content p {
+    font-size: 12.5px;
   }
 
   .header-stats {
@@ -1292,26 +1495,101 @@
     justify-content: space-between;
   }
 
-  .sh-tabs {
+  .stat-number {
+    font-size: 20px;
+  }
+
+  .sh-tabs,
+  .sh-subtabs {
     width: 100%;
   }
 
   .sh-tab-btn {
     flex: 1;
     justify-content: center;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .sh-subtab-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 7px 10px;
+    font-size: 12.5px;
   }
 
   .categories-list {
     flex-direction: column;
   }
 
+  .category-btn {
+    padding: 8px 10px;
+    font-size: 12.5px;
+  }
+
+  .category-icon-wrap {
+    width: 22px;
+    height: 22px;
+  }
+
+  .category-icon {
+    font-size: 13px;
+  }
+
   .topics-section,
   .generator-section,
   .history-section,
+  .prompt-section,
   .empty-state,
   .categories-sidebar {
-    padding: 18px;
-    border-radius: 16px;
+    padding: 16px;
+    border-radius: 14px;
+  }
+
+  .topic-btn {
+    padding: 10px 12px;
+    font-size: 12.5px;
+  }
+
+  .topic-number {
+    width: 18px;
+    height: 18px;
+    font-size: 10px;
+  }
+
+  .section-header h2 {
+    font-size: 14.5px;
+  }
+
+  .generator-header h3 {
+    font-size: 14.5px;
+  }
+
+  .selected-topic-display {
+    padding: 12px 14px;
+  }
+
+  .selected-topic-display .topic-preview {
+    font-size: 13px;
+  }
+
+  .btn {
+    padding: 9px 16px;
+    font-size: 13px;
+  }
+
+  .btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .empty-state {
+    padding: 40px 18px;
+  }
+
+  .empty-icon {
+    width: 46px;
+    height: 46px;
   }
 
   .coming-soon-card {
@@ -1324,16 +1602,101 @@
 }
 
 @media (max-width: 480px) {
+  .social-hub {
+    padding: 12px;
+  }
+
+  .hub-header {
+    padding: 16px 14px;
+    gap: 14px;
+  }
+
+  .header-content h1 {
+    font-size: 18px;
+  }
+
+  .header-eyebrow {
+    font-size: 11px;
+  }
+
+  .stat-item {
+    min-width: 64px;
+  }
+
+  .stat-number {
+    font-size: 18px;
+  }
+
+  .stat-label {
+    font-size: 9.5px;
+  }
+
+  .sh-tab-btn {
+    padding: 7px 8px;
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  .sh-tab-pill {
+    padding: 1px 6px;
+    font-size: 9px;
+  }
+
+  .sh-subtab-btn {
+    padding: 6px 8px;
+    font-size: 12px;
+    gap: 5px;
+  }
+
+  .categories-list {
+    flex-direction: column;
+  }
+
+  .category-btn {
+    flex: 1 1 auto;
+  }
+
+  .topics-grid {
+    gap: 6px;
+  }
+
+  .topic-btn {
+    padding: 9px 10px;
+    gap: 8px;
+  }
+
   .generator-actions {
     flex-direction: column;
     align-items: stretch;
   }
 
+  .generator-actions .btn {
+    width: 100%;
+  }
+
+  .attached-image-preview {
+    flex-wrap: wrap;
+  }
+
   .content-actions {
     flex-direction: column;
+    width: 100%;
+  }
+
+  .content-actions .btn {
+    width: 100%;
+  }
+
+  .modal-content {
+    padding: 24px 20px;
   }
 
   .modal-actions {
     flex-direction: column;
+  }
+
+  .prompt-textarea {
+    font-size: 13px;
+    min-height: 90px;
   }
 }

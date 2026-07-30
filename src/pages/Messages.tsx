@@ -87,6 +87,7 @@ interface Group {
   createdBy: string;
   members: string;
   createdAt: string;
+  unreadCount?: number;
 }
 
 interface PageResponse<T> {
@@ -704,7 +705,7 @@ export default function Messages() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const inboxScrollRef = useRef<HTMLDivElement>(null);
   const convScrollRef = useRef<HTMLDivElement>(null);
 
@@ -869,7 +870,9 @@ export default function Messages() {
     // FIX: same merge treatment for group messages.
     const unsubGroup = subscribe(`/user/queue/group-messages`, (newMsg: GroupMessage) => {
       const target = chatTargetRef.current;
-      if (target?.type === "group" && newMsg.groupId === target.group.id) {
+      const isOpenGroup = target?.type === "group" && newMsg.groupId === target.group.id;
+
+      if (isOpenGroup) {
         setGroupMessages((prev) => {
           const existing = prev.find((m) => m.id === newMsg.id);
           if (existing) {
@@ -878,6 +881,20 @@ export default function Messages() {
           }
           return [...prev, newMsg];
         });
+
+        // Chat is already open — keep the server-side read marker current so
+        // the unread count doesn't jump back up on the next group list fetch.
+        if (newMsg.senderUsername !== name) {
+          api.post(`/groups/${newMsg.groupId}/read`).catch(() => { });
+        }
+      } else if (newMsg.senderUsername !== name) {
+        // Message arrived for a group we're not currently viewing — bump its
+        // unread badge locally without waiting on a full /groups refetch.
+        setGroups((prev) =>
+          prev.map((g) =>
+            g.id === newMsg.groupId ? { ...g, unreadCount: (g.unreadCount ?? 0) + 1 } : g
+          )
+        );
       }
     });
 
@@ -955,6 +972,12 @@ export default function Messages() {
     try {
       const r = await api.get<GroupMessage[]>(`/groups/${chatTarget.group.id}/messages`);
       setGroupMessages(r.data);
+      // The GET above marks the group read server-side; reflect that
+      // immediately in the sidebar instead of waiting on a refetch.
+      const groupId = chatTarget.group.id;
+      setGroups((prev) =>
+        prev.map((g) => (g.id === groupId ? { ...g, unreadCount: 0 } : g))
+      );
     } catch { /* ignore */ }
   }, [chatTarget]);
 
@@ -1192,15 +1215,28 @@ export default function Messages() {
 
   const cancelReply = () => setReplyingTo(null);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey && !uploading) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !uploading) {
       e.preventDefault();
       handleSend();
+      return;
     }
+    // Plain Enter (and Shift+Enter) falls through to the textarea's default
+    // behavior and inserts a newline, allowing unlimited multi-line messages.
     if (e.key === "Escape" && replyingTo) {
       cancelReply();
     }
   };
+
+  // Grow the composer textarea to fit its content (up to a max height, after
+  // which it scrolls internally), and shrink it back down when the message
+  // is cleared (e.g. right after sending).
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [newMessage, chatTarget]);
 
   const openChat = (target: ChatTarget) => {
     setChatTarget(target);
@@ -1401,9 +1437,11 @@ export default function Messages() {
   const filteredGroups = groups.filter((g) =>
     g.name.toLowerCase().includes(search.toLowerCase())
   );
-  const totalUnread = Object.values(inboxMap).filter(
-    (m) => m.receiverUsername === name && !m.readByReceiver
-  ).length;
+  const totalUnread =
+    Object.values(inboxMap).filter(
+      (m) => m.receiverUsername === name && !m.readByReceiver
+    ).length +
+    groups.reduce((sum, g) => sum + (g.unreadCount ?? 0), 0);
 
   const toggleMember = (username: string) => {
     setGroupForm((prev) => ({
@@ -1550,6 +1588,11 @@ export default function Messages() {
         .msg-contact-preview.unread { color:hsl(var(--foreground)); font-weight:600; }
         .msg-contact-time { font-size:10.5px; color:hsl(var(--muted-foreground)); flex-shrink:0; }
         .msg-unread-dot { width:8px; height:8px; border-radius:50%; background:var(--msg-accent); flex-shrink:0; }
+        .msg-unread-count {
+          display:inline-flex; align-items:center; justify-content:center;
+          background:var(--msg-accent); color:#fff; font-size:10px; font-weight:700;
+          min-width:18px; height:18px; border-radius:var(--msg-radius-pill); padding:0 5px; flex-shrink:0;
+        }
         .msg-role-tag { font-size:10px; font-weight:600; padding:1px 6px; border-radius:var(--msg-radius-pill); flex-shrink:0; }
         .msg-group-actions { display:flex; gap:2px; opacity:0; transition:opacity var(--msg-transition-fast); }
         .msg-contact:hover .msg-group-actions,
@@ -1666,18 +1709,22 @@ export default function Messages() {
         .msg-toolbar-btn:hover:not(:disabled) { border-color:var(--msg-accent); color:var(--msg-accent); }
         .msg-toolbar-btn:disabled { opacity:.5; cursor:not-allowed; }
         .msg-input-row {
-          display:flex; align-items:center; gap:8px;
+          display:flex; align-items:flex-end; gap:8px;
           background:hsl(var(--background)); border:1.5px solid hsl(var(--border));
           border-radius:var(--msg-radius-lg); padding:6px 6px 6px 16px; transition:border-color var(--msg-transition-fast);
           width:100%; max-width:100%; box-sizing:border-box;
         }
         .msg-input-row:focus-within { border-color:var(--msg-accent); }
-        .msg-input-row input {
+        .msg-input-row input, .msg-input-row textarea {
           flex:1 1 auto; min-width:0; border:none; background:transparent; color:hsl(var(--foreground));
           font-size:14px; outline:none; padding:8px 0;
         }
-        .msg-input-row input::placeholder { color:hsl(var(--muted-foreground)); }
-        .msg-input-row input:disabled { opacity:.6; }
+        .msg-input-row textarea {
+          resize:none; font-family:inherit; line-height:1.4; max-height:160px;
+          overflow-y:auto; display:block;
+        }
+        .msg-input-row input::placeholder, .msg-input-row textarea::placeholder { color:hsl(var(--muted-foreground)); }
+        .msg-input-row input:disabled, .msg-input-row textarea:disabled { opacity:.6; }
         .msg-send-btn {
           width:38px; height:38px; min-width:38px; border-radius:var(--msg-radius-md); border:none; background:var(--msg-accent); color:#fff;
           display:flex; align-items:center; justify-content:center; cursor:pointer;
@@ -1996,7 +2043,7 @@ export default function Messages() {
                   </div>
                   <div className="msg-contact-info">
                     <div className="msg-contact-name">Everyone</div>
-                    <div className="msg-contact-preview">Broadcast to all users</div>
+                    <div className="msg-contact-preview">Broadcast to all employee's</div>
                   </div>
                 </div>
               </>
@@ -2013,6 +2060,7 @@ export default function Messages() {
             {filteredGroups.map((g) => {
               const isActive = chatTarget?.type === "group" && chatTarget.group.id === g.id;
               const memberCount = g.members ? g.members.split(",").filter(Boolean).length : 0;
+              const isGroupUnread = (g.unreadCount ?? 0) > 0;
               return (
                 <div
                   key={g.id}
@@ -2021,6 +2069,7 @@ export default function Messages() {
                   role="button"
                   tabIndex={0}
                   aria-current={isActive ? "true" : undefined}
+                  aria-label={`${formatDisplayName(g.name)}${isGroupUnread ? `, ${g.unreadCount} unread message${g.unreadCount === 1 ? "" : "s"}` : ""}`}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChat({ type: "group", group: g }); } }}
                 >
                   <div className="msg-avatar msg-avatar-broadcast" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", fontSize: 12 }}>
@@ -2028,7 +2077,7 @@ export default function Messages() {
                   </div>
                   <div className="msg-contact-info">
                     <div className="msg-contact-name">{formatDisplayName(g.name)}</div>
-                    <div className="msg-contact-preview">{memberCount} member{memberCount !== 1 ? "s" : ""}</div>
+                    <div className={`msg-contact-preview ${isGroupUnread ? "unread" : ""}`}>{memberCount} member{memberCount !== 1 ? "s" : ""}</div>
                   </div>
                   <div className="msg-group-actions">
                     {g.createdBy === name && (
@@ -2038,6 +2087,11 @@ export default function Messages() {
                       </>
                     )}
                   </div>
+                  {isGroupUnread && (
+                    g.unreadCount! > 1
+                      ? <span className="msg-unread-count" aria-hidden="true">{g.unreadCount! > 99 ? "99+" : g.unreadCount}</span>
+                      : <div className="msg-unread-dot" aria-hidden="true" />
+                  )}
                 </div>
               );
             })}
@@ -2163,7 +2217,7 @@ export default function Messages() {
                 )}
                 <div className="msg-input-row">
                   <label htmlFor="broadcast-input" className="sr-only">Send a message to everyone</label>
-                  <input id="broadcast-input" ref={inputRef} placeholder="Send a message to everyone…" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={handleKeyDown} disabled={sending || uploading} />
+                  <textarea id="broadcast-input" ref={inputRef} rows={1} placeholder="Send a message to everyone… (Enter for new line, Ctrl+Enter to send)" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={handleKeyDown} disabled={sending || uploading} />
                   <div style={{ position: "relative" }}>
                     <button className="msg-toolbar-btn" onClick={() => setShowComposeEmoji((v) => !v)} disabled={uploading} title="Emoji" aria-label="Insert emoji" aria-haspopup="true" aria-expanded={showComposeEmoji}>
                       <Smile size={13} aria-hidden="true" />
@@ -2329,10 +2383,11 @@ export default function Messages() {
                 )}
                 <div className="msg-input-row">
                   <label htmlFor="group-msg-input" className="sr-only">{`Message ${formatDisplayName(chatTarget.group.name)}`}</label>
-                  <input
+                  <textarea
                     id="group-msg-input"
                     ref={inputRef}
-                    placeholder={`Message ${formatDisplayName(chatTarget.group.name)}…`}
+                    rows={1}
+                    placeholder={`Message ${formatDisplayName(chatTarget.group.name)}… (Enter for new line, Ctrl+Enter to send)`}
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
@@ -2493,10 +2548,11 @@ export default function Messages() {
                 )}
                 <div className="msg-input-row">
                   <label htmlFor="dm-input" className="sr-only">{`Message ${formatDisplayName(chatTarget.username)}`}</label>
-                  <input
+                  <textarea
                     id="dm-input"
                     ref={inputRef}
-                    placeholder={`Message ${formatDisplayName(chatTarget.username)}…`}
+                    rows={1}
+                    placeholder={`Message ${formatDisplayName(chatTarget.username)}… (Enter for new line, Ctrl+Enter to send)`}
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={handleKeyDown}

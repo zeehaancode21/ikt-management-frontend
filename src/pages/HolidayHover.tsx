@@ -188,25 +188,25 @@ const HolidayHover = ({
             onClick={() =>
               setOpenMessages(!openMessages)
             }
-            className="relative rounded-full p-2 hover:bg-gray-100"
+            className="relative rounded-full p-2 hover:bg-accent"
           >
-            <Bell className="h-6 w-6 text-gray-700" />
+            <Bell className="h-6 w-6 text-foreground" />
 
             {unreadCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs text-destructive-foreground">
                 {unreadCount}
               </span>
             )}
           </button>
 
           {openMessages && (
-            <div className="absolute right-0 mt-3 max-h-[350px] w-80 overflow-y-auto rounded-xl border bg-white shadow-2xl z-50">
-              <div className="border-b p-4 font-semibold">
+            <div className="holiday-announcements-panel absolute right-0 mt-3 max-h-[350px] w-80 overflow-y-auto rounded-xl shadow-2xl z-50">
+              <div className="border-b border-border p-4 font-semibold">
                 Announcements
               </div>
 
               {announcements.length === 0 ? (
-                <div className="p-4 text-sm text-gray-500">
+                <div className="p-4 text-sm text-muted-foreground">
                   No announcements
                 </div>
               ) : (
@@ -214,7 +214,7 @@ const HolidayHover = ({
                   <div
                     key={index}
                     onClick={() => markAsRead(index)}
-                    className={`cursor-pointer border-b p-4 hover:bg-gray-100 ${item.read ? "bg-gray-100 text-gray-500" : "bg-white"
+                    className={`holiday-announcement-item cursor-pointer p-4 ${item.read ? "read" : ""
                       }`}
                   >
                     <div className="font-semibold">
@@ -225,7 +225,7 @@ const HolidayHover = ({
                       {item.text}
                     </div>
 
-                    <div className="text-xs text-gray-400">
+                    <div className="text-xs text-muted-foreground">
                       {item.time}
                     </div>
                   </div>
@@ -255,34 +255,38 @@ const HolidayHover = ({
                   📅 Government Holidays 2026
                 </h2>
 
-                <button onClick={() => setOpen(false)}>
+                <button onClick={() => setOpen(false)} aria-label="Close">
                   ✕
                 </button>
               </div>
 
-              <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
+              <div className="holiday-body p-4 space-y-3 max-h-[400px]">
                 {loading ? (
-                  <div className="text-center text-gray-500">
+                  <div className="loading-text">
                     Loading...
+                  </div>
+                ) : holidays.length === 0 ? (
+                  <div className="empty-text">
+                    No holidays to show.
                   </div>
                 ) : (
                   holidays.map((item, index) => (
                     <div
                       key={index}
-                      className="flex justify-between rounded-xl border p-4 shadow-sm hover:shadow-md"
+                      className="holiday-item"
                     >
-                      <div>
-                        <h3 className="font-semibold">
+                      <div className="holiday-info">
+                        <strong>
                           {item.name}
-                        </h3>
-                        <p className="text-xs text-gray-500">
+                        </strong>
+                        <p>
                           {item.day}
                         </p>
                       </div>
 
-                      <div className="font-bold text-blue-600">
+                      <span>
                         {item.date}
-                      </div>
+                      </span>
                     </div>
                   ))
                 )}

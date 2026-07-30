@@ -26,6 +26,7 @@ import {
   Rocket,
   Bell,
   PenSquare,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 // Types
@@ -52,6 +53,14 @@ interface ApiResponse {
   error?: string;
   needsAuth?: boolean;
 }
+
+interface AttachedImage {
+  file: File;
+  preview: string;
+  base64: string;
+}
+
+type ContentMode = 'ai' | 'prompted';
 
 // API Base URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
@@ -197,7 +206,22 @@ const SocialHub: React.FC = () => {
   // behave exactly like any other topic once selected.
   const [aiTopics, setAiTopics] = useState<Record<string, string[]>>({});
   const [isLoadingMoreTopics, setIsLoadingMoreTopics] = useState<boolean>(false);
-  
+
+  // Secondary toggle: "AI" (existing category/topic picker flow) vs
+  // "Prompted" (a free-form prompt typed by the user). Both modes call the
+  // exact same /generate-post and /post-to-linkedin endpoints — only the
+  // string used as the "topic"/prompt payload differs.
+  const [contentMode, setContentMode] = useState<ContentMode>('ai');
+  const [customPrompt, setCustomPrompt] = useState<string>('');
+  // The topic/prompt actually sent to the last generation call. Used to
+  // match history entries and the post-to-LinkedIn call regardless of which
+  // mode produced the content.
+  const [currentTopic, setCurrentTopic] = useState<string>('');
+
+  // Optional image attached to a generated post before publishing.
+  const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
   const contentRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
 
@@ -252,9 +276,23 @@ const SocialHub: React.FC = () => {
     }
   };
 
+  // Switching between AI / Prompted resets in-flight generated content and
+  // any attached image so a stale post from the other mode can't be
+  // accidentally published, but keeps each mode's own selections intact.
+  const handleContentModeChange = (mode: ContentMode) => {
+    if (mode === contentMode) return;
+    setContentMode(mode);
+    setGeneratedContent('');
+    setCurrentTopic('');
+    setAttachedImage(null);
+  };
+
+  // The prompt/topic that will be used for the next generation call.
+  const activeTopic = contentMode === 'ai' ? selectedTopic : customPrompt.trim();
+
   const generatePost = async () => {
-    if (!selectedTopic) {
-      toast.error('Please select a topic first');
+    if (!activeTopic) {
+      toast.error(contentMode === 'ai' ? 'Please select a topic first' : 'Please enter a prompt first');
       return;
     }
 
@@ -271,9 +309,9 @@ const SocialHub: React.FC = () => {
       const response = await fetch(`${API_BASE_URL}/social-post/generate-post`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ 
-          topic: selectedTopic,
-          categoryId: selectedCategory 
+        body: JSON.stringify({
+          topic: activeTopic,
+          categoryId: contentMode === 'ai' ? selectedCategory : null
         }),
       });
 
@@ -292,11 +330,12 @@ const SocialHub: React.FC = () => {
       
       if (data.success && data.content) {
         setGeneratedContent(data.content);
+        setCurrentTopic(activeTopic);
         toast.success('✅ Post generated successfully!');
         
         const newHistory: PostHistory = {
           id: Date.now().toString(),
-          topic: selectedTopic,
+          topic: activeTopic,
           content: data.content,
           timestamp: new Date().toLocaleString(),
           status: 'pending'
@@ -394,10 +433,14 @@ const SocialHub: React.FC = () => {
       const response = await fetch(`${API_BASE_URL}/social-post/post-to-linkedin`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           content: generatedContent,
-          topic: selectedTopic,
-          linkedInToken: linkedInToken
+          topic: currentTopic,
+          linkedInToken: linkedInToken,
+          // Optional image attachment, sent as a base64 data URL. Existing
+          // backend integrations that don't expect this field can safely
+          // ignore it.
+          image: attachedImage?.base64 || null
         }),
       });
 
@@ -426,7 +469,7 @@ const SocialHub: React.FC = () => {
         
         setPostHistory(prev => 
           prev.map(item => 
-            item.topic === selectedTopic && item.content === generatedContent
+            item.topic === currentTopic && item.content === generatedContent
               ? { ...item, status: 'success' }
               : item
           )
@@ -435,6 +478,9 @@ const SocialHub: React.FC = () => {
         setTimeout(() => {
           setGeneratedContent('');
           setSelectedTopic('');
+          setCustomPrompt('');
+          setCurrentTopic('');
+          setAttachedImage(null);
         }, 3000);
       } else {
         throw new Error(data.message || 'Failed to post to LinkedIn');
@@ -452,7 +498,7 @@ const SocialHub: React.FC = () => {
       
       setPostHistory(prev => 
         prev.map(item => 
-          item.topic === selectedTopic && item.content === generatedContent
+          item.topic === currentTopic && item.content === generatedContent
             ? { ...item, status: 'error' }
             : item
         )
@@ -499,6 +545,44 @@ const SocialHub: React.FC = () => {
     setShowClearConfirm(false);
   };
 
+  // Image attach handlers -----------------------------------------------
+  const handleAttachImageClick = () => {
+    imageInputRef.current?.click();
+  };
+
+  const handleImageSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset the input value so selecting the same file again still fires onChange
+    e.target.value = '';
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+    if (file.size > MAX_SIZE_BYTES) {
+      toast.error('Image must be smaller than 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setAttachedImage({ file, preview: result, base64: result });
+      toast.success('🖼️ Image attached');
+    };
+    reader.onerror = () => {
+      toast.error('Failed to read image file');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeAttachedImage = () => {
+    setAttachedImage(null);
+  };
+
   useEffect(() => {
     if (generatedContent && contentRef.current) {
       contentRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -520,32 +604,7 @@ const SocialHub: React.FC = () => {
 
   return (
     <div className="social-hub">
-      {/* Header */}
-      <header className="hub-header">
-        <div className="header-content">
-          <div className="header-eyebrow">
-            <Rocket size={14} />
-            <span>Content Hub</span>
-          </div>
-          <h1>AI-Powered Content Studio</h1>
-          <p>Generate on-brand steel detailing content for LinkedIn in seconds</p>
-        </div>
-        <div className="header-stats">
-          <div className="stat-item">
-            <span className="stat-number">{postHistory.length}</span>
-            <span className="stat-label">Posts Generated</span>
-          </div>
-          <div className="stat-divider" aria-hidden="true" />
-          <div className="stat-item">
-            <span className="stat-number">
-              {postHistory.filter(p => p.status === 'success').length}
-            </span>
-            <span className="stat-label">Published</span>
-          </div>
-        </div>
-      </header>
-
-      {/* Tab Navigation - matches Admin Console toggle styling */}
+      {/* Primary Toggle - LinkedIn / Coming Soon - now the very first thing on the page */}
       <div className="sh-tabs" role="tablist" aria-label="Content Hub sections">
         <button
           type="button"
@@ -572,244 +631,356 @@ const SocialHub: React.FC = () => {
         </button>
       </div>
 
-      
+      {/* Header */}
+      <header className="hub-header">
+        <div className="header-content">
+          <div className="header-eyebrow">
+            <Rocket size={14} />
+            <span>Content Hub</span>
+          </div>
+          <h1>AI-Powered Content Studio</h1>
+          <p>Generate on-brand steel detailing content for LinkedIn in seconds</p>
+        </div>
+        <div className="header-stats">
+          <div className="stat-item">
+            <span className="stat-number">{postHistory.length}</span>
+            <span className="stat-label">Posts Generated</span>
+          </div>
+          <div className="stat-divider" aria-hidden="true" />
+          <div className="stat-item">
+            <span className="stat-number">
+              {postHistory.filter(p => p.status === 'success').length}
+            </span>
+            <span className="stat-label">Published</span>
+          </div>
+        </div>
+      </header>
 
       {/* Main Content - Only show when LinkedIn tab is active */}
       {activeTab === 'linkedin' && (
-        <div className="hub-main">
-          <aside className="categories-sidebar">
-            <h2 className="sidebar-title">Categories</h2>
-            <div className="categories-list">
-              {CATEGORIES.map((category) => (
-                <button
-                  key={category.id}
-                  type="button"
-                  className={`category-btn ${selectedCategory === category.id ? 'active' : ''}`}
-                  onClick={() => handleCategorySelect(category.id)}
-                  aria-expanded={selectedCategory === category.id}
-                  style={{ '--category-color': category.color } as React.CSSProperties}
-                >
-                  <span className="category-icon-wrap" aria-hidden="true">
-                    <span className="category-icon">{category.icon}</span>
-                  </span>
-                  <span className="category-title">{category.title}</span>
-                  <span className="category-indicator" aria-hidden="true">
-                    {selectedCategory === category.id ? (
-                      <Check className="category-check" size={14} />
-                    ) : (
-                      <ChevronRight className="category-arrow" size={14} />
-                    )}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </aside>
+        <>
+          {/* Secondary Toggle - AI (category picker) / Prompted (manual prompt) */}
+          <div className="sh-subtabs" role="tablist" aria-label="Content generation mode">
+            <button
+              type="button"
+              className={`sh-subtab-btn ${contentMode === 'ai' ? 'active' : ''}`}
+              role="tab"
+              aria-selected={contentMode === 'ai'}
+              onClick={() => handleContentModeChange('ai')}
+            >
+              <Sparkles size={15} className="sh-subtab-icon" aria-hidden="true" />
+              AI
+            </button>
+            <button
+              type="button"
+              className={`sh-subtab-btn ${contentMode === 'prompted' ? 'active' : ''}`}
+              role="tab"
+              aria-selected={contentMode === 'prompted'}
+              onClick={() => handleContentModeChange('prompted')}
+            >
+              <PenSquare size={15} className="sh-subtab-icon" aria-hidden="true" />
+              Prompted
+            </button>
+          </div>
 
-          <div className="main-content">
-            {selectedCategory && (
-              <section className="topics-section animate-slide-in">
-                <div className="section-header">
-                  <h2>
-                    <span aria-hidden="true">{getCategory(selectedCategory)?.icon}</span>
-                    {getCategory(selectedCategory)?.title}
-                  </h2>
-                  <span className="topic-count">{getAllTopics(selectedCategory).length} topics</span>
-                </div>
-                <div className="topics-grid">
-                  {getAllTopics(selectedCategory).map((item, index) => (
+          <div className="hub-main">
+            {contentMode === 'ai' && (
+              <aside className="categories-sidebar">
+                <h2 className="sidebar-title">Categories</h2>
+                <div className="categories-list">
+                  {CATEGORIES.map((category) => (
                     <button
-                      key={`${item.source}-${index}-${item.text}`}
+                      key={category.id}
                       type="button"
-                      className={`topic-btn ${selectedTopic === item.text ? 'selected' : ''}`}
-                      onClick={() => handleTopicSelect(item.text)}
-                      style={{ 
-                        animationDelay: `${Math.min(index, 20) * 50}ms`,
-                        '--topic-index': index 
-                      } as React.CSSProperties}
+                      className={`category-btn ${selectedCategory === category.id ? 'active' : ''}`}
+                      onClick={() => handleCategorySelect(category.id)}
+                      aria-expanded={selectedCategory === category.id}
+                      style={{ '--category-color': category.color } as React.CSSProperties}
                     >
-                      <span className="topic-number">{index + 1}</span>
-                      <span className="topic-text">
-                        {item.text}
-                        {item.source === 'ai' && (
-                          <span className="topic-ai-badge">
-                            <Sparkles size={11} aria-hidden="true" />
-                            AI
-                          </span>
+                      <span className="category-icon-wrap" aria-hidden="true">
+                        <span className="category-icon">{category.icon}</span>
+                      </span>
+                      <span className="category-title">{category.title}</span>
+                      <span className="category-indicator" aria-hidden="true">
+                        {selectedCategory === category.id ? (
+                          <Check className="category-check" size={14} />
+                        ) : (
+                          <ChevronRight className="category-arrow" size={14} />
                         )}
                       </span>
-                      {selectedTopic === item.text && (
-                        <Check className="topic-check" size={16} aria-hidden="true" />
-                      )}
                     </button>
                   ))}
                 </div>
-
-                <button
-                  type="button"
-                  className={`btn btn-load-more ${isLoadingMoreTopics ? 'loading' : ''}`}
-                  onClick={loadMoreTopics}
-                  disabled={isLoadingMoreTopics || !token}
-                >
-                  {isLoadingMoreTopics ? (
-                    <>
-                      <span className="spinner" aria-hidden="true"></span>
-                      Generating topics...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={15} aria-hidden="true" />
-                      Load More Topics
-                    </>
-                  )}
-                </button>
-                {!token && (
-                  <span className="auth-warning auth-warning--centered">
-                    <AlertTriangle size={14} aria-hidden="true" />
-                    Please login to load more topics
-                  </span>
-                )}
-              </section>
+              </aside>
             )}
 
-            <div ref={contentRef} className="content-area">
-              {selectedTopic ? (
-                <div className="generator-section animate-slide-up">
-                  <div className="generator-header">
-                    <h3>
-                      <PenSquare size={18} aria-hidden="true" />
-                      Content Generator
-                    </h3>
-                    <div className="selected-topic-display">
-                      <span className="label">Selected Topic</span>
-                      <span className="topic-preview">{selectedTopic}</span>
-                    </div>
+            <div className="main-content">
+              {contentMode === 'ai' && selectedCategory && (
+                <section className="topics-section animate-slide-in">
+                  <div className="section-header">
+                    <h2>
+                      <span aria-hidden="true">{getCategory(selectedCategory)?.icon}</span>
+                      {getCategory(selectedCategory)?.title}
+                    </h2>
+                    <span className="topic-count">{getAllTopics(selectedCategory).length} topics</span>
+                  </div>
+                  <div className="topics-grid">
+                    {getAllTopics(selectedCategory).map((item, index) => (
+                      <button
+                        key={`${item.source}-${index}-${item.text}`}
+                        type="button"
+                        className={`topic-btn ${selectedTopic === item.text ? 'selected' : ''}`}
+                        onClick={() => handleTopicSelect(item.text)}
+                        style={{ 
+                          animationDelay: `${Math.min(index, 20) * 50}ms`,
+                          '--topic-index': index 
+                        } as React.CSSProperties}
+                      >
+                        <span className="topic-number">{index + 1}</span>
+                        <span className="topic-text">
+                          {item.text}
+                          {item.source === 'ai' && (
+                            <span className="topic-ai-badge">
+                              <Sparkles size={11} aria-hidden="true" />
+                              AI
+                            </span>
+                          )}
+                        </span>
+                        {selectedTopic === item.text && (
+                          <Check className="topic-check" size={16} aria-hidden="true" />
+                        )}
+                      </button>
+                    ))}
                   </div>
 
-                  <div className="generator-actions">
-                    <button
-                      type="button"
-                      className={`btn btn-primary ${isGenerating ? 'loading' : ''}`}
-                      onClick={generatePost}
-                      disabled={isGenerating || !token}
-                    >
-                      {isGenerating ? (
-                        <>
-                          <span className="spinner" aria-hidden="true"></span>
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <Rocket size={16} aria-hidden="true" />
-                          Generate Post
-                        </>
-                      )}
-                    </button>
-                    {!token && (
-                      <span className="auth-warning">
-                        <AlertTriangle size={14} aria-hidden="true" />
-                        Please login to generate posts
-                      </span>
+                  <button
+                    type="button"
+                    className={`btn btn-load-more ${isLoadingMoreTopics ? 'loading' : ''}`}
+                    onClick={loadMoreTopics}
+                    disabled={isLoadingMoreTopics || !token}
+                  >
+                    {isLoadingMoreTopics ? (
+                      <>
+                        <span className="spinner" aria-hidden="true"></span>
+                        Generating topics...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={15} aria-hidden="true" />
+                        Load More Topics
+                      </>
                     )}
-                  </div>
+                  </button>
+                  {!token && (
+                    <span className="auth-warning auth-warning--centered">
+                      <AlertTriangle size={14} aria-hidden="true" />
+                      Please login to load more topics
+                    </span>
+                  )}
+                </section>
+              )}
 
-                  {generatedContent && (
-                    <div className="generated-content animate-fade-in">
-                      <div className="content-header">
-                        <h4>Generated Content</h4>
-                        <div className="content-actions">
-                          <button type="button" className="btn btn-sm btn-copy" onClick={copyToClipboard}>
-                            <Copy size={14} aria-hidden="true" />
-                            Copy
-                          </button>
-                          <button type="button" className="btn btn-sm btn-clear" onClick={clearContent}>
-                            <X size={14} aria-hidden="true" />
-                            Clear
+              {contentMode === 'prompted' && (
+                <section className="prompt-section animate-slide-in">
+                  <div className="section-header">
+                    <h2>
+                      <PenSquare size={17} aria-hidden="true" />
+                      Custom Prompt
+                    </h2>
+                  </div>
+                  <textarea
+                    className="prompt-textarea"
+                    placeholder="Describe exactly what you'd like the post to be about. This text will be sent as-is to the generator."
+                    value={customPrompt}
+                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    rows={5}
+                  />
+                  <div className="prompt-footer">
+                    <span className="prompt-char-count">{customPrompt.length} characters</span>
+                  </div>
+                </section>
+              )}
+
+              <div ref={contentRef} className="content-area">
+                {activeTopic ? (
+                  <div className="generator-section animate-slide-up">
+                    <div className="generator-header">
+                      <h3>
+                        <PenSquare size={18} aria-hidden="true" />
+                        Content Generator
+                      </h3>
+                      <div className="selected-topic-display">
+                        <span className="label">{contentMode === 'ai' ? 'Selected Topic' : 'Your Prompt'}</span>
+                        <span className="topic-preview">{activeTopic}</span>
+                      </div>
+                    </div>
+
+                    <div className="generator-actions">
+                      <button
+                        type="button"
+                        className={`btn btn-primary ${isGenerating ? 'loading' : ''}`}
+                        onClick={generatePost}
+                        disabled={isGenerating || !token}
+                      >
+                        {isGenerating ? (
+                          <>
+                            <span className="spinner" aria-hidden="true"></span>
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <Rocket size={16} aria-hidden="true" />
+                            Generate Post
+                          </>
+                        )}
+                      </button>
+
+                      <input
+                        type="file"
+                        accept="image/*"
+                        ref={imageInputRef}
+                        onChange={handleImageSelected}
+                        className="sh-hidden-file-input"
+                        aria-hidden="true"
+                        tabIndex={-1}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-attach-image"
+                        onClick={handleAttachImageClick}
+                      >
+                        <ImageIcon size={16} aria-hidden="true" />
+                        {attachedImage ? 'Change Image' : 'Attach Image'}
+                      </button>
+
+                      {!token && (
+                        <span className="auth-warning">
+                          <AlertTriangle size={14} aria-hidden="true" />
+                          Please login to generate posts
+                        </span>
+                      )}
+                    </div>
+
+                    {attachedImage && (
+                      <div className="attached-image-preview animate-fade-in">
+                        <img src={attachedImage.preview} alt="Attachment preview" />
+                        <div className="attached-image-meta">
+                          <span className="attached-image-name">{attachedImage.file.name}</span>
+                          <button
+                            type="button"
+                            className="remove-image-btn"
+                            onClick={removeAttachedImage}
+                            aria-label="Remove attached image"
+                          >
+                            <X size={13} aria-hidden="true" />
                           </button>
                         </div>
                       </div>
-                      <div className="content-body">
-                        <p>{generatedContent}</p>
-                      </div>
-                      <div className="content-footer">
-                        <button
-                          type="button"
-                          className={`btn btn-success ${isPosting ? 'loading' : ''}`}
-                          onClick={postToLinkedIn}
-                          disabled={isPosting || !generatedContent || !token}
-                        >
-                          {isPosting ? (
-                            <>
-                              <span className="spinner" aria-hidden="true"></span>
-                              Posting...
-                            </>
-                          ) : (
-                            <>
-                              <Send size={16} aria-hidden="true" />
-                              Post to LinkedIn
-                            </>
+                    )}
+
+                    {generatedContent && (
+                      <div className="generated-content animate-fade-in">
+                        <div className="content-header">
+                          <h4>Generated Content</h4>
+                          <div className="content-actions">
+                            <button type="button" className="btn btn-sm btn-copy" onClick={copyToClipboard}>
+                              <Copy size={14} aria-hidden="true" />
+                              Copy
+                            </button>
+                            <button type="button" className="btn btn-sm btn-clear" onClick={clearContent}>
+                              <X size={14} aria-hidden="true" />
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+                        <div className="content-body">
+                          <p>{generatedContent}</p>
+                        </div>
+                        <div className="content-footer">
+                          <button
+                            type="button"
+                            className={`btn btn-success ${isPosting ? 'loading' : ''}`}
+                            onClick={postToLinkedIn}
+                            disabled={isPosting || !generatedContent || !token}
+                          >
+                            {isPosting ? (
+                              <>
+                                <span className="spinner" aria-hidden="true"></span>
+                                Posting...
+                              </>
+                            ) : (
+                              <>
+                                <Send size={16} aria-hidden="true" />
+                                Post to LinkedIn
+                              </>
+                            )}
+                          </button>
+                          {!linkedInToken && token && (
+                            <span className="auth-warning">
+                              <AlertTriangle size={14} aria-hidden="true" />
+                              LinkedIn not connected
+                            </span>
                           )}
-                        </button>
-                        {!linkedInToken && token && (
-                          <span className="auth-warning">
-                            <AlertTriangle size={14} aria-hidden="true" />
-                            LinkedIn not connected
-                          </span>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <div className="empty-icon">
-                    <Lightbulb size={28} aria-hidden="true" />
+                    )}
                   </div>
-                  <h3>Select a Topic</h3>
-                  <p>Choose a topic from the categories above to generate content</p>
-                </div>
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-icon">
+                      <Lightbulb size={28} aria-hidden="true" />
+                    </div>
+                    <h3>{contentMode === 'ai' ? 'Select a Topic' : 'Enter a Prompt'}</h3>
+                    <p>
+                      {contentMode === 'ai'
+                        ? 'Choose a topic from the categories above to generate content'
+                        : 'Type a prompt above to generate content from it'}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {postHistory.length > 0 && (
+                <section ref={historyRef} className="history-section animate-slide-in">
+                  <div className="history-header">
+                    <h3>
+                      <BarChart3 size={18} aria-hidden="true" />
+                      Post History
+                    </h3>
+                    <button 
+                      type="button"
+                      className="btn btn-sm btn-clear-history"
+                      onClick={handleClearHistory}
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                      Clear All
+                    </button>
+                  </div>
+                  <div className="history-list">
+                    {postHistory.map((item) => (
+                      <div key={item.id} className={`history-item status-${item.status}`}>
+                        <div className="history-content">
+                          <div className="history-topic">{item.topic}</div>
+                          <div className="history-preview">
+                            {item.content.substring(0, 100)}...
+                          </div>
+                        </div>
+                        <div className="history-meta">
+                          <span className="history-time">{item.timestamp}</span>
+                          <span className={`history-status status-${item.status}`}>
+                            {item.status === 'success' ? <CheckCircle2 size={14} aria-hidden="true" /> :
+                             item.status === 'error' ? <XCircle size={14} aria-hidden="true" /> :
+                             <Loader2 size={14} className="spin-icon" aria-hidden="true" />}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
               )}
             </div>
-
-            {postHistory.length > 0 && (
-              <section ref={historyRef} className="history-section animate-slide-in">
-                <div className="history-header">
-                  <h3>
-                    <BarChart3 size={18} aria-hidden="true" />
-                    Post History
-                  </h3>
-                  <button 
-                    type="button"
-                    className="btn btn-sm btn-clear-history"
-                    onClick={handleClearHistory}
-                  >
-                    <Trash2 size={14} aria-hidden="true" />
-                    Clear All
-                  </button>
-                </div>
-                <div className="history-list">
-                  {postHistory.map((item) => (
-                    <div key={item.id} className={`history-item status-${item.status}`}>
-                      <div className="history-content">
-                        <div className="history-topic">{item.topic}</div>
-                        <div className="history-preview">
-                          {item.content.substring(0, 100)}...
-                        </div>
-                      </div>
-                      <div className="history-meta">
-                        <span className="history-time">{item.timestamp}</span>
-                        <span className={`history-status status-${item.status}`}>
-                          {item.status === 'success' ? <CheckCircle2 size={14} aria-hidden="true" /> :
-                           item.status === 'error' ? <XCircle size={14} aria-hidden="true" /> :
-                           <Loader2 size={14} className="spin-icon" aria-hidden="true" />}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
           </div>
-        </div>
+        </>
       )}
 
       {/* Coming Soon Tab Content */}
