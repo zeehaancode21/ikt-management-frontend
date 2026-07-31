@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, FormEvent, useCallback, useId } from "react";
 import { format } from "date-fns";
+import { useNotifications } from "@/context/NotificationsContext";
 import {
   Clock3,
   AlertCircle,
@@ -1499,6 +1500,11 @@ const OwnerView = () => {
 
 const PermissionPortal = () => {
   const { role } = useAuth();
+  const { markModuleRead } = useNotifications();
+  useEffect(() => {
+    markModuleRead("permission");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <>
       <PageHeader

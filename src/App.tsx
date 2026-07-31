@@ -19,6 +19,7 @@ import NotFound from "./pages/NotFound";
 import Messages from "./pages/Messages";
 import DocumentManager from "./pages/DocumentManager";
 import { WebSocketProvider } from "@/context/WebSocketContext";
+import { NotificationsProvider } from "@/context/NotificationsContext";
 import MyDocuments from "./pages/MyDocuments";
 import Vault from "./pages/Vault";
 import MyProfile from "./pages/MyProfile";
@@ -69,6 +70,7 @@ function App() {
     <AuthProvider>
       <ThemeProvider>          
         <WebSocketProvider>
+          <NotificationsProvider>
           <BrowserRouter>
             <div className="app-wrapper">
               <Routes>
@@ -103,6 +105,7 @@ function App() {
               <Toaster />
             </div>
           </BrowserRouter>
+          </NotificationsProvider>
         </WebSocketProvider>
       </ThemeProvider>         
     </AuthProvider>

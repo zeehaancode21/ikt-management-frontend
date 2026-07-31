@@ -22,7 +22,6 @@ import {
   AlertTriangle,
   Lightbulb,
   BarChart3,
-  Link2,
   Rocket,
   Bell,
   PenSquare,
@@ -64,6 +63,10 @@ type ContentMode = 'ai' | 'prompted';
 
 // API Base URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+
+// LinkedIn access token used directly for posting. No popup/prompt flow —
+// this is the single source of truth for the token used when publishing.
+const LINKEDIN_ACCESS_TOKEN = import.meta.env.VITE_LINKEDIN_ACCESS_TOKEN || '';
 
 // Category data
 const CATEGORIES: TopicCategory[] = [
@@ -186,6 +189,20 @@ const CATEGORIES: TopicCategory[] = [
   }
 ];
 
+// Small messaging-app-style status dot: solid core + an expanding pulse
+// ring when "active". Respects prefers-reduced-motion via CSS.
+const StatusDot: React.FC<{ active: boolean; label: string }> = ({ active, label }) => (
+  <span
+    className={`sh-status-dot ${active ? 'sh-status-dot--online' : 'sh-status-dot--offline'}`}
+    role="status"
+    aria-label={`${label}: ${active ? 'connected' : 'not connected'}`}
+    title={`${label}: ${active ? 'connected' : 'not connected'}`}
+  >
+    <span className="sh-status-dot-core" aria-hidden="true" />
+    {active && <span className="sh-status-dot-ping" aria-hidden="true" />}
+  </span>
+);
+
 const SocialHub: React.FC = () => {
   const { token, user } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -195,10 +212,6 @@ const SocialHub: React.FC = () => {
   const [postHistory, setPostHistory] = useState<PostHistory[]>([]);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isPosting, setIsPosting] = useState<boolean>(false);
-  const [linkedInToken, setLinkedInToken] = useState<string>(() => {
-    return localStorage.getItem('linkedInToken') || '';
-  });
-  const [showLinkedInAuth, setShowLinkedInAuth] = useState<boolean>(false);
   const [showClearConfirm, setShowClearConfirm] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'linkedin' | 'comingsoon'>('linkedin');
   // AI-generated topics loaded on demand via "Load More", keyed by category id.
@@ -237,15 +250,6 @@ const SocialHub: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('socialPostHistory', JSON.stringify(postHistory));
   }, [postHistory]);
-
-  // Save LinkedIn token to localStorage
-  useEffect(() => {
-    if (linkedInToken) {
-      localStorage.setItem('linkedInToken', linkedInToken);
-    } else {
-      localStorage.removeItem('linkedInToken');
-    }
-  }, [linkedInToken]);
 
   // Helper function to get auth headers
   const getAuthHeaders = () => {
@@ -289,6 +293,10 @@ const SocialHub: React.FC = () => {
 
   // The prompt/topic that will be used for the next generation call.
   const activeTopic = contentMode === 'ai' ? selectedTopic : customPrompt.trim();
+
+  // Whether the LinkedIn connection is considered "live" — i.e. an access
+  // token is configured, so posting can proceed without any extra auth step.
+  const linkedInConnected = Boolean(LINKEDIN_ACCESS_TOKEN);
 
   const generatePost = async () => {
     if (!activeTopic) {
@@ -411,6 +419,10 @@ const SocialHub: React.FC = () => {
     }
   };
 
+  // Posts the generated content to LinkedIn. This now goes straight to the
+  // API call using LINKEDIN_ACCESS_TOKEN — no token-validity check, no
+  // popup, and no user-entered token. The flow is: click "Post to
+  // LinkedIn" -> call the backend directly with LINKEDIN_ACCESS_TOKEN.
   const postToLinkedIn = async () => {
     if (!generatedContent) {
       toast.error('Please generate content first');
@@ -419,11 +431,6 @@ const SocialHub: React.FC = () => {
 
     if (!token) {
       toast.error('Please login to post to LinkedIn');
-      return;
-    }
-
-    if (!linkedInToken) {
-      setShowLinkedInAuth(true);
       return;
     }
 
@@ -436,7 +443,7 @@ const SocialHub: React.FC = () => {
         body: JSON.stringify({
           content: generatedContent,
           topic: currentTopic,
-          linkedInToken: linkedInToken,
+          linkedInToken: LINKEDIN_ACCESS_TOKEN,
           // Optional image attachment, sent as a base64 data URL. Existing
           // backend integrations that don't expect this field can safely
           // ignore it.
@@ -447,9 +454,7 @@ const SocialHub: React.FC = () => {
       const data: ApiResponse = await response.json();
 
       if (data.needsAuth) {
-        setShowLinkedInAuth(true);
-        toast.warning('Please re-authenticate with LinkedIn');
-        setLinkedInToken('');
+        toast.error('LinkedIn authentication failed. Please check the configured access token.');
         setIsPosting(false);
         return;
       }
@@ -487,14 +492,7 @@ const SocialHub: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Error posting to LinkedIn:', error);
-      
-      if (error.message && error.message.includes('401')) {
-        toast.error('LinkedIn token expired. Please re-authenticate.');
-        setShowLinkedInAuth(true);
-        setLinkedInToken('');
-      } else {
-        toast.error('❌ Failed to post to LinkedIn. ' + error.message);
-      }
+      toast.error('❌ Failed to post to LinkedIn. ' + error.message);
       
       setPostHistory(prev => 
         prev.map(item => 
@@ -505,15 +503,6 @@ const SocialHub: React.FC = () => {
       );
     } finally {
       setIsPosting(false);
-    }
-  };
-
-  const handleLinkedInAuth = () => {
-    const testToken = prompt('Enter your LinkedIn Access Token:');
-    if (testToken && testToken.trim()) {
-      setLinkedInToken(testToken.trim());
-      setShowLinkedInAuth(false);
-      toast.success('✅ LinkedIn connected successfully!');
     }
   };
 
@@ -615,7 +604,8 @@ const SocialHub: React.FC = () => {
         >
           <Linkedin size={16} className="sh-tab-icon" aria-hidden="true" />
           LinkedIn
-          <span className="sh-tab-pill sh-tab-pill--live">Live</span>
+          {/* <StatusDot active={linkedInConnected} label="LinkedIn" />
+          <span className="sh-tab-pill sh-tab-pill--live">Live</span> */}
         </button>
         <button
           type="button"
@@ -670,6 +660,7 @@ const SocialHub: React.FC = () => {
             >
               <Sparkles size={15} className="sh-subtab-icon" aria-hidden="true" />
               AI
+              <StatusDot active={contentMode === 'ai'} label="AI mode" />
             </button>
             <button
               type="button"
@@ -680,6 +671,7 @@ const SocialHub: React.FC = () => {
             >
               <PenSquare size={15} className="sh-subtab-icon" aria-hidden="true" />
               Prompted
+              <StatusDot active={contentMode === 'prompted'} label="Prompted mode" />
             </button>
           </div>
 
@@ -915,12 +907,6 @@ const SocialHub: React.FC = () => {
                               </>
                             )}
                           </button>
-                          {!linkedInToken && token && (
-                            <span className="auth-warning">
-                              <AlertTriangle size={14} aria-hidden="true" />
-                              LinkedIn not connected
-                            </span>
-                          )}
                         </div>
                       </div>
                     )}
@@ -1039,38 +1025,6 @@ const SocialHub: React.FC = () => {
               <button type="button" className="btn btn-primary notify-btn" disabled>
                 <Clock size={16} aria-hidden="true" />
                 Stay Tuned
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* LinkedIn Auth Modal */}
-      {showLinkedInAuth && (
-        <div className="modal-overlay" onClick={() => setShowLinkedInAuth(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-icon">
-              <Link2 size={22} aria-hidden="true" />
-            </div>
-            <h2>Connect LinkedIn</h2>
-            <p>You need to connect your LinkedIn account to post content.</p>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mt-2">
-              Enter your LinkedIn Access Token to connect.
-            </p>
-            <div className="modal-actions">
-              <button 
-                type="button"
-                className="btn btn-primary"
-                onClick={handleLinkedInAuth}
-              >
-                Connect LinkedIn
-              </button>
-              <button 
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setShowLinkedInAuth(false)}
-              >
-                Cancel
               </button>
             </div>
           </div>

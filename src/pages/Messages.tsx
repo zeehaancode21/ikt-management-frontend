@@ -3,6 +3,7 @@ import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useWebSocket } from "@/context/WebSocketContext";
 import { UserAvatar } from "@/components/UserAvatar";
+import { useNotifications } from "@/context/NotificationsContext";
 import {
   Send, Search, Users, Megaphone, Hash, ArrowLeft,
   Plus, Settings, Trash2, UserPlus, BarChart2, X, Check,
@@ -672,6 +673,7 @@ function mergeReplyMeta<T extends {
 export default function Messages() {
   const { name, role } = useAuth();
   const { connected, subscribe } = useWebSocket();
+  const { markModuleRead } = useNotifications();
 
   const [users, setUsers] = useState<UserEntry[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -756,6 +758,11 @@ export default function Messages() {
       .then((r) => setUsers(r.data.filter((u) => u.username !== name)))
       .catch(() => { });
   }, [name]);
+
+   useEffect(() => {
+    markModuleRead("messages");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Load groups ──────────────────────────────────────────────────────────────
   const fetchGroups = useCallback(async () => {

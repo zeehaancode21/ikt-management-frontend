@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/select";
 
 import { toast } from "@/hooks/use-toast";
+import { useNotifications } from "@/context/NotificationsContext";
 
 interface Leave {
   id: string | number;
@@ -2112,6 +2113,11 @@ const OwnerView = () => {
 
 const LeavePortal = () => {
   const { role } = useAuth();
+  const { markModuleRead } = useNotifications();
+  useEffect(() => {
+    markModuleRead("leave");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <>
       <PageHeader

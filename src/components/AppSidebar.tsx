@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
+import { useNotifications, type NotificationModule } from "@/context/NotificationsContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
@@ -68,6 +69,17 @@ function formatDisplayName(username: string): string {
   displayNameCache.set(username, result);
   return result;
 }
+
+// ── Sidebar notification badges ─────────────────────────────────────────
+// Maps a nav item's route to the notification module (see
+// NotificationsContext / backend NotificationController#MODULE_TYPES) whose
+// unread count should be shown as a badge next to it. Routes not listed here
+// simply render without a badge.
+const ROUTE_NOTIFICATION_MODULE: Partial<Record<string, NotificationModule>> = {
+  "/messages": "messages",
+  "/leave": "leave",
+  "/permission": "permission",
+};
 
 // ── Company website ───────────────────────────────────────────────────────
 const COMPANY_WEBSITE_URL = "https://www.iktangience.com";
@@ -613,6 +625,7 @@ export const AppSidebar = () => {
   const { name, role, displayRole, refreshRoleName, logout } = useAuth();
   const navigate = useNavigate();
   const [showCP, setShowCP] = useState(false);
+  const { counts } = useNotifications();
 
   // Pick up the latest custom Role Name (e.g. if an admin changed it after
   // this session's login) whenever the sidebar mounts — i.e. on login and
@@ -717,42 +730,42 @@ export const AppSidebar = () => {
   };
 
   // One-off allowance: Zeeshan gets the Media Hub link even though their
-// role isn't OWNER. This is a name check, not a real permission system —
-// if more people need per-user access, replace this with a backend-driven
-// permissions list instead of stacking more name checks here.
-const isZeeshan = (name || "").trim().toLowerCase() === "zeeshan";
+  // role isn't OWNER. This is a name check, not a real permission system —
+  // if more people need per-user access, replace this with a backend-driven
+  // permissions list instead of stacking more name checks here.
+  const isZeeshan = (name || "").trim().toLowerCase() === "zeeshan";
 
-const navItems =
-  role === "OWNER"
-    ? [
-      { to: "/admin", label: "Admin Console", icon: ShieldCheck },
-      { to: "/social-hub", label: "Media Hub", icon: Share2 },
-      { to: "/hours-dashboard", label: "Dashboard", icon: BarChart3 },
-      { to: "/dashboard", label: "Projects", icon: Briefcase },
-      { to: "/documents", label: "Documents", icon: FolderOpen },
-      { to: "/reports", label: "Work Report", icon: FileText },
-      { to: "/leave", label: "Leave Portal", icon: CalendarDays },
-      { to: "/permission", label: "Permission Portal", icon: Timer },
-      { to: "/messages", label: "Messages", icon: MessageSquare },
-    ]
-    : role === "LEAD"
+  const navItems =
+    role === "OWNER"
       ? [
-        ...(isZeeshan ? [{ to: "/social-hub", label: "Media Hub", icon: Share2 }] : []),
-        { to: "/reports", label: "Work Report", icon: FileText },
-        { to: "/dashboard", label: "Projects", icon: Briefcase },
-        { to: "/documents", label: "Documents", icon: FolderOpen },
-        { to: "/leave", label: "Leave Report", icon: CalendarDays },
-        { to: "/permission", label: "Permission Portal", icon: Timer },
-        { to: "/messages", label: "Messages", icon: MessageSquare },
-      ]
+          { to: "/admin", label: "Admin Console", icon: ShieldCheck },
+          { to: "/social-hub", label: "Media Hub", icon: Share2 },
+          { to: "/hours-dashboard", label: "Dashboard", icon: BarChart3 },
+          { to: "/dashboard", label: "Projects", icon: Briefcase },
+          { to: "/documents", label: "Documents", icon: FolderOpen },
+          { to: "/reports", label: "Work Report", icon: FileText },
+          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+          { to: "/permission", label: "Permission Portal", icon: Timer },
+          { to: "/messages", label: "Messages", icon: MessageSquare },
+        ]
+      : role === "LEAD"
+      ? [
+          ...(isZeeshan ? [{ to: "/social-hub", label: "Media Hub", icon: Share2 }] : []),
+          { to: "/reports", label: "Work Report", icon: FileText },
+          { to: "/dashboard", label: "Projects", icon: Briefcase },
+          { to: "/documents", label: "Documents", icon: FolderOpen },
+          { to: "/leave", label: "Leave Report", icon: CalendarDays },
+          { to: "/permission", label: "Permission Portal", icon: Timer },
+          { to: "/messages", label: "Messages", icon: MessageSquare },
+        ]
       : [
-        ...(isZeeshan ? [{ to: "/social-hub", label: "Media Hub", icon: Share2 }] : []),
-        { to: "/reports", label: "Work Report", icon: FileText },
-        { to: "/leave", label: "Leave Portal", icon: CalendarDays },
-        { to: "/permission", label: "Permission Portal", icon: Timer },
-        { to: "/documents", label: "Documents", icon: FolderOpen },
-        { to: "/messages", label: "Messages", icon: MessageSquare },
-      ];
+          ...(isZeeshan ? [{ to: "/social-hub", label: "Media Hub", icon: Share2 }] : []),
+          { to: "/reports", label: "Work Report", icon: FileText },
+          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+          { to: "/permission", label: "Permission Portal", icon: Timer },
+          { to: "/documents", label: "Documents", icon: FolderOpen },
+          { to: "/messages", label: "Messages", icon: MessageSquare },
+        ];
 
   return (
     <>
@@ -876,23 +889,35 @@ const navItems =
 
         {/* NAV */}
         <nav className="sb-nav min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-3">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-white"
-                )
-              }
-            >
-              <item.icon className="h-4 w-4 shrink-0" />
-              {item.label}
-            </NavLink>
-          ))}
+          {navItems.map((item) => {
+            const badgeModule = ROUTE_NOTIFICATION_MODULE[item.to];
+            const badgeCount = badgeModule ? counts[badgeModule] : 0;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-white"
+                  )
+                }
+              >
+                <item.icon className="h-4 w-4 shrink-0" />
+                <span className="flex-1">{item.label}</span>
+                {badgeCount > 0 && (
+                  <span
+                    className="ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white"
+                    aria-label={`${badgeCount} unread`}
+                  >
+                    {badgeCount > 9 ? "9+" : badgeCount}
+                  </span>
+                )}
+              </NavLink>
+            );
+          })}
         </nav>
 
         {/* FOOTER */}
