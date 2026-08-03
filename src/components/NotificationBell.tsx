@@ -28,9 +28,43 @@ export default function NotificationBell() {
   };
 
   useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const isTabVisible = () => document.visibilityState === "visible";
+
+    const startPolling = () => {
+      if (interval) return;
+      interval = setInterval(fetchNotifications, 30000);
+    };
+
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (isTabVisible()) {
+        // Catch up immediately, then resume polling.
+        fetchNotifications();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+
+    // Initial fetch on mount, and start polling only if we're visible now.
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
+    if (isTabVisible()) {
+      startPolling();
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {

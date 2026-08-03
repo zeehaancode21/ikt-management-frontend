@@ -143,6 +143,15 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .dark .date-step-input,
-.dark .owner-date-input {
+.dark .owner-date-input,
+.dark .leave-date-input {
+  /* Force the browser to draw this field's native chrome (including the
+     calendar-picker icon) in its LIGHT-mode style first — i.e. a plain
+     black icon — so the invert filter below has something correct to
+     flip to white. Without this, the field inherits color-scheme: dark
+     from .dark on :root, the browser already renders a white icon on its
+     own, and the invert filter flips it right back to black/invisible
+     (double inversion). This was missing for .leave-date-input, which is
+     why only the Leave Portal's calendar icon stayed dark/invisible. */
   color-scheme: light;
 }
