@@ -73,7 +73,7 @@ type WorkType =
 
 const WORK_TYPE_LABELS: Record<WorkType, string> = {
   CHECKING: "Checking",
-  DESIGNING:"designing",
+  DESIGNING:"Designing",
   DISCUSSION_STUDY: "Discussion / Study",
   E_PLAN: "E Plan",
   ESTIMATION: "Estimation",
