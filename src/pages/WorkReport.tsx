@@ -59,6 +59,7 @@ import {
 
 type WorkType =
   | "E_PLAN"
+  | "DESIGNING"
   | "SHOP_DRAWING"
   | "LINKING"
   | "PART_DRAWING"
@@ -72,6 +73,7 @@ type WorkType =
 
 const WORK_TYPE_LABELS: Record<WorkType, string> = {
   CHECKING: "Checking",
+  DESIGNING:"designing",
   DISCUSSION_STUDY: "Discussion / Study",
   E_PLAN: "E Plan",
   ESTIMATION: "Estimation",
@@ -82,6 +84,7 @@ const WORK_TYPE_LABELS: Record<WorkType, string> = {
   SHOP_DRAWING: "Shop Drawing",
   PRACTICING: "Practicing",
   TRAINING: "Training",
+  
 };
 
 const WORK_TYPE_COLORS: Record<WorkType, string> = {
@@ -96,6 +99,7 @@ const WORK_TYPE_COLORS: Record<WorkType, string> = {
   PRACTICING: "bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300",
   MISCELLANEOUS: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300",
   ESTIMATION: "bg-pink-100 text-pink-700 dark:bg-pink-500/20 dark:text-pink-300",
+  DESIGNING:  "bg-pink-100 text-pink-700 dark:bg-pink-500/20 dark:text-pink-300",
 };
 
 interface WorkEntry {
@@ -108,7 +112,7 @@ interface WorkEntry {
 }
 
 // Work types that don't require a client/project to be selected (e.g. training days)
-const OPTIONAL_WORK_TYPES = new Set<WorkType>(["TRAINING", "PRACTICING", "MISCELLANEOUS", "ESTIMATION"]);
+const OPTIONAL_WORK_TYPES = new Set<WorkType>(["TRAINING", "PRACTICING", "MISCELLANEOUS", "ESTIMATION", "DESIGNING"]);
 
 interface Report {
   id: string | number;
@@ -1007,7 +1011,9 @@ const EmployeeView = () => {
   const [clientsError, setClientsError] = useState(false);
 
   // Draft date used only in Step 1, before the user has committed to it.
-  const [draftDate, setDraftDate] = useState("");
+  // Default to today's date instead of leaving the native date input empty
+  // (an empty value renders as an unfriendly "dd/mm/yyyy" placeholder).
+  const [draftDate, setDraftDate] = useState(today);
 
   const totalHours = entries.reduce((s, e) => s + (parseFloat(e.time) || 0), 0);
   const progressPercent = Math.min(100, (totalHours / 8) * 100);
@@ -1240,7 +1246,7 @@ const EmployeeView = () => {
     setIsEditMode(false);
     setEntries([createEntry()]);
     setDate("");
-    setDraftDate("");
+    setDraftDate(today);
     setHasInteracted(false);
   };
 

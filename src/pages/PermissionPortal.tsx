@@ -21,6 +21,7 @@ import { ClockTimePicker } from "@/components/ClockTimePicker";
 import { PageHeader } from "@/components/PageHeader";
 import { Spinner, FullSpinner } from "@/components/Spinner";
 import { StatusBadge } from "@/components/StatusBadge";
+import { UsageAnalyticsChart } from "@/components/UsageAnalyticsChart";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -603,6 +604,11 @@ const EmployeeView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [historyTab, setHistoryTab] = useState<"pending" | "all" | "approved" | "rejected">("pending");
+  // "All" / "Filter" toggle for the employee's own permission history.
+  // "filter" (the default) keeps the existing month picker + status tabs.
+  // "all" drops every filter and groups the complete history into
+  // Pending/Reapproval/Approved/Rejected sections instead.
+  const [historyViewMode, setHistoryViewMode] = useState<"filter" | "all">("filter");
   // "yyyy-MM", defaults to the current month
   const [historyMonth, setHistoryMonth] = useState<string>(() => format(new Date(), "yyyy-MM"));
 
@@ -809,8 +815,8 @@ const EmployeeView = () => {
     }
   };
 
-  // ── Permissions scoped to the selected month ──────────────────────────
-  const monthFilteredPermissions = permissions.filter((p) => p.date?.slice(0, 7) === historyMonth);
+  // ── Permissions scoped to the selected month (or every permission, in "all" view mode) ──
+  const monthFilteredPermissions = historyViewMode === "all" ? permissions : permissions.filter((p) => p.date?.slice(0, 7) === historyMonth);
 
   // ── Counts for tab badges ──────────────────────────────────────────────
   const pendingCount = monthFilteredPermissions.filter((p) => p.status?.toUpperCase() === "PENDING").length;
@@ -842,6 +848,30 @@ const EmployeeView = () => {
       return 0;
     }
   });
+
+  // ── "All" view grouping ───────────────────────────────────────────────
+  // Same records, broken back out into the same status sections the
+  // individual tabs show, all rendered together on one page.
+  const groupedPermissions =
+    historyViewMode === "all"
+      ? (
+          [
+            { key: "pending", label: "Pending", icon: CalendarClock, items: monthFilteredPermissions.filter((p) => p.status?.toUpperCase() === "PENDING") },
+            { key: "reapproval", label: "Reapproval pending", icon: CalendarClock, items: monthFilteredPermissions.filter((p) => p.status?.toUpperCase() === "REAPPROVAL_PENDING") },
+            { key: "approved", label: "Approved", icon: CalendarCheck2, items: monthFilteredPermissions.filter((p) => p.status?.toUpperCase() === "APPROVED") },
+            { key: "rejected", label: "Rejected", icon: CalendarX2, items: monthFilteredPermissions.filter((p) => p.status?.toUpperCase() === "REJECTED") },
+            {
+              key: "other",
+              label: "Other",
+              icon: CalendarRange,
+              items: monthFilteredPermissions.filter((p) => {
+                const s = p.status?.toUpperCase();
+                return s !== "PENDING" && s !== "REAPPROVAL_PENDING" && s !== "APPROVED" && s !== "REJECTED";
+              }),
+            },
+          ] as const
+        ).filter((g) => g.items.length > 0)
+      : [];
 
   return (
     <div className="space-y-6">
@@ -937,7 +967,8 @@ const EmployeeView = () => {
             <h2 className="text-base font-semibold leading-tight">Permission history</h2>
             <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
               <span>
-                {monthFilteredPermissions.length} request{monthFilteredPermissions.length !== 1 ? "s" : ""} in {format(new Date(`${historyMonth}-01`), "MMMM yyyy")}
+                {monthFilteredPermissions.length} request{monthFilteredPermissions.length !== 1 ? "s" : ""}
+                {historyViewMode === "filter" ? ` in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}` : ""}
               </span>
               {pendingCount > 0 && (
                 <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
@@ -962,24 +993,42 @@ const EmployeeView = () => {
             </p>
           </div>
 
-          {/* Month picker */}
-          <div className="w-full max-w-[180px] space-y-1.5">
-            <Label htmlFor="employee-history-month" className="text-xs">Month</Label>
-            <Input
-              id="employee-history-month"
-              type="month"
-              value={historyMonth}
-              onChange={(e) => setHistoryMonth(e.target.value)}
-              className="h-9"
-            />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            {/* All / Filter toggle — "All" drops the month picker and the
+                Pending/All/Approved/Rejected tabs below and groups every
+                permission request into status sections instead. "Filter"
+                (default) keeps the month-scoped single-tab view, defaulting
+                to the current month. */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">View</Label>
+              <div role="tablist" aria-label="Show all records or filter by month/status" className="inline-flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
+                <TabButton active={historyViewMode === "all"} onClick={() => setHistoryViewMode("all")} label="All" controls={historyPanelId} />
+                <TabButton active={historyViewMode === "filter"} onClick={() => setHistoryViewMode("filter")} label="Filter" controls={historyPanelId} />
+              </div>
+            </div>
+
+            {historyViewMode === "filter" && (
+              <div className="w-full max-w-[180px] space-y-1.5">
+                <Label htmlFor="employee-history-month" className="text-xs">Month</Label>
+                <Input
+                  id="employee-history-month"
+                  type="month"
+                  value={historyMonth}
+                  onChange={(e) => setHistoryMonth(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+            )}
           </div>
 
-          <div role="tablist" aria-label="Filter permission history" className="inline-flex w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
-            <TabButton active={historyTab === "pending"} onClick={() => setHistoryTab("pending")} icon={CalendarClock} label="Pending" count={pendingCount} controls={historyPanelId} />
-            <TabButton active={historyTab === "all"} onClick={() => setHistoryTab("all")} icon={CalendarRange} label="All" count={allCount} controls={historyPanelId} />
-            <TabButton active={historyTab === "approved"} onClick={() => setHistoryTab("approved")} icon={CalendarCheck2} label="Approved" count={approvedCount} controls={historyPanelId} />
-            <TabButton active={historyTab === "rejected"} onClick={() => setHistoryTab("rejected")} icon={CalendarX2} label="Rejected" count={rejectedCount} controls={historyPanelId} />
-          </div>
+          {historyViewMode === "filter" && (
+            <div role="tablist" aria-label="Filter permission history" className="inline-flex w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
+              <TabButton active={historyTab === "pending"} onClick={() => setHistoryTab("pending")} icon={CalendarClock} label="Pending" count={pendingCount} controls={historyPanelId} />
+              <TabButton active={historyTab === "all"} onClick={() => setHistoryTab("all")} icon={CalendarRange} label="All" count={allCount} controls={historyPanelId} />
+              <TabButton active={historyTab === "approved"} onClick={() => setHistoryTab("approved")} icon={CalendarCheck2} label="Approved" count={approvedCount} controls={historyPanelId} />
+              <TabButton active={historyTab === "rejected"} onClick={() => setHistoryTab("rejected")} icon={CalendarX2} label="Rejected" count={rejectedCount} controls={historyPanelId} />
+            </div>
+          )}
         </div>
 
         <div id={historyPanelId} role="tabpanel" className="p-4 sm:p-6">
@@ -989,6 +1038,29 @@ const EmployeeView = () => {
             </div>
           ) : error ? (
             <ErrorState message={error} onRetry={load} />
+          ) : historyViewMode === "all" ? (
+            groupedPermissions.length === 0 ? (
+              <EmptyState message="No permission requests found." />
+            ) : (
+              <div className="space-y-5">
+                {groupedPermissions.map((group) => (
+                  <div key={group.key} className="space-y-2">
+                    <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                      <group.icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                      <span>{group.label}</span>
+                      <span className="ml-0.5 min-w-[1.1rem] rounded-full bg-muted px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-muted-foreground">
+                        {group.items.length}
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      {group.items.map((p) => (
+                        <PermissionCard key={p.id} p={p} onRequestChange={openReapproval} onCancelReapproval={cancelReapproval} cancelingId={cancelingId} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
           ) : sortedPermissions.length === 0 ? (
             <EmptyState
               message={
@@ -1145,6 +1217,13 @@ const OwnerView = () => {
   // scoped to the one employee the owner picked.
   const [empHistoryTab, setEmpHistoryTab] = useState<"pending" | "all" | "approved" | "rejected">("all");
 
+  // "All" / "Filter" toggle for the Employee History tab. "filter" (the
+  // default) keeps the existing month picker + Pending/All/Approved/Rejected
+  // sub-tabs. "all" drops every filter and shows the employee's complete
+  // permission history — the month picker, sub-tabs, and month-scoped
+  // counts are hidden while this is active.
+  const [empViewMode, setEmpViewMode] = useState<"filter" | "all">("filter");
+
   // ── Month filter for the Employee History tab ──────────────────────────
   // "yyyy-MM", defaults to the current month. Powers /permissions/employee-monthly
   // so an owner can see how many requests were approved/rejected/pending for
@@ -1261,6 +1340,7 @@ const OwnerView = () => {
     (empName: string) => {
       setSelectedEmployee(empName);
       setEmpHistoryTab("all");
+      setEmpViewMode("filter");
       loadEmpPermissions(empName);
     },
     [loadEmpPermissions]
@@ -1326,8 +1406,10 @@ const OwnerView = () => {
     }
   };
 
+  // In "all" view mode every filter is dropped, so the month restriction
+  // below is skipped and every permission request for the employee is shown.
   const empMonthFiltered = [...empPermissions]
-    .filter((p) => p.date?.slice(0, 7) === empMonth)
+    .filter((p) => empViewMode === "all" || p.date?.slice(0, 7) === empMonth)
     .sort((a, b) => {
       try {
         return new Date(b.date).getTime() - new Date(a.date).getTime();
@@ -1337,10 +1419,15 @@ const OwnerView = () => {
     });
 
   // ── Pending / All / Approved / Rejected counts + filter, scoped to the
-  // selected employee's month-filtered records ──
+  // selected employee's month-filtered records (or all records, in "all"
+  // view mode) ──
   const empPendingCount = empMonthFiltered.filter((p) => p.status?.toUpperCase() === "PENDING" || p.status?.toUpperCase() === "REAPPROVAL_PENDING").length;
   const empApprovedTabCount = empMonthFiltered.filter((p) => p.status?.toUpperCase() === "APPROVED").length;
   const empRejectedTabCount = empMonthFiltered.filter((p) => p.status?.toUpperCase() === "REJECTED").length;
+  // The same Pending/All/Approved/Rejected segmented toggle (empHistoryTab)
+  // drives the filter in both "All" and "Filter" view modes — "All" mode
+  // just skips the month restriction above, it doesn't skip the status
+  // filter, so the exact same toggle/state/logic is reused everywhere.
   const filteredEmpPermissions = empMonthFiltered.filter((p) => {
     const status = p.status?.toUpperCase();
     if (empHistoryTab === "pending") return status === "PENDING" || status === "REAPPROVAL_PENDING";
@@ -1414,7 +1501,7 @@ const OwnerView = () => {
         {/* ══ EMPLOYEE HISTORY TAB ══ */}
         {ownerTab === "employee" && (
           <div className="space-y-5">
-            <div className="flex flex-col gap-4 sm:flex-row">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
               <div className="w-full max-w-xs space-y-2">
                 <Label htmlFor="perm-owner-employee-select">Select employee</Label>
                 <Select value={selectedEmployee} onValueChange={handleEmployeeSelect} disabled={namesLoading}>
@@ -1430,10 +1517,26 @@ const OwnerView = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="w-full max-w-[180px] space-y-2">
-                <Label htmlFor="perm-owner-month-select">Month</Label>
-                <Input id="perm-owner-month-select" type="month" value={empMonth} onChange={(e) => setEmpMonth(e.target.value)} className="h-9" />
+
+              {/* All / Filter toggle — "All" drops the month picker and just
+                  shows every permission request for the employee (still
+                  narrowable by the same Pending/All/Approved/Rejected toggle
+                  below). "Filter" (default) keeps the month-scoped view,
+                  defaulting to the current month. */}
+              <div className="space-y-2">
+                <Label>View</Label>
+                <div role="tablist" aria-label="Show all records or filter by month/status" className="inline-flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
+                  <TabButton active={empViewMode === "all"} onClick={() => setEmpViewMode("all")} label="All" controls={ownerPanelId} />
+                  <TabButton active={empViewMode === "filter"} onClick={() => setEmpViewMode("filter")} label="Filter" controls={ownerPanelId} />
+                </div>
               </div>
+
+              {empViewMode === "filter" && (
+                <div className="w-full max-w-[180px] space-y-2">
+                  <Label htmlFor="perm-owner-month-select">Month</Label>
+                  <Input id="perm-owner-month-select" type="month" value={empMonth} onChange={(e) => setEmpMonth(e.target.value)} className="h-9" />
+                </div>
+              )}
             </div>
 
             {!selectedEmployee ? (
@@ -1448,27 +1551,51 @@ const OwnerView = () => {
               <div className="space-y-4">
                 <QuotaSummary quota={empQuota} label={`${selectedEmployee}'s permission quota`} />
 
-                {/* Approved / Rejected / Pending counts for the selected month */}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Approved Request</p>
-                    <p className="text-lg font-bold text-green-600 dark:text-green-400">{empMonthLoading ? "…" : empMonthCounts?.approved ?? 0}</p>
-                  </div>
-                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Rejected Request</p>
-                    <p className="text-lg font-bold text-red-600 dark:text-red-400">{empMonthLoading ? "…" : empMonthCounts?.rejected ?? 0}</p>
-                  </div>
-                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Pending Request</p>
-                    <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{empMonthLoading ? "…" : empMonthCounts?.pending ?? 0}</p>
-                  </div>
-                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Approved hours</p>
-                    <p className="text-lg font-bold text-foreground">{empMonthLoading ? "…" : formatHours(empMonthCounts?.approvedHours ?? 0)}h</p>
-                  </div>
-                </div>
+                {/* Animated permission usage analytics for the selected employee.
+                    Re-mounts (and replays its entrance/gauge animation) whenever
+                    a different employee is selected, via the animationKey prop. */}
+                <UsageAnalyticsChart
+                  title="Permission usage"
+                  unitLabel="hrs"
+                  allocated={empQuota.maxHoursPerMonth}
+                  used={empQuota.hoursUsedThisMonth}
+                  remaining={empQuota.hoursRemainingThisMonth}
+                  approved={empApprovedTabCount}
+                  pending={empPendingCount}
+                  rejected={empRejectedTabCount}
+                  isLoading={empLoading}
+                  animationKey={selectedEmployee}
+                />
 
-                {/* Pending / All / Approved / Rejected sub-filter for this employee */}
+                {empViewMode === "filter" && (
+                  /* Approved / Rejected / Pending counts for the selected month —
+                     only meaningful when scoped to a month, so this stays
+                     Filter-mode only. */
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Approved Request</p>
+                      <p className="text-lg font-bold text-green-600 dark:text-green-400">{empMonthLoading ? "…" : empMonthCounts?.approved ?? 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Rejected Request</p>
+                      <p className="text-lg font-bold text-red-600 dark:text-red-400">{empMonthLoading ? "…" : empMonthCounts?.rejected ?? 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Pending Request</p>
+                      <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{empMonthLoading ? "…" : empMonthCounts?.pending ?? 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Approved hours</p>
+                      <p className="text-lg font-bold text-foreground">{empMonthLoading ? "…" : formatHours(empMonthCounts?.approvedHours ?? 0)}h</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Pending / All / Approved / Rejected segmented status toggle
+                    for this employee — the exact same TabButton row/state
+                    (empHistoryTab) drives filtering in both "All" and
+                    "Filter" view modes, so there's a single implementation
+                    to keep consistent instead of two. */}
                 <div role="tablist" aria-label="Filter this employee's permission records" className="inline-flex w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
                   <TabButton active={empHistoryTab === "pending"} onClick={() => setEmpHistoryTab("pending")} icon={CalendarClock} label="Pending" count={empPendingCount} controls={ownerPanelId} />
                   <TabButton active={empHistoryTab === "all"} onClick={() => setEmpHistoryTab("all")} icon={CalendarRange} label="All" count={empMonthFiltered.length} controls={ownerPanelId} />
@@ -1476,8 +1603,15 @@ const OwnerView = () => {
                   <TabButton active={empHistoryTab === "rejected"} onClick={() => setEmpHistoryTab("rejected")} icon={CalendarX2} label="Rejected" count={empRejectedTabCount} controls={ownerPanelId} />
                 </div>
 
+                {/* Permission cards — filtered by the segmented toggle above,
+                    scoped to the month in "Filter" mode or to every record
+                    in "All" mode. */}
                 {filteredEmpPermissions.length === 0 ? (
-                  <EmptyState message={`No ${empHistoryTab === "all" ? "" : empHistoryTab + " "}permission records found for ${selectedEmployee} in ${empMonth}.`} />
+                  <EmptyState
+                    message={`No ${empHistoryTab === "all" ? "" : empHistoryTab + " "}permission records found for ${selectedEmployee}${
+                      empViewMode === "filter" ? ` in ${empMonth}` : ""
+                    }.`}
+                  />
                 ) : (
                   <div className="space-y-3">
                     {filteredEmpPermissions.map((p) => (
