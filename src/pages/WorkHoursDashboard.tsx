@@ -537,7 +537,7 @@ const WorkHoursDashboard = () => {
   return (
     <div className="whd-page">
       <PageHeader
-        title="Hours Dashboard"
+        title="Project Hours Dashboard"
         description="Filter by client and project to see total hours spent on Modeling, Checking, and E Plan + Shop Drawing + Linking + Part Drawing."
       />
 

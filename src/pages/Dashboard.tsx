@@ -218,6 +218,21 @@ function useAbortController() {
 // and close everything regardless. That was the cause of the update form
 // closing unexpectedly: Escape always ran the very first version of the
 // close handler, from before editing even started.
+//
+// It also ignores Escape keydowns that originate from a native <select> or
+// a native <input type="date"> picker. Browsers dispatch a real "Escape"
+// keydown to the document when the user dismisses one of these native
+// popups — for example, opening a <select>'s option list, arrowing to a
+// value that's already selected (so nothing actually changes), and
+// pressing Escape/clicking away to close the list — and that keydown
+// bubbles up exactly like a user pressing Escape to close the whole
+// modal. Without this guard, that ordinary dropdown interaction is
+// indistinguishable from "close the modal", so picking an already-selected
+// value (or simply dismissing an open dropdown) would wipe out whatever
+// was being edited and close the popup. Filtering on the event's own
+// target — rather than tracking "was a dropdown open" in state — means the
+// guard applies no matter which dropdown or date field triggered it, and
+// never needs to be updated when new form fields are added.
 function useEscapeToClose(isOpen, onClose) {
   const previouslyFocused = useRef(null);
   const onCloseRef = useRef(onClose);
@@ -228,9 +243,17 @@ function useEscapeToClose(isOpen, onClose) {
     previouslyFocused.current = document.activeElement;
 
     const handleKeyDown = (e) => {
-      if (e.key === "Escape") {
-        onCloseRef.current?.();
+      if (e.key !== "Escape") return;
+
+      const target = e.target;
+      if (target && typeof target.closest === "function") {
+        // Native <select> dropdown (covers our .form-select / .co-table-select).
+        if (target.tagName === "SELECT" || target.closest("select")) return;
+        // Native date input / its calendar picker popup.
+        if (target.tagName === "INPUT" && target.type === "date") return;
       }
+
+      onCloseRef.current?.();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -318,9 +341,6 @@ const styles = `
   html { scroll-behavior: smooth; }
   body { background: var(--bg); font-family: 'Outfit', sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; }
 
-  /* ── Global accessible focus state ─────────────────────────────────────
-     Visible only for keyboard users (not on mouse click), consistent across
-     every interactive element in the dashboard. */
   a:focus-visible,
   button:focus-visible,
   input:focus-visible,
@@ -438,7 +458,6 @@ const styles = `
   }
   .status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 
-  /* ── Project Details View — animated, elevated cards ──────────────────── */
   .detail-hero {
     position: relative; overflow: hidden;
     border: 1px solid var(--border); border-radius: var(--radius-lg);
@@ -517,10 +536,6 @@ const styles = `
   .form-row.three { grid-template-columns: 1fr 1fr 1fr; }
   .form-group { display: flex; flex-direction: column; gap: 5px; }
 
-  /* Dedicated, uniform grid for the "Edit project" form: every row is the
-     same two equal-width columns, so fields never drift out of alignment
-     the way a mix of 2- and 3-column rows would. Full-width fields (Team,
-     Remarks) opt in with .span-2. */
   .edit-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 14px; }
   .edit-form-grid .span-2 { grid-column: 1 / -1; }
   @media (max-width: 560px) {
@@ -534,15 +549,12 @@ const styles = `
   .form-textarea { resize: vertical; min-height: 80px; }
   .form-select option { background: var(--surface); color: var(--text); }
 
-  /* ─── Custom date picker icon ─────────────────────────── */
-
   .date-picker-wrapper {
     position: relative;
     display: inline-block;
     width: 100%;
   }
 
-  /* Hide native icon in all browsers */
   .date-input-ifc-ifa::-webkit-calendar-picker-indicator {
     display: none !important;
     -webkit-appearance: none;
@@ -551,13 +563,12 @@ const styles = `
     display: none !important;
   }
   .date-input-ifc-ifa {
-    -moz-appearance: textfield; /* Firefox */
-    appearance: textfield;      /* standard */
-    padding-right: 36px;        /* make room for custom icon */
-    cursor: pointer;            /* whole field opens the picker now */
+    -moz-appearance: textfield;
+    appearance: textfield;
+    padding-right: 36px;
+    cursor: pointer;
   }
 
-  /* Custom icon – SVG calendar (gray in light mode) */
   .date-picker-wrapper::after {
     content: '';
     position: absolute;
@@ -570,13 +581,10 @@ const styles = `
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
-    pointer-events: none;  /* allow click to pass through to input */
+    pointer-events: none;
     transition: opacity 0.2s, filter 0.2s;
   }
 
-  /* In dark mode, make the icon white. Two separate rules — one for the
-     manual .dark class toggle, one for the OS-level preference — since a
-     selector list can't be mixed into an @media block. */
   :root.dark .date-picker-wrapper::after,
   .dark .date-picker-wrapper::after {
     filter: invert(1) brightness(200%);
@@ -587,7 +595,6 @@ const styles = `
     }
   }
 
-  /* Hover effect (optional) */
   .date-picker-wrapper:hover::after {
     opacity: 0.8;
   }
