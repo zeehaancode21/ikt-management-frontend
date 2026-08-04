@@ -820,6 +820,41 @@
   white-space: nowrap;
 }
 
+/* Year-group sections inside the Manage Clients popup — mirrors the
+   year-grouped "Projects" dropdown pattern used on the Work Report page,
+   just restyled with this page's own design tokens instead of a fixed
+   indigo accent. */
+.whd-fav-year-group + .whd-fav-year-group {
+  margin-top: 6px;
+}
+
+.whd-fav-year-label {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin-bottom: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.08);
+  backdrop-filter: blur(4px);
+  border-radius: 0.4rem;
+}
+
+.whd-fav-year-count {
+  margin-left: auto;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .whd-fav-star--on {
   color: hsl(var(--primary));
 }

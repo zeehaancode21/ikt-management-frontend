@@ -1,10 +1,14 @@
 import { useEffect, useState, useCallback, useRef, useMemo, useId } from "react";
 import api, { getErrorMessage } from "@/lib/api";
+import { groupByYear } from "@/lib/yearGrouping";
 import { PageHeader } from "@/components/PageHeader";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -23,6 +27,7 @@ import {
   Star,
   Plus,
   Search,
+  Calendar,
   X,
 } from "lucide-react";
 import "./WorkHoursDashboard.css";
@@ -44,6 +49,38 @@ interface ApiListResponse {
   data: string[];
   error?: string;
 }
+
+/** A single (year, client) pairing returned by the grouped-by-year clients endpoint. */
+interface ClientYearOption {
+  year: string;
+  clientName: string;
+}
+
+/** A single (year, project) pairing returned by the grouped-by-year projects endpoint. */
+interface ProjectYearOption {
+  year: string;
+  projectName: string;
+}
+
+/**
+ * One year's worth of clients/projects, ready to render as a labeled
+ * section in a dropdown. Same shape used by the Work Report page's
+ * Projects dropdown (see `@/pages/WorkReport`), reused here for both the
+ * Client and Project dropdowns so the two pages stay consistent.
+ */
+type YearGroupedList = { year: string; names: string[] };
+
+/** Groups a flat list of (year, client) pairs — see `groupByYear` in `@/lib/yearGrouping`. */
+const groupClientsByYear = (options: ClientYearOption[]): YearGroupedList[] =>
+  groupByYear(options.map(({ year, clientName }) => ({ year, name: clientName }))).map(
+    ({ year, items }) => ({ year, names: items })
+  );
+
+/** Groups a flat list of (year, project) pairs — see `groupByYear` in `@/lib/yearGrouping`. */
+const groupProjectsByYear = (options: ProjectYearOption[]): YearGroupedList[] =>
+  groupByYear(options.map(({ year, projectName }) => ({ year, name: projectName }))).map(
+    ({ year, items }) => ({ year, names: items })
+  );
 
 const ALL_VALUE = "__ALL__";
 
@@ -363,8 +400,10 @@ const FavoriteChip = ({
 /* ─── Main page ─────────────────────────────────────────────── */
 
 const WorkHoursDashboard = () => {
-  const [clients, setClients] = useState<string[]>([]);
-  const [projectsCache, setProjectsCache] = useState<Record<string, string[]>>({});
+  // Clients, grouped by year (newest first, alphabetical within a year) —
+  // the same shape/behavior as the Work Report "Projects" dropdown.
+  const [clientGroups, setClientGroups] = useState<YearGroupedList[]>([]);
+  const [projectsCache, setProjectsCache] = useState<Record<string, YearGroupedList[]>>({});
 
   const [selectedClient, setSelectedClient] = useState<string>(ALL_VALUE);
   const [selectedProject, setSelectedProject] = useState<string>(ALL_VALUE);
@@ -392,16 +431,18 @@ const WorkHoursDashboard = () => {
   const favModalDescId = useId();
   const favSearchInputId = useId();
 
-  /* Fetch client list once */
+  /* Fetch client list, grouped by year, once — reuses the same
+     grouped-by-year endpoint pattern as the Work Report Projects
+     dropdown, just scoped to clients instead of one client's projects. */
   useEffect(() => {
     api
-      .get<{ success: boolean; data: string[] }>("/project-status")
+      .get<{ success: boolean; data: ClientYearOption[] }>("/project-status/grouped-by-year")
       .then(({ data }) => {
-        const clientsArray = data?.success && Array.isArray(data?.data) ? data.data : [];
-        setClients(clientsArray);
+        const options = data?.success && Array.isArray(data?.data) ? data.data : [];
+        setClientGroups(groupClientsByYear(options));
       })
       .catch(() => {
-        setClients([]);
+        setClientGroups([]);
       })
       .finally(() => setLoadingClients(false));
   }, []);
@@ -415,7 +456,10 @@ const WorkHoursDashboard = () => {
       .finally(() => setLoadingFavorites(false));
   }, []);
 
-  /* Fetch projects whenever the selected client changes */
+  /* Fetch projects whenever the selected client changes — grouped by
+     year, same endpoint and grouping logic the Work Report Projects
+     dropdown uses, so a project stays reachable under every year it has
+     activity in instead of the dropdown being narrowed to one year. */
   useEffect(() => {
     if (selectedClient === ALL_VALUE) {
       setSelectedProject(ALL_VALUE);
@@ -428,12 +472,12 @@ const WorkHoursDashboard = () => {
 
     setLoadingProjects(true);
     api
-      .get<{ success: boolean; data: string[] }>(
-        `/project-status/client/${encodeURIComponent(selectedClient)}`
+      .get<{ success: boolean; data: ProjectYearOption[] }>(
+        `/project-status/client/${encodeURIComponent(selectedClient)}/grouped-by-year`
       )
       .then(({ data }) => {
-        const projectsArray = data?.success && Array.isArray(data?.data) ? data.data : [];
-        setProjectsCache((prev) => ({ ...prev, [selectedClient]: projectsArray }));
+        const options = data?.success && Array.isArray(data?.data) ? data.data : [];
+        setProjectsCache((prev) => ({ ...prev, [selectedClient]: groupProjectsByYear(options) }));
       })
       .catch(() => {
         setProjectsCache((prev) => ({ ...prev, [selectedClient]: [] }));
@@ -505,13 +549,25 @@ const WorkHoursDashboard = () => {
     [favoriteClients, togglingClient, selectedClient]
   );
 
-  const filteredAllClients = useMemo(() => {
-    const q = favSearch.trim().toLowerCase();
-    if (!q) return clients;
-    return clients.filter((c) => c.toLowerCase().includes(q));
-  }, [clients, favSearch]);
+  // Total client count across all year groups (de-duplicated), used for the
+  // Manage popup's empty state — a client can appear in more than one year.
+  const totalClientCount = useMemo(
+    () => new Set(clientGroups.flatMap((g) => g.names)).size,
+    [clientGroups]
+  );
 
-  const projectOptions = selectedClient !== ALL_VALUE ? projectsCache[selectedClient] ?? [] : [];
+  // Client year-groups filtered by the Manage popup's search box: each
+  // group keeps only its matching clients, and empty groups are dropped
+  // entirely so the search box also collapses years with no matches.
+  const filteredClientGroups = useMemo(() => {
+    const q = favSearch.trim().toLowerCase();
+    if (!q) return clientGroups;
+    return clientGroups
+      .map((g) => ({ ...g, names: g.names.filter((c) => c.toLowerCase().includes(q)) }))
+      .filter((g) => g.names.length > 0);
+  }, [clientGroups, favSearch]);
+
+  const projectGroups = selectedClient !== ALL_VALUE ? projectsCache[selectedClient] ?? [] : [];
 
   const total = summary?.totalHours ?? 0;
   const pct = (n: number, denom: number) => (denom > 0 ? (n / denom) * 100 : 0);
@@ -610,12 +666,27 @@ const WorkHoursDashboard = () => {
                       placeholder={selectedClient === ALL_VALUE ? "Select a client first" : "All projects"}
                     />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="year-grouped-select-content max-h-[320px] overflow-y-auto custom-scrollbar">
                     <SelectItem value={ALL_VALUE}>All Projects</SelectItem>
-                    {projectOptions.map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {p}
-                      </SelectItem>
+                    {projectGroups.length > 0 && (
+                      <SelectSeparator className="my-1.5" />
+                    )}
+                    {projectGroups.map((group, idx) => (
+                      <SelectGroup key={group.year}>
+                        {idx > 0 && <SelectSeparator className="my-1.5" />}
+                        <SelectLabel className="year-group-label sticky top-0 z-10 flex items-center gap-1.5 py-1.5 pl-2 pr-2 text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50/90 dark:bg-indigo-950/40 backdrop-blur-sm rounded-sm">
+                          <Calendar className="h-3 w-3" aria-hidden="true" />
+                          {group.year}
+                          <span className="ml-auto font-medium text-slate-400 dark:text-slate-500 normal-case tracking-normal">
+                            {group.names.length}
+                          </span>
+                        </SelectLabel>
+                        {group.names.map((p) => (
+                          <SelectItem key={`${group.year}-${p}`} value={p} className="year-group-item pl-6">
+                            {p}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     ))}
                   </SelectContent>
                 </Select>
@@ -787,36 +858,45 @@ const WorkHoursDashboard = () => {
             <div className="whd-fav-list">
               {loadingClients ? (
                 <div className="whd-fav-loading">Loading clients…</div>
-              ) : clients.length === 0 ? (
+              ) : totalClientCount === 0 ? (
                 <div className="whd-fav-loading">No clients found.</div>
-              ) : filteredAllClients.length === 0 ? (
+              ) : filteredClientGroups.length === 0 ? (
                 <div className="whd-fav-loading">No clients match “{favSearch}”.</div>
               ) : (
-                filteredAllClients.map((c) => {
-                  const isFav = favoriteClients.includes(c);
-                  const busy = togglingClient === c;
-                  return (
-                    <button
-                      type="button"
-                      key={c}
-                      className={`whd-fav-row ${isFav ? "whd-fav-row--active" : ""}`}
-                      onClick={() => toggleFavorite(c)}
-                      disabled={busy}
-                      aria-pressed={isFav}
-                    >
-                      <span className="whd-fav-row-name">{c}</span>
-                      {busy ? (
-                        <span className="whd-fav-spinner" aria-hidden="true" />
-                      ) : (
-                        <Star
-                          className={`h-4 w-4 ${isFav ? "whd-fav-star--on" : "whd-fav-star--off"}`}
-                          fill={isFav ? "currentColor" : "none"}
-                          aria-hidden="true"
-                        />
-                      )}
-                    </button>
-                  );
-                })
+                filteredClientGroups.map((group) => (
+                  <div key={group.year} className="whd-fav-year-group">
+                    <div className="whd-fav-year-label year-group-label">
+                      <Calendar className="h-3 w-3" aria-hidden="true" />
+                      {group.year}
+                      <span className="whd-fav-year-count">{group.names.length}</span>
+                    </div>
+                    {group.names.map((c) => {
+                      const isFav = favoriteClients.includes(c);
+                      const busy = togglingClient === c;
+                      return (
+                        <button
+                          type="button"
+                          key={`${group.year}-${c}`}
+                          className={`whd-fav-row year-group-item ${isFav ? "whd-fav-row--active" : ""}`}
+                          onClick={() => toggleFavorite(c)}
+                          disabled={busy}
+                          aria-pressed={isFav}
+                        >
+                          <span className="whd-fav-row-name">{c}</span>
+                          {busy ? (
+                            <span className="whd-fav-spinner" aria-hidden="true" />
+                          ) : (
+                            <Star
+                              className={`h-4 w-4 ${isFav ? "whd-fav-star--on" : "whd-fav-star--off"}`}
+                              fill={isFav ? "currentColor" : "none"}
+                              aria-hidden="true"
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))
               )}
             </div>
           </div>

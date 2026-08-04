@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { format } from "date-fns";
 import api, { getErrorMessage } from "@/lib/api";
+import { groupByYear } from "@/lib/yearGrouping";
 import { useAuth } from "@/context/AuthContext";
 import { PageHeader } from "@/components/PageHeader";
 import { FullSpinner } from "@/components/Spinner";
@@ -151,23 +152,16 @@ interface ProjectYearGroup {
  * used by both the Lead (Owner) and User (Employee) views, so the full
  * project history stays browsable in a single control instead of being
  * filtered down to one year at a time.
+ *
+ * Thin wrapper around the shared `groupByYear` helper (see
+ * `@/lib/yearGrouping`) so other pages — e.g. the Owner's Hours
+ * Dashboard's Client/Project dropdowns — can reuse the exact same
+ * grouping/sorting behavior without duplicating it.
  */
-const groupProjectsByYear = (options: ProjectYearOption[]): ProjectYearGroup[] => {
-  const byYear = new Map<string, Set<string>>();
-  for (const { year, projectName } of options) {
-    const y = year || "Unassigned";
-    const p = projectName?.trim();
-    if (!p) continue;
-    if (!byYear.has(y)) byYear.set(y, new Set());
-    byYear.get(y)!.add(p);
-  }
-  return [...byYear.entries()]
-    .sort(([a], [b]) => b.localeCompare(a, undefined, { numeric: true }))
-    .map(([year, projects]) => ({
-      year,
-      projects: [...projects].sort((a, b) => a.localeCompare(b)),
-    }));
-};
+const groupProjectsByYear = (options: ProjectYearOption[]): ProjectYearGroup[] =>
+  groupByYear(options.map(({ year, projectName }) => ({ year, name: projectName }))).map(
+    ({ year, items }) => ({ year, projects: items })
+  );
 
 /* ─── Helpers ────────────────────────────────────────────── */
 
