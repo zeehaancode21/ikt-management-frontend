@@ -10,7 +10,10 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -128,6 +131,43 @@ interface Report {
   // (e.g. "submittedAt") — used to gate the 10-minute delete window.
   createdAt?: string;
 }
+
+/** A single (year, project) pairing returned by the grouped-by-year projects endpoint. */
+interface ProjectYearOption {
+  year: string;
+  projectName: string;
+}
+
+/** One year's worth of projects, ready to render as a labeled section in the dropdown. */
+interface ProjectYearGroup {
+  year: string;
+  projects: string[];
+}
+
+/**
+ * Groups a flat list of (year, project) pairs into year-labeled sections,
+ * newest year first, with projects sorted alphabetically within each year
+ * and de-duplicated. Powers the "all projects, grouped by year" dropdown
+ * used by both the Lead (Owner) and User (Employee) views, so the full
+ * project history stays browsable in a single control instead of being
+ * filtered down to one year at a time.
+ */
+const groupProjectsByYear = (options: ProjectYearOption[]): ProjectYearGroup[] => {
+  const byYear = new Map<string, Set<string>>();
+  for (const { year, projectName } of options) {
+    const y = year || "Unassigned";
+    const p = projectName?.trim();
+    if (!p) continue;
+    if (!byYear.has(y)) byYear.set(y, new Set());
+    byYear.get(y)!.add(p);
+  }
+  return [...byYear.entries()]
+    .sort(([a], [b]) => b.localeCompare(a, undefined, { numeric: true }))
+    .map(([year, projects]) => ({
+      year,
+      projects: [...projects].sort((a, b) => a.localeCompare(b)),
+    }));
+};
 
 /* ─── Helpers ────────────────────────────────────────────── */
 
@@ -993,7 +1033,9 @@ const EmployeeView = () => {
   const [isEditMode, setIsEditMode] = useState(false);
 
   const [clients, setClients] = useState<string[]>([]);
-  const [projectsCache, setProjectsCache] = useState<Record<string, string[]>>({});
+  // Every project a client has ever had, grouped by year, so the dropdown
+  // can show the full history instead of filtering to one year.
+  const [projectsCache, setProjectsCache] = useState<Record<string, ProjectYearGroup[]>>({});
   const [loadingProjects, setLoadingProjects] = useState<Record<string, boolean>>({});
 
   const [reports, setReports] = useState<Report[]>([]);
@@ -1140,7 +1182,7 @@ const EmployeeView = () => {
     }
   }, [detailOpen, detailDate, reportsByDate]);
 
-  /* Fetch projects for a client */
+  /* Fetch all of a client's projects, grouped by year, for the Projects dropdown */
   const fetchProjects = useCallback(
     async (client: string) => {
       if (!client || projectsCache[client] !== undefined) return;
@@ -1148,11 +1190,11 @@ const EmployeeView = () => {
       setLoadingProjects((prev) => ({ ...prev, [client]: true }));
 
       try {
-        const response = await api.get<{ success: boolean; data: string[] }>(
-          `/project-status/client/${encodeURIComponent(client)}`
+        const response = await api.get<{ success: boolean; data: ProjectYearOption[] }>(
+          `/project-status/client/${encodeURIComponent(client)}/grouped-by-year`
         );
-        const projectsArray: string[] = response.data.data || [];
-        setProjectsCache((prev) => ({ ...prev, [client]: projectsArray }));
+        const options: ProjectYearOption[] = response.data.data || [];
+        setProjectsCache((prev) => ({ ...prev, [client]: groupProjectsByYear(options) }));
       } catch (error) {
         setProjectsCache((prev) => ({ ...prev, [client]: [] }));
         toast({
@@ -1632,10 +1674,30 @@ const EmployeeView = () => {
                                       : "Select project"
                               } />
                             </SelectTrigger>
-                            <SelectContent>
-                              {(projectsCache[entry.client] ?? []).map((p) => (
-                                <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>
-                              ))}
+                            <SelectContent className="year-grouped-select-content max-h-[320px] overflow-y-auto custom-scrollbar">
+                              {(projectsCache[entry.client] ?? []).length === 0 ? (
+                                <div className="px-2 py-3 text-center text-xs text-slate-400 dark:text-slate-500">
+                                  No projects found for this client yet.
+                                </div>
+                              ) : (
+                                (projectsCache[entry.client] ?? []).map((group, idx) => (
+                                  <SelectGroup key={group.year}>
+                                    {idx > 0 && <SelectSeparator className="my-1.5 bg-slate-200 dark:bg-slate-700" />}
+                                    <SelectLabel className="year-group-label sticky top-0 z-10 flex items-center gap-1.5 py-1.5 pl-2 pr-2 text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50/90 dark:bg-indigo-950/40 backdrop-blur-sm rounded-sm">
+                                      <Calendar className="h-3 w-3" aria-hidden="true" />
+                                      {group.year}
+                                      <span className="ml-auto font-medium text-slate-400 dark:text-slate-500 normal-case tracking-normal">
+                                        {group.projects.length}
+                                      </span>
+                                    </SelectLabel>
+                                    {group.projects.map((p) => (
+                                      <SelectItem key={`${group.year}-${p}`} value={p} className="year-group-item text-xs pl-6">
+                                        {p}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                ))
+                              )}
                             </SelectContent>
                           </Select>
                         </TableCell>
@@ -2117,14 +2179,18 @@ const OwnerView = () => {
     ...new Set(reports.map((r) => r.client).filter(Boolean)),
   ].sort() as string[];
 
-  const uniqueProjects = [
-    ...new Set(
-      reports
-        .filter((r) => filterClient === "all" || r.client === filterClient)
-        .map((r) => r.project)
-        .filter(Boolean)
-    ),
-  ].sort() as string[];
+  // All projects (optionally scoped to the selected client), grouped by the
+  // year of the report entries they appear in — so a project stays
+  // reachable under every year it has activity in, rather than the
+  // dropdown being narrowed to a single year.
+  const projectsByYear: ProjectYearGroup[] = groupProjectsByYear(
+    reports
+      .filter((r) => (filterClient === "all" || r.client === filterClient) && r.project)
+      .map((r) => ({
+        year: r.date ? String(new Date(r.date).getFullYear()) : "Unassigned",
+        projectName: r.project,
+      }))
+  );
 
   const filtered = reports.filter((r) => {
     const dateMatch =
@@ -2453,10 +2519,27 @@ const OwnerView = () => {
                   <SelectTrigger aria-label="Filter by project" className="h-8 text-xs w-full sm:w-[130px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="year-grouped-select-content max-h-[320px] overflow-y-auto custom-scrollbar">
                     <SelectItem value="all" className="text-xs">All projects</SelectItem>
-                    {uniqueProjects.map((p) => (
-                      <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>
+                    {projectsByYear.length > 0 && (
+                      <SelectSeparator className="my-1.5 bg-slate-200 dark:bg-slate-700" />
+                    )}
+                    {projectsByYear.map((group, idx) => (
+                      <SelectGroup key={group.year}>
+                        {idx > 0 && <SelectSeparator className="my-1.5 bg-slate-200 dark:bg-slate-700" />}
+                        <SelectLabel className="year-group-label sticky top-0 z-10 flex items-center gap-1.5 py-1.5 pl-2 pr-2 text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50/90 dark:bg-indigo-950/40 backdrop-blur-sm rounded-sm">
+                          <Calendar className="h-3 w-3" aria-hidden="true" />
+                          {group.year}
+                          <span className="ml-auto font-medium text-slate-400 dark:text-slate-500 normal-case tracking-normal">
+                            {group.projects.length}
+                          </span>
+                        </SelectLabel>
+                        {group.projects.map((p) => (
+                          <SelectItem key={`${group.year}-${p}`} value={p} className="year-group-item text-xs pl-6">
+                            {p}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     ))}
                   </SelectContent>
                 </Select>
