@@ -206,8 +206,22 @@ function useAbortController() {
 
 // Closes the topmost modal on Escape, and (optionally) restores focus to the
 // element that had focus before the modal opened, for a11y/keyboard users.
+//
+// The keydown listener is only attached/removed when `isOpen` changes (so we
+// don't churn the listener on every render), but `onClose` is read through a
+// ref that's refreshed on every render. Without that ref, this effect would
+// capture whatever `onClose` closure existed at the moment the modal opened
+// and keep calling *that* one for as long as `isOpen` stays true — so if the
+// caller's close behavior depends on state that changes after the modal
+// opens (e.g. "cancel the current edit instead of closing outright, once
+// we're editing"), Escape would keep running the stale, pre-edit version
+// and close everything regardless. That was the cause of the update form
+// closing unexpectedly: Escape always ran the very first version of the
+// close handler, from before editing even started.
 function useEscapeToClose(isOpen, onClose) {
   const previouslyFocused = useRef(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -215,7 +229,7 @@ function useEscapeToClose(isOpen, onClose) {
 
     const handleKeyDown = (e) => {
       if (e.key === "Escape") {
-        onClose?.();
+        onCloseRef.current?.();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
@@ -226,7 +240,6 @@ function useEscapeToClose(isOpen, onClose) {
         previouslyFocused.current.focus();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 }
 
@@ -499,10 +512,20 @@ const styles = `
     html { scroll-behavior: auto; }
   }
 
-  .edit-form { display: flex; flex-direction: column; gap: 14px; }
+  .edit-form { display: flex; flex-direction: column; gap: 18px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .form-row.three { grid-template-columns: 1fr 1fr 1fr; }
   .form-group { display: flex; flex-direction: column; gap: 5px; }
+
+  /* Dedicated, uniform grid for the "Edit project" form: every row is the
+     same two equal-width columns, so fields never drift out of alignment
+     the way a mix of 2- and 3-column rows would. Full-width fields (Team,
+     Remarks) opt in with .span-2. */
+  .edit-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 14px; }
+  .edit-form-grid .span-2 { grid-column: 1 / -1; }
+  @media (max-width: 560px) {
+    .edit-form-grid { grid-template-columns: 1fr; }
+  }
   .form-label { font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-weight: 500; }
   .form-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
   .form-input, .form-textarea, .form-select { background: var(--surface-2); border: 1px solid var(--border-dark); border-radius: 8px; color: var(--text); font-family: 'Outfit', sans-serif; font-size: 0.87rem; padding: 9px 12px; outline: none; transition: border-color .2s, box-shadow .2s; width: 100%; }
@@ -788,7 +811,7 @@ function initialsFrom(name) {
     .slice(0, 2);
 }
 // ─── DATE INPUT (with clickable custom calendar icon) ──────────────────────
-function IfcIfaDateInput({ value, onChange, className = "", label }) {
+function IfcIfaDateInput({ id, value, onChange, className = "", label }) {
   const inputRef = useRef(null);
 
   const openPicker = () => {
@@ -807,6 +830,7 @@ function IfcIfaDateInput({ value, onChange, className = "", label }) {
     <div className="date-picker-wrapper">
       <input
         ref={inputRef}
+        id={id}
         type="date"
         aria-label={label}
         className={`form-input date-input-ifc-ifa ${className}`}
@@ -1494,13 +1518,28 @@ export default function Dashboard() {
   };
 
   // Escape-to-close for every overlay currently on screen.
-  useEscapeToClose(!!selectedProject, () => {
+  //
+  // Important: while the user is mid-edit (editing the project, adding a
+  // change order, or editing a change order row) this should only step
+  // *out* of that edit — the same as pressing Cancel — instead of slamming
+  // the whole modal shut. Otherwise something as ordinary as pressing Esc
+  // to dismiss the native date-picker popup (opened by the IFA/IFC date
+  // fields) silently discards every unsaved change. A second Escape, once
+  // back in the plain view mode, closes the modal as before.
+  const stepBackOrCloseProjectModal = () => {
+    if (editingProjectMode) {
+      setEditingProjectMode(false);
+      return;
+    }
+    if (showAddCo || editingCoId !== null) {
+      setShowAddCo(false);
+      setEditingCoId(null);
+      return;
+    }
     setSelectedProject(null);
-    setEditingProjectMode(false);
-    setShowAddCo(false);
-    setEditingCoId(null);
     setError("");
-  });
+  };
+  useEscapeToClose(!!selectedProject, stepBackOrCloseProjectModal);
   useEscapeToClose(!!viewProject, closeViewModal);
   useEscapeToClose(!!viewClient, closeViewClientModal);
   useEscapeToClose(confirmDialog.isOpen, () => setConfirmDialog(prev => ({ ...prev, isOpen: false })));
@@ -1777,11 +1816,7 @@ export default function Dashboard() {
               role="presentation"
               onClick={(e) => {
                 if (e.target === e.currentTarget) {
-                  setSelectedProject(null);
-                  setEditingProjectMode(false);
-                  setShowAddCo(false);
-                  setEditingCoId(null);
-                  setError("");
+                  stepBackOrCloseProjectModal();
                 }
               }}>
               <motion.div
@@ -1789,7 +1824,30 @@ export default function Dashboard() {
                 onClick={e => e.stopPropagation()} style={{ position: "relative" }}
                 role="dialog" aria-modal="true" aria-labelledby="project-modal-title"
               >
-                <button className="modal-close" aria-label="Close project details" onClick={() => { setSelectedProject(null); setEditingProjectMode(false); setError(""); }}><X size={16} /></button>
+                <button
+                  className="modal-close"
+                  aria-label="Close project details"
+                  onClick={() => {
+                    if (editingProjectMode) {
+                      showConfirm(
+                        "Discard changes?",
+                        "You have unsaved changes to this project. Close anyway and discard them?",
+                        () => {
+                          setSelectedProject(null);
+                          setEditingProjectMode(false);
+                          setError("");
+                          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                        }
+                      );
+                      return;
+                    }
+                    setSelectedProject(null);
+                    setEditingProjectMode(false);
+                    setShowAddCo(false);
+                    setEditingCoId(null);
+                    setError("");
+                  }}
+                ><X size={16} /></button>
 
                 <div className="modal-header">
                   <p className="modal-title" id="project-modal-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -2556,16 +2614,29 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
   const s = (k) => (v) => setData(p => ({ ...p, [k]: v }));
   return (
     <div className="edit-form">
-      <div className="form-row">
-        <div className="form-group"><label className="form-label" htmlFor="edit-client">Client</label><input id="edit-client" className="form-input" value={f("client")} onChange={e => s("client")(e.target.value)} /></div>
-        <div className="form-group"><label className="form-label" htmlFor="edit-projectName">Project name</label><input id="edit-projectName" className="form-input" value={f("projectName")} onChange={e => s("projectName")(e.target.value)} /></div>
-      </div>
-      <div className="form-row three">
-        <div className="form-group"><label className="form-label" htmlFor="edit-jobNumber">Job number</label><input id="edit-jobNumber" className="form-input" value={f("jobNumber")} onChange={e => s("jobNumber")(e.target.value)} /></div>
-        <div className="form-group"><label className="form-label" htmlFor="edit-year">Year</label><input id="edit-year" className="form-input" value={f("year")} onChange={e => s("year")(e.target.value)} /></div>
-        <div className="form-group"><label className="form-label" htmlFor="edit-pm">Project manager</label><input id="edit-pm" className="form-input" value={f("projectManager")} onChange={e => s("projectManager")(e.target.value)} /></div>
-      </div>
-      <div className="form-row three">
+      <div className="edit-form-grid">
+        <div className="form-group">
+          <label className="form-label" htmlFor="edit-client">Client</label>
+          <input id="edit-client" className="form-input" value={f("client")} onChange={e => s("client")(e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label" htmlFor="edit-projectName">Project name</label>
+          <input id="edit-projectName" className="form-input" value={f("projectName")} onChange={e => s("projectName")(e.target.value)} />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label" htmlFor="edit-jobNumber">Job number</label>
+          <input id="edit-jobNumber" className="form-input" value={f("jobNumber")} onChange={e => s("jobNumber")(e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label" htmlFor="edit-year">Year</label>
+          <input id="edit-year" className="form-input" value={f("year")} onChange={e => s("year")(e.target.value)} />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label" htmlFor="edit-pm">Project manager</label>
+          <input id="edit-pm" className="form-input" value={f("projectManager")} onChange={e => s("projectManager")(e.target.value)} />
+        </div>
         <div className="form-group">
           <label className="form-label" htmlFor="edit-approvalStatus">Approval status</label>
           <input
@@ -2576,13 +2647,11 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
             placeholder="100%"
           />
         </div>
+
         <div className="form-group">
           <label className="form-label" htmlFor="edit-ifaDate">IFA date</label>
-          <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} label="IFA date" />
+          <IfcIfaDateInput id="edit-ifaDate" value={f("ifaDate")} onChange={s("ifaDate")} label="IFA date" />
         </div>
-        <div className="form-group"></div>
-      </div>
-      <div className="form-row">
         <div className="form-group">
           <label className="form-label" htmlFor="edit-fabStatus">FAB status</label>
           <input
@@ -2593,23 +2662,23 @@ function EditProjectForm({ data, setData, onSave, onCancel, saving }) {
             placeholder="100%"
           />
         </div>
+
         <div className="form-group">
           <label className="form-label" htmlFor="edit-ifcDate">IFC date</label>
-          <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} label="IFC date" />
+          <IfcIfaDateInput id="edit-ifcDate" value={f("ifcDate")} onChange={s("ifcDate")} label="IFC date" />
         </div>
-      </div>
-      <div className="form-row">
         <div className="form-group">
           <label className="form-label" htmlFor="edit-team">Team (modeler/editor/checker)</label>
           <input id="edit-team" className="form-input" placeholder="e.g. Modeler/Editor/Checker" value={f("team")} onChange={e => s("team")(e.target.value)} />
         </div>
-      </div>
-      <div className="form-group">
-        <label className="form-label" htmlFor="edit-remarks">Remarks</label>
-        <textarea id="edit-remarks" className="form-textarea" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} />
+
+        <div className="form-group span-2">
+          <label className="form-label" htmlFor="edit-remarks">Remarks</label>
+          <textarea id="edit-remarks" className="form-textarea" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} />
+        </div>
       </div>
       <div className="form-actions">
-        <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+        <button className="btn btn-ghost" onClick={onCancel} disabled={saving}>Cancel</button>
         <button className="btn btn-gold" onClick={onSave} disabled={saving}>
           {saving ? <><BtnSpinner />&nbsp;Saving…</> : "Save changes"}
         </button>
