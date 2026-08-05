@@ -23,6 +23,8 @@ import { NotificationsProvider } from "@/context/NotificationsContext";
 import MyDocuments from "./pages/MyDocuments";
 import Vault from "./pages/Vault";
 import MyProfile from "./pages/MyProfile";
+import WeekendAttendance from "./pages/WeekendAttendance";
+import WeekendAttendanceDashboard from "./pages/WeekendAttendanceDashboard";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
@@ -39,6 +41,14 @@ function OwnerOnly({ children }: { children: React.ReactNode }) {
 function OwnerOrLead({ children }: { children: React.ReactNode }) {
   const { role } = useAuth();
   if (role !== "OWNER" && role !== "LEAD") return <Navigate to="/leave" replace />;
+  return <>{children}</>;
+}
+
+// Guards the Weekend Attendance Dashboard: owners/admins monitor and manage
+// everyone's weekend attendance, mirroring OwnerOnly/OwnerOrLead above.
+function OwnerOrAdmin({ children }: { children: React.ReactNode }) {
+  const { role } = useAuth();
+  if (role !== "OWNER" && role !== "ADMIN") return <Navigate to="/weekend-attendance" replace />;
   return <>{children}</>;
 }
 
@@ -92,6 +102,11 @@ function App() {
                   <Route path="/progress" element={<WorkProgress />} />
                   <Route path="/leave" element={<LeavePortal />} />
                   <Route path="/permission" element={<PermissionPortal />} />
+                  <Route path="/weekend-attendance" element={<WeekendAttendance />} />
+                  <Route
+                    path="/weekend-attendance/dashboard"
+                    element={<OwnerOrAdmin><WeekendAttendanceDashboard /></OwnerOrAdmin>}
+                  />
                   <Route path="/reports" element={<WorkReport />} />
                   <Route path="/messages" element={<Messages />} />
                   <Route path="/my-documents" element={<OwnerOrLead><MyDocuments /></OwnerOrLead>} />

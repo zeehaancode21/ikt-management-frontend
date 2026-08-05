@@ -19,7 +19,8 @@ import {
   Zap,
   Timer,
   Link,
-  Share2
+  Share2,
+  CalendarCheck
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
@@ -746,8 +747,19 @@ export const AppSidebar = () => {
           { to: "/reports", label: "Work Report", icon: FileText },
           { to: "/leave", label: "Leave Portal", icon: CalendarDays },
           { to: "/permission", label: "Permission Portal", icon: Timer },
+          { to: "/weekend-attendance/dashboard", label: "Weekend Entries", icon: CalendarCheck },
           { to: "/messages", label: "Messages", icon: MessageSquare },
         ]
+      // : role === "ADMIN"
+      // ? [
+      //     { to: "/reports", label: "Work Report", icon: FileText },
+      //     { to: "/dashboard", label: "Projects", icon: Briefcase },
+      //     { to: "/documents", label: "Documents", icon: FolderOpen },
+      //     { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+      //     { to: "/permission", label: "Permission Portal", icon: Timer },
+      //     { to: "/weekend-attendance/dashboard", label: "Weekend Entry", icon: CalendarCheck },
+      //     { to: "/messages", label: "Messages", icon: MessageSquare },
+      //   ]
       : role === "LEAD"
       ? [
           ...(isZeeshan ? [{ to: "/social-hub", label: "Media Hub", icon: Share2 }] : []),
@@ -756,6 +768,7 @@ export const AppSidebar = () => {
           { to: "/documents", label: "Documents", icon: FolderOpen },
           { to: "/leave", label: "Leave Report", icon: CalendarDays },
           { to: "/permission", label: "Permission Portal", icon: Timer },
+          { to: "/weekend-attendance", label: "Weekend Entry", icon: CalendarCheck },
           { to: "/messages", label: "Messages", icon: MessageSquare },
         ]
       : [
@@ -763,6 +776,7 @@ export const AppSidebar = () => {
           { to: "/reports", label: "Work Report", icon: FileText },
           { to: "/leave", label: "Leave Portal", icon: CalendarDays },
           { to: "/permission", label: "Permission Portal", icon: Timer },
+          { to: "/weekend-attendance", label: "Weekend Entry", icon: CalendarCheck },
           { to: "/documents", label: "Documents", icon: FolderOpen },
           { to: "/messages", label: "Messages", icon: MessageSquare },
         ];
