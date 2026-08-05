@@ -266,6 +266,51 @@ function useEscapeToClose(isOpen, onClose) {
   }, [isOpen]);
 }
 
+// Guards a modal overlay's "click outside to close" behavior against being
+// triggered by an ordinary mouse text-selection drag (e.g. click-dragging
+// across the Client, Remarks, or Job number fields to select their text).
+//
+// The naive version of this pattern closes the modal whenever a `click`
+// event's target is the overlay element itself:
+//
+//   onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+//
+// The problem: a browser's synthetic `click` event fires based on where the
+// mouse button was *released* (mouseup), not where the drag started. When a
+// user click-drags to select text inside an input/textarea, it's easy for
+// the cursor to drift a pixel or two past the field's edge — onto the
+// modal's padding or the backdrop — by the time the mouse button comes up.
+// That single `click` event then reports its target as the overlay, which
+// is indistinguishable from "the user deliberately clicked empty space to
+// close the modal". The result: selecting text with the mouse can silently
+// exit edit mode or close the modal outright, discarding unsaved changes,
+// even though the user never intended to close anything. (Keyboard
+// selection, e.g. Ctrl+A, never fires a mouse click on the overlay, which
+// is why it never reproduced this.)
+//
+// The fix: only treat it as a genuine "clicked the backdrop" gesture if
+// BOTH the initiating mousedown and the resulting click landed on the
+// overlay element itself. A text-selection drag starts with mousedown on
+// the input, so it fails this check and the modal stays open — while an
+// actual click on empty backdrop still has both events targeting the
+// overlay and closes as before.
+function useOverlayClickGuard(onClose) {
+  const mouseDownOnSelfRef = useRef(false);
+
+  const handleMouseDown = (e) => {
+    mouseDownOnSelfRef.current = e.target === e.currentTarget;
+  };
+
+  const handleClick = (e) => {
+    if (mouseDownOnSelfRef.current && e.target === e.currentTarget) {
+      onClose();
+    }
+    mouseDownOnSelfRef.current = false;
+  };
+
+  return { onMouseDown: handleMouseDown, onClick: handleClick };
+}
+
 // ─── STYLES ────────────────────────────────────────────────────────────────
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -1551,6 +1596,18 @@ export default function Dashboard() {
   useEscapeToClose(!!viewClient, closeViewClientModal);
   useEscapeToClose(confirmDialog.isOpen, () => setConfirmDialog(prev => ({ ...prev, isOpen: false })));
 
+  // Overlay click guards: only close a modal on a genuine click on the empty
+  // backdrop (mousedown AND click both targeting the overlay itself), not
+  // when a mouse text-selection drag inside a field (Client, Remarks, Job
+  // number, etc.) happens to end with mouseup landing outside that field.
+  // See useOverlayClickGuard for the full explanation.
+  const projectOverlayGuard = useOverlayClickGuard(stepBackOrCloseProjectModal);
+  const viewOverlayGuard = useOverlayClickGuard(closeViewModal);
+  const viewClientOverlayGuard = useOverlayClickGuard(closeViewClientModal);
+  const confirmOverlayGuard = useOverlayClickGuard(() =>
+    setConfirmDialog(prev => ({ ...prev, isOpen: false }))
+  );
+
   if (loading) return (
     <div className="loading-screen" role="status" aria-live="polite">
       <div className="spinner" aria-hidden="true" />
@@ -1821,11 +1878,8 @@ export default function Dashboard() {
           {selectedProject && (
             <motion.div className="modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               role="presentation"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) {
-                  stepBackOrCloseProjectModal();
-                }
-              }}>
+              onMouseDown={projectOverlayGuard.onMouseDown}
+              onClick={projectOverlayGuard.onClick}>
               <motion.div
                 className="modal-box" variants={scaleIn} initial="hidden" animate="show" exit="exit"
                 onClick={e => e.stopPropagation()} style={{ position: "relative" }}
@@ -2010,7 +2064,8 @@ export default function Dashboard() {
           {viewProject && (
             <motion.div className="modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               role="presentation"
-              onClick={closeViewModal}>
+              onMouseDown={viewOverlayGuard.onMouseDown}
+              onClick={viewOverlayGuard.onClick}>
               <motion.div
                 className="modal-box" variants={scaleIn} initial="hidden" animate="show" exit="exit"
                 onClick={e => e.stopPropagation()} style={{ position: "relative" }}
@@ -2132,7 +2187,8 @@ export default function Dashboard() {
           {viewClient && (
             <motion.div className="modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               role="presentation"
-              onClick={closeViewClientModal}>
+              onMouseDown={viewClientOverlayGuard.onMouseDown}
+              onClick={viewClientOverlayGuard.onClick}>
               <motion.div
                 className="modal-box" variants={scaleIn} initial="hidden" animate="show" exit="exit"
                 onClick={e => e.stopPropagation()} style={{ position: "relative", maxWidth: 1040 }}
@@ -2270,7 +2326,8 @@ export default function Dashboard() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               role="presentation"
-              onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+              onMouseDown={confirmOverlayGuard.onMouseDown}
+              onClick={confirmOverlayGuard.onClick}
             >
               <motion.div
                 className="confirm-modal"
@@ -2699,6 +2756,7 @@ function AddClientModal({ existingClients = [], onAdd, onCancel }) {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const inputRef = useRef(null);
+  const overlayGuard = useOverlayClickGuard(onCancel);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -2731,7 +2789,8 @@ function AddClientModal({ existingClients = [], onAdd, onCancel }) {
       className="client-modal-overlay"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       role="presentation"
-      onClick={onCancel}
+      onMouseDown={overlayGuard.onMouseDown}
+      onClick={overlayGuard.onClick}
     >
       <motion.div
         className="client-modal"
