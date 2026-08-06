@@ -742,6 +742,215 @@
   gap: 8px;
 }
 
+/* Page attachment section — houses both the manual-upload and AI-generate
+   flows for attaching an image to a post. */
+.attachment-section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px dashed hsl(var(--border) / 0.7);
+}
+
+.attachment-mode-toggle {
+  display: inline-flex;
+  padding: 3px;
+  gap: 3px;
+  border-radius: 10px;
+  background: hsl(var(--muted) / 0.6);
+  border: 1px solid hsl(var(--border) / 0.6);
+  margin-bottom: 14px;
+}
+
+.attachment-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.attachment-mode-btn:hover {
+  color: hsl(var(--foreground));
+}
+
+.attachment-mode-btn.active {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.08);
+}
+
+.attachment-upload-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* AI Image Generator */
+.ai-image-generator {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-image-generator-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.ai-image-prompt-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 52px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 10px;
+  background: hsl(var(--background) / 0.6);
+  color: hsl(var(--foreground));
+  font-family: inherit;
+}
+
+.ai-image-prompt-input:focus {
+  outline: none;
+  border-color: hsl(var(--primary) / 0.6);
+}
+
+.ai-image-ref-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ai-image-generate-btn {
+  margin-left: auto;
+}
+
+.ai-image-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 999px;
+  background: hsl(var(--background) / 0.5);
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  max-width: 220px;
+}
+
+.ai-image-ref-chip img {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.ai-image-ref-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-image-options-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.ai-image-option {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid hsl(var(--border) / 0.6);
+  background: hsl(var(--muted) / 0.4);
+}
+
+.ai-image-option img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ai-image-option.chosen {
+  border-color: hsl(var(--primary));
+}
+
+.ai-image-option-skeleton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-image-skeleton-spinner {
+  color: hsl(var(--muted-foreground));
+  animation: sh-spin 1s linear infinite;
+}
+
+@keyframes sh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.ai-image-use-btn {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 6px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  border: none;
+  cursor: pointer;
+  background: hsl(var(--foreground) / 0.72);
+  color: hsl(var(--background));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.ai-image-option:hover .ai-image-use-btn,
+.ai-image-use-btn.chosen {
+  opacity: 1;
+}
+
+.ai-image-use-btn.chosen {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.ai-image-empty-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  margin: 2px 0 0;
+}
+
+.ai-image-finalized {
+  margin-top: 4px;
+}
+
 .attached-image-preview {
   display: flex;
   align-items: center;
@@ -1497,6 +1706,25 @@
 
   .stat-number {
     font-size: 20px;
+  }
+
+  .ai-image-options-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ai-image-generate-btn {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .attachment-mode-toggle {
+    width: 100%;
+  }
+
+  .attachment-mode-btn {
+    flex: 1;
+    justify-content: center;
   }
 
   .sh-tabs,

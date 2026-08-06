@@ -20,7 +20,8 @@ import {
   Timer,
   Link,
   Share2,
-  CalendarCheck
+  CalendarCheck,
+  Users
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
@@ -740,26 +741,13 @@ export const AppSidebar = () => {
     role === "OWNER"
       ? [
           { to: "/admin", label: "Admin Console", icon: ShieldCheck },
+          { to: "/employee-hub", label: "Employee Hub", icon: Users },
           { to: "/social-hub", label: "Media Hub", icon: Share2 },
           { to: "/hours-dashboard", label: "Dashboard", icon: BarChart3 },
           { to: "/dashboard", label: "Projects", icon: Briefcase },
           { to: "/documents", label: "Documents", icon: FolderOpen },
-          { to: "/reports", label: "Work Report", icon: FileText },
-          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
-          { to: "/permission", label: "Permission Portal", icon: Timer },
-          { to: "/weekend-attendance/dashboard", label: "Weekend Entries", icon: CalendarCheck },
           { to: "/messages", label: "Messages", icon: MessageSquare },
         ]
-      // : role === "ADMIN"
-      // ? [
-      //     { to: "/reports", label: "Work Report", icon: FileText },
-      //     { to: "/dashboard", label: "Projects", icon: Briefcase },
-      //     { to: "/documents", label: "Documents", icon: FolderOpen },
-      //     { to: "/leave", label: "Leave Portal", icon: CalendarDays },
-      //     { to: "/permission", label: "Permission Portal", icon: Timer },
-      //     { to: "/weekend-attendance/dashboard", label: "Weekend Entry", icon: CalendarCheck },
-      //     { to: "/messages", label: "Messages", icon: MessageSquare },
-      //   ]
       : role === "LEAD"
       ? [
           ...(isZeeshan ? [{ to: "/social-hub", label: "Media Hub", icon: Share2 }] : []),
@@ -860,7 +848,7 @@ export const AppSidebar = () => {
             )}
           </button>
 
-          {/* Company website link */}
+          {/* Company website link - FIXED: Added opening <a> tag */}
           <a
             href={COMPANY_WEBSITE_URL}
             target="_blank"
@@ -905,7 +893,12 @@ export const AppSidebar = () => {
         <nav className="sb-nav min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-3">
           {navItems.map((item) => {
             const badgeModule = ROUTE_NOTIFICATION_MODULE[item.to];
-            const badgeCount = badgeModule ? counts[badgeModule] : 0;
+            const badgeCount =
+              item.to === "/employee-hub"
+                ? counts.leave + counts.permission
+                : badgeModule
+                ? counts[badgeModule]
+                : 0;
             return (
               <NavLink
                 key={item.to}

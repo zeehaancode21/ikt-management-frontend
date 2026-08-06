@@ -26,7 +26,11 @@ import {
   Bell,
   PenSquare,
   Image as ImageIcon,
+  Wand2,
+  Upload,
 } from 'lucide-react';
+import AiImageGenerator from '@/components/AiImageGenerator';
+import { clearDraftImages } from '@/lib/aiImageApi';
 
 // Types
 interface TopicCategory {
@@ -54,10 +58,31 @@ interface ApiResponse {
 }
 
 interface AttachedImage {
-  file: File;
+  // Absent for AI-generated images, which don't come from a local <input type="file">.
+  file?: File;
   preview: string;
   base64: string;
+  source?: 'upload' | 'ai';
 }
+
+type AttachmentMode = 'upload' | 'ai';
+
+// Generates (and persists in localStorage) an opaque id identifying the
+// current post-composer "draft". AI-generated image options are scoped to
+// this id on the backend so they survive a page reload/revisit before the
+// user actually publishes. A fresh id is issued after every successful
+// publish (or if none exists yet).
+const DRAFT_ID_STORAGE_KEY = 'socialHubDraftId';
+const getOrCreateDraftId = (): string => {
+  const existing = localStorage.getItem(DRAFT_ID_STORAGE_KEY);
+  if (existing) return existing;
+  const created =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  localStorage.setItem(DRAFT_ID_STORAGE_KEY, created);
+  return created;
+};
 
 type ContentMode = 'ai' | 'prompted';
 
@@ -231,9 +256,16 @@ const SocialHub: React.FC = () => {
   // mode produced the content.
   const [currentTopic, setCurrentTopic] = useState<string>('');
 
-  // Optional image attached to a generated post before publishing.
+  // Optional image attached to a generated post before publishing. Can come
+  // either from a manual upload or from the AI Image Generator — both flow
+  // through the same `attachedImage` state so the rest of the publish logic
+  // (postToLinkedIn, preview, remove) doesn't need to know which.
   const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null);
+  const [attachmentMode, setAttachmentMode] = useState<AttachmentMode>('upload');
   const imageInputRef = useRef<HTMLInputElement>(null);
+  // Opaque id scoping AI-generated image options to the current compose
+  // session so they can be restored if the user revisits this draft.
+  const [draftId, setDraftId] = useState<string>(() => getOrCreateDraftId());
 
   const contentRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
@@ -480,12 +512,18 @@ const SocialHub: React.FC = () => {
           )
         );
         
+        // Best-effort cleanup of any AI-generated image candidates tied to
+        // this draft, then start a fresh draft id for the next post.
+        clearDraftImages(token, draftId);
+        localStorage.removeItem(DRAFT_ID_STORAGE_KEY);
+
         setTimeout(() => {
           setGeneratedContent('');
           setSelectedTopic('');
           setCustomPrompt('');
           setCurrentTopic('');
           setAttachedImage(null);
+          setDraftId(getOrCreateDraftId());
         }, 3000);
       } else {
         throw new Error(data.message || 'Failed to post to LinkedIn');
@@ -559,7 +597,7 @@ const SocialHub: React.FC = () => {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
-      setAttachedImage({ file, preview: result, base64: result });
+      setAttachedImage({ file, preview: result, base64: result, source: 'upload' });
       toast.success('🖼️ Image attached');
     };
     reader.onerror = () => {
@@ -827,24 +865,6 @@ const SocialHub: React.FC = () => {
                         )}
                       </button>
 
-                      <input
-                        type="file"
-                        accept="image/*"
-                        ref={imageInputRef}
-                        onChange={handleImageSelected}
-                        className="sh-hidden-file-input"
-                        aria-hidden="true"
-                        tabIndex={-1}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-attach-image"
-                        onClick={handleAttachImageClick}
-                      >
-                        <ImageIcon size={16} aria-hidden="true" />
-                        {attachedImage ? 'Change Image' : 'Attach Image'}
-                      </button>
-
                       {!token && (
                         <span className="auth-warning">
                           <AlertTriangle size={14} aria-hidden="true" />
@@ -853,22 +873,91 @@ const SocialHub: React.FC = () => {
                       )}
                     </div>
 
-                    {attachedImage && (
-                      <div className="attached-image-preview animate-fade-in">
-                        <img src={attachedImage.preview} alt="Attachment preview" />
-                        <div className="attached-image-meta">
-                          <span className="attached-image-name">{attachedImage.file.name}</span>
+                    {/* Page attachment section: attach an image either by
+                        uploading one or by generating one with AI. Both
+                        paths write into the same `attachedImage` state, so
+                        publishing behaves identically either way. */}
+                    <div className="attachment-section">
+                      <div className="attachment-mode-toggle" role="tablist" aria-label="Attachment method">
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={attachmentMode === 'upload'}
+                          className={`attachment-mode-btn ${attachmentMode === 'upload' ? 'active' : ''}`}
+                          onClick={() => setAttachmentMode('upload')}
+                        >
+                          <Upload size={14} aria-hidden="true" />
+                          Upload Image
+                        </button>
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={attachmentMode === 'ai'}
+                          className={`attachment-mode-btn ${attachmentMode === 'ai' ? 'active' : ''}`}
+                          onClick={() => setAttachmentMode('ai')}
+                        >
+                          <Wand2 size={14} aria-hidden="true" />
+                          Generate with AI
+                        </button>
+                      </div>
+
+                      {attachmentMode === 'upload' && (
+                        <div className="attachment-upload-panel">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            ref={imageInputRef}
+                            onChange={handleImageSelected}
+                            className="sh-hidden-file-input"
+                            aria-hidden="true"
+                            tabIndex={-1}
+                          />
                           <button
                             type="button"
-                            className="remove-image-btn"
-                            onClick={removeAttachedImage}
-                            aria-label="Remove attached image"
+                            className="btn btn-secondary btn-attach-image"
+                            onClick={handleAttachImageClick}
                           >
-                            <X size={13} aria-hidden="true" />
+                            <ImageIcon size={16} aria-hidden="true" />
+                            {attachedImage ? 'Change Image' : 'Attach Image'}
                           </button>
+
+                          {attachedImage && (
+                            <div className="attached-image-preview animate-fade-in">
+                              <img src={attachedImage.preview} alt="Attachment preview" />
+                              <div className="attached-image-meta">
+                                <span className="attached-image-name">
+                                  {attachedImage.file ? attachedImage.file.name : 'AI-generated image attached'}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="remove-image-btn"
+                                  onClick={removeAttachedImage}
+                                  aria-label="Remove attached image"
+                                >
+                                  <X size={13} aria-hidden="true" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    )}
+                      )}
+
+                      {attachmentMode === 'ai' && (
+                        <AiImageGenerator
+                          token={token}
+                          draftId={draftId}
+                          suggestedPrompt={generatedContent || activeTopic}
+                          finalizedImage={attachedImage?.source === 'ai' ? attachedImage.base64 : null}
+                          onImageFinalized={(dataUrl) => {
+                            if (dataUrl) {
+                              setAttachedImage({ preview: dataUrl, base64: dataUrl, source: 'ai' });
+                            } else {
+                              setAttachedImage((prev) => (prev?.source === 'ai' ? null : prev));
+                            }
+                          }}
+                        />
+                      )}
+                    </div>
 
                     {generatedContent && (
                       <div className="generated-content animate-fade-in">
