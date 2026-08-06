@@ -478,10 +478,22 @@ const TabButton = ({
 );
 
 /* =========================================================
-   LEAVE TAKEN SUMMARY
+   LEAVE QUOTA SUMMARY
+   Mirrors QuotaSummary in PermissionPortal.tsx (the "hours
+   remaining this month" banner) — same banner treatment, but
+   for the employee's annual leave allowance: days remaining
+   THIS YEAR instead of hours remaining this month. Shown at
+   the very top of the Leave Portal, above the apply form, so
+   it's the first thing visible when the page loads.
 ========================================================= */
 
-const LeaveTakenSummary = ({ leaves, leaveLimit }: { leaves: Leave[]; leaveLimit: number }) => {
+const LeaveQuotaSummary = ({
+  leaves,
+  leaveLimit,
+}: {
+  leaves: Leave[];
+  leaveLimit: number;
+}) => {
   const currentYear = new Date().getFullYear();
 
   const takenDays = leaves
@@ -494,144 +506,58 @@ const LeaveTakenSummary = ({ leaves, leaveLimit }: { leaves: Leave[]; leaveLimit
 
   const isOverLimit = takenDays > leaveLimit;
   const remainingDays = leaveLimit - takenDays;
-
-  const ringColor = isOverLimit ? "#ef4444" : "#22c55e";
-  const pulseColor = isOverLimit ? "#ef4444" : "#22c55e";
-  const numberColor = isOverLimit ? "#ef4444" : "#22c55e";
-
-  const [displayed, setDisplayed] = useState(0);
-  const [started, setStarted] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const animationFrameRef = useRef<number>();
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setStarted(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.4 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!started || takenDays === 0) {
-      setDisplayed(takenDays);
-      return;
-    }
-    setDisplayed(0);
-    const duration = 900;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const progress = Math.min((now - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplayed(Math.round(eased * takenDays * 10) / 10);
-      if (progress < 1) {
-        animationFrameRef.current = requestAnimationFrame(tick);
-      }
-    };
-    animationFrameRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    };
-  }, [started, takenDays]);
-
-  const fillRatio = Math.min(takenDays / leaveLimit, 1);
-  const circumference = 2 * Math.PI * 44;
+  const yearPct = Math.min((takenDays / (leaveLimit || 1)) * 100, 100);
 
   return (
-    <div ref={ref} className="flex flex-col items-center justify-center gap-6 py-10">
-      {isOverLimit && (
-        <div
-          role="alert"
-          className="w-full max-w-sm animate-fade-slide-down rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-center dark:border-red-900/60 dark:bg-red-950/30"
-          style={{ animation: "leaveWarnPulse 1.8s ease-in-out infinite" }}
-        >
+    <div
+      role="status"
+      aria-live="polite"
+      className={`rounded-lg border px-4 py-3 ${
+        isOverLimit
+          ? "border-red-300 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30"
+          : "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30"
+      }`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <p
-            className="text-sm font-bold text-red-600 dark:text-red-400"
-            style={{ animation: "leaveShake 0.5s ease-in-out 0.3s 1" }}
+            className={`text-sm font-bold ${
+              isOverLimit ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"
+            }`}
           >
-            <span aria-hidden="true">⚠</span> Leave limit exceeded
+            <span aria-hidden="true">{isOverLimit ? "⚠" : "✓"}</span>{" "}
+            {isOverLimit ? "Annual leave limit exceeded" : "Your leave balance"}
           </p>
-          <p className="mt-0.5 text-xs text-red-500 dark:text-red-400/80">
-            You've taken {takenDays} days — {Math.abs(remainingDays)} day
-            {Math.abs(remainingDays) !== 1 ? "s" : ""} over the {leaveLimit}-day limit.
+          <p
+            className={`mt-0.5 text-xs ${
+              isOverLimit ? "text-red-600 dark:text-red-400/80" : "text-green-600 dark:text-green-400/80"
+            }`}
+          >
+            {formatDays(takenDays)} / {leaveLimit} days used in {currentYear}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {leaveLimit}-day annual allowance · resets each calendar year
           </p>
         </div>
-      )}
-
-      <div className="relative flex items-center justify-center">
-        <span
-          className="absolute inline-flex h-40 w-40 animate-ping rounded-full opacity-20"
-          style={{
-            background: `radial-gradient(circle, ${pulseColor} 0%, transparent 70%)`,
-            animationDuration: "2.4s",
-          }}
-          aria-hidden="true"
-        />
-        <svg className="absolute h-44 w-44 -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
-          <circle cx="50" cy="50" r="44" fill="none" stroke="hsl(var(--border))" strokeWidth="5" />
-          <circle
-            cx="50"
-            cy="50"
-            r="44"
-            fill="none"
-            stroke={ringColor}
-            strokeWidth="5"
-            strokeLinecap="round"
-            strokeDasharray={`${circumference}`}
-            strokeDashoffset={started ? `${circumference * (1 - fillRatio)}` : `${circumference}`}
-            style={{
-              transition: "stroke-dashoffset 0.9s cubic-bezier(0.16,1,0.3,1), stroke 0.4s ease",
-            }}
-          />
-        </svg>
-        <div
-          className="relative flex h-32 w-32 flex-col items-center justify-center rounded-full bg-background shadow-inner"
-          role="status"
-          aria-live="polite"
-        >
+        <div className="flex w-full flex-col items-end gap-1 sm:w-auto">
           <span
-            className="text-5xl font-bold leading-none tabular-nums"
-            style={{
-              color: numberColor,
-              opacity: started ? 1 : 0,
-              transform: started ? "scale(1)" : "scale(0.7)",
-              transition:
-                "opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1), color 0.4s ease",
-            }}
+            className={`text-xs font-semibold ${
+              isOverLimit ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"
+            }`}
           >
-            {formatDays(displayed)}
+            {isOverLimit
+              ? `${formatDays(Math.abs(remainingDays))} day${Math.abs(remainingDays) !== 1 ? "s" : ""} over limit`
+              : `${formatDays(remainingDays)} day${remainingDays !== 1 ? "s" : ""} remaining this year`}
           </span>
-          <span className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-            {takenDays === 1 ? "day" : "days"}
-          </span>
+          <div className="h-2 w-full overflow-hidden rounded-full border border-white/40 bg-white/60 dark:border-white/10 dark:bg-black/30 sm:w-28">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${
+                isOverLimit ? "bg-red-500" : "bg-green-500"
+              }`}
+              style={{ width: `${yearPct}%` }}
+            />
+          </div>
         </div>
-      </div>
-
-      <div className="space-y-1 text-center">
-        <p className="text-base font-semibold text-foreground">Leave taken in {currentYear}</p>
-        {takenDays === 0 ? (
-          <p className="text-sm text-muted-foreground">No approved leaves taken this year.</p>
-        ) : isOverLimit ? (
-          <p className="text-sm font-semibold text-red-500 dark:text-red-400">
-            {takenDays} / {leaveLimit} days — exceeded by {Math.abs(remainingDays)} day
-            {Math.abs(remainingDays) !== 1 ? "s" : ""}
-          </p>
-        ) : (
-          <p className="text-sm font-medium text-green-600 dark:text-green-400">
-            {takenDays} / {leaveLimit} days taken &mdash;{" "}
-            <span className="font-semibold">
-              {remainingDays} day{remainingDays !== 1 ? "s" : ""} remaining
-            </span>
-          </p>
-        )}
       </div>
     </div>
   );
@@ -1323,6 +1249,10 @@ const EmployeeView = () => {
   // ── Render ────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
+      {/* LEAVE QUOTA SUMMARY — days remaining this year, shown first so
+         it's the first thing visible when the Leave Portal opens. */}
+      <LeaveQuotaSummary leaves={leaves} leaveLimit={leaveLimit} />
+
       {/* APPLY FORM */}
       <section className="animate-fade-in-up card-hover overflow-visible rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
         <div className="mb-4 flex items-center gap-2">
