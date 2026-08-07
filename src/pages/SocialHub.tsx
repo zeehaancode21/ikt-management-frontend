@@ -30,7 +30,7 @@ import {
   Upload,
 } from 'lucide-react';
 import AiImageGenerator from '@/components/AiImageGenerator';
-import { clearDraftImages } from '@/lib/aiImageApi';
+import { clearDraftImages, composeUploadedImage } from '@/lib/aiImageApi';
 
 // Types
 interface TopicCategory {
@@ -262,6 +262,9 @@ const SocialHub: React.FC = () => {
   // (postToLinkedIn, preview, remove) doesn't need to know which.
   const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null);
   const [attachmentMode, setAttachmentMode] = useState<AttachmentMode>('upload');
+  // True while an uploaded image is being composed into the company
+  // template on the server, right after the user picks a file.
+  const [isComposingUpload, setIsComposingUpload] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   // Opaque id scoping AI-generated image options to the current compose
   // session so they can be restored if the user revisits this draft.
@@ -595,10 +598,26 @@ const SocialHub: React.FC = () => {
     }
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const result = reader.result as string;
-      setAttachedImage({ file, preview: result, base64: result, source: 'upload' });
-      toast.success('🖼️ Image attached');
+      // Uploaded images always get the company template applied
+      // automatically, the same as AI-generated ones — this isn't a
+      // separate mode the user opts into.
+      setIsComposingUpload(true);
+      try {
+        const data = await composeUploadedImage(token, result);
+        if (data.success && data.image) {
+          setAttachedImage({ file, preview: data.image, base64: data.image, source: 'upload' });
+          toast.success('🖼️ Image attached and branded with the company template');
+        } else {
+          throw new Error(data.message || 'Failed to apply the company template');
+        }
+      } catch (error: any) {
+        console.error('Error applying company template to uploaded image:', error);
+        toast.error('❌ Could not apply the company template. ' + error.message);
+      } finally {
+        setIsComposingUpload(false);
+      }
     };
     reader.onerror = () => {
       toast.error('Failed to read image file');
@@ -916,9 +935,14 @@ const SocialHub: React.FC = () => {
                             type="button"
                             className="btn btn-secondary btn-attach-image"
                             onClick={handleAttachImageClick}
+                            disabled={isComposingUpload}
                           >
                             <ImageIcon size={16} aria-hidden="true" />
-                            {attachedImage ? 'Change Image' : 'Attach Image'}
+                            {isComposingUpload
+                              ? 'Applying company template...'
+                              : attachedImage
+                              ? 'Change Image'
+                              : 'Attach Image'}
                           </button>
 
                           {attachedImage && (

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Sparkles, Wand2, RefreshCw, Check, X, Loader2 } from 'lucide-react';
+import { Sparkles, Wand2, RefreshCw, Check, X, Loader2, LayoutTemplate } from 'lucide-react';
 import {
   generateTemplatedImages,
   getDraftImages,
@@ -8,7 +8,7 @@ import {
   type GeneratedImageOption,
 } from '@/lib/aiImageApi';
 
-interface AiImageGeneratorProps {
+interface TemplatedImageGeneratorProps {
   token: string | null | undefined;
   /** Opaque id identifying the current post draft; images generated here are scoped to it. */
   draftId: string;
@@ -21,17 +21,20 @@ interface AiImageGeneratorProps {
 }
 
 /**
- * The Media Hub's "Generate with AI" flow. The user's prompt controls WHAT
- * content is generated — it's sent to the AI exactly as typed, with nothing
- * prepended, appended, or substituted — while the fixed IK Tangience post
- * template always controls HOW and WHERE it's presented: the header, logo,
- * slogan, footer and CONNECT NOW block come from the template on every
- * image and are never regenerated. Applying the template is automatic and
- * is not a separate mode the user has to choose. The company template
+ * "Use Company Template" mode: the user's prompt controls WHAT content is
+ * generated, but the fixed IK Tangience post template controls HOW and
+ * WHERE it's presented — the header, logo, slogan, footer and CONNECT NOW
+ * block come from the template on every image and are never regenerated.
+ *
+ * Deliberately mirrors AiImageGenerator's structure (same props, same
+ * prompt -> generate -> options grid -> select -> finalized-preview flow,
+ * same draft-restore-on-mount behavior) so the Media Hub's existing
+ * generation UX stays consistent between modes. The company template
  * (public/template.png) ships with the app, so generation is always
- * available.
+ * available — there's no server-side "template missing" state to check
+ * for anymore.
  */
-const AiImageGenerator: React.FC<AiImageGeneratorProps> = ({
+const TemplatedImageGenerator: React.FC<TemplatedImageGeneratorProps> = ({
   token,
   draftId,
   suggestedPrompt,
@@ -134,12 +137,9 @@ const AiImageGenerator: React.FC<AiImageGeneratorProps> = ({
   return (
     <div className="ai-image-generator">
       <div className="ai-image-generator-header">
-        <Wand2 size={15} aria-hidden="true" />
-        <span>Generate an image with AI</span>
+        <LayoutTemplate size={15} aria-hidden="true" />
+        <span>Generate content inside the IK Tangience template</span>
       </div>
-      <p className="ai-image-empty-hint">
-        Your image will be generated from the prompt below, then automatically placed inside the company post template.
-      </p>
 
       <textarea
         className="ai-image-prompt-input"
@@ -171,7 +171,7 @@ const AiImageGenerator: React.FC<AiImageGeneratorProps> = ({
           ) : (
             <>
               <Sparkles size={14} aria-hidden="true" />
-              Generate images
+              Generate with template
             </>
           )}
         </button>
@@ -220,7 +220,7 @@ const AiImageGenerator: React.FC<AiImageGeneratorProps> = ({
       {!isGenerating && options.length === 0 && (
         <p className="ai-image-empty-hint">
           <Wand2 size={12} aria-hidden="true" />
-          Describe what you want above and click "Generate images".
+          Describe what you want above — it'll be placed inside the fixed template's content area.
         </p>
       )}
 
@@ -228,7 +228,7 @@ const AiImageGenerator: React.FC<AiImageGeneratorProps> = ({
         <div className="attached-image-preview ai-image-finalized animate-fade-in">
           <img src={finalizedImage} alt="Finalized attachment preview" />
           <div className="attached-image-meta">
-            <span className="attached-image-name">AI-generated image attached</span>
+            <span className="attached-image-name">Templated image attached</span>
             <button
               type="button"
               className="remove-image-btn"
@@ -244,4 +244,4 @@ const AiImageGenerator: React.FC<AiImageGeneratorProps> = ({
   );
 };
 
-export default AiImageGenerator;
+export default TemplatedImageGenerator;

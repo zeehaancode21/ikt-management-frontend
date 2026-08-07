@@ -40,30 +40,6 @@ const authHeaders = (token: string | null | undefined): Record<string, string> =
   return headers;
 };
 
-/**
- * Generates a fresh batch of AI image options for a draft. Pass a single
- * reference image (as a base64 data URL) to guide style/layout/composition;
- * omit it for pure text-to-image generation.
- */
-export async function generateAiImages(
-  token: string | null | undefined,
-  draftId: string,
-  prompt: string,
-  referenceImages: string[] = [],
-  count = 1
-): Promise<GenerateImagesResponse> {
-  const response = await fetch(`${API_BASE_URL}/social-post/ai-image/generate`, {
-    method: "POST",
-    headers: authHeaders(token),
-    body: JSON.stringify({ draftId, prompt, referenceImages, count }),
-  });
-  const data = (await response.json()) as GenerateImagesResponse;
-  if (!response.ok && data.success !== false) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-  return data;
-}
-
 /** Re-fetches a draft's generated options + finalized selection (if any). */
 export async function getDraftImages(
   token: string | null | undefined,
@@ -105,4 +81,72 @@ export async function clearDraftImages(token: string | null | undefined, draftId
     });
   } catch {
   }
+}
+
+// ---------------------------------------------------------------------------
+// AI image generation. The company template is always applied automatically
+// — every returned image has the user's prompt content (sent to the AI
+// exactly as typed) composed into the fixed IK Tangience post template
+// (header, footer, logo, slogan and CONNECT NOW block are never
+// regenerated). There is no way to opt out of this.
+// ---------------------------------------------------------------------------
+
+/**
+ * The company template (public/template.png) ships with the app and is
+ * loaded once at server startup — it is not a runtime "maybe missing"
+ * state, so the frontend no longer needs to poll for its availability
+ * before generating.
+ */
+
+/**
+ * Generates a fresh batch of image options whose content is composed into
+ * the fixed post template. The prompt is sent to the AI exactly as typed —
+ * no reference images are supported here since the template itself is the
+ * fixed visual reference, so there's nothing else to attach.
+ */
+export async function generateTemplatedImages(
+  token: string | null | undefined,
+  draftId: string,
+  prompt: string,
+  count = 1
+): Promise<GenerateImagesResponse> {
+  const response = await fetch(`${API_BASE_URL}/social-post/ai-image/generate-templated`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ draftId, prompt, count }),
+  });
+  const data = (await response.json()) as GenerateImagesResponse;
+  if (!response.ok && data.success !== false) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Uploaded images. Also always get the company template applied — a manually
+// uploaded photo is composed into the same fixed template's content area as
+// an AI-generated one, so the final attachment is branded either way.
+// ---------------------------------------------------------------------------
+
+export interface ComposeUploadedResponse {
+  success: boolean;
+  image?: string; // data URL of the template-composed image
+  message?: string;
+}
+
+/** Sends an uploaded image (as a base64 data URL) to be composed into the fixed company template. */
+export async function composeUploadedImage(
+  token: string | null | undefined,
+  imageBase64: string
+): Promise<ComposeUploadedResponse> {
+  const response = await fetch(`${API_BASE_URL}/social-post/ai-image/compose-uploaded`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ imageBase64 }),
+  });
+  const data = (await response.json()) as ComposeUploadedResponse;
+  if (!response.ok && data.success !== false) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return data;
 }
