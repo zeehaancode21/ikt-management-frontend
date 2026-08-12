@@ -28,8 +28,10 @@ import {
   Image as ImageIcon,
   Wand2,
   Upload,
+  CalendarClock,
 } from 'lucide-react';
 import AiImageGenerator from '@/components/AiImageGenerator';
+import ScheduledPostsPanel from '@/components/ScheduledPostsPanel';
 import { clearDraftImages, composeUploadedImage } from '@/lib/aiImageApi';
 
 // Types
@@ -238,7 +240,7 @@ const SocialHub: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isPosting, setIsPosting] = useState<boolean>(false);
   const [showClearConfirm, setShowClearConfirm] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'linkedin' | 'comingsoon'>('linkedin');
+  const [activeTab, setActiveTab] = useState<'linkedin' | 'scheduled' | 'comingsoon'>('linkedin');
   // AI-generated topics loaded on demand via "Load More", keyed by category id.
   // These are appended to that category's built-in topic list/column and
   // behave exactly like any other topic once selected.
@@ -666,6 +668,16 @@ const SocialHub: React.FC = () => {
         </button>
         <button
           type="button"
+          className={`sh-tab-btn sh-tab-btn--scheduled ${activeTab === 'scheduled' ? 'active' : ''}`}
+          role="tab"
+          aria-selected={activeTab === 'scheduled'}
+          onClick={() => setActiveTab('scheduled')}
+        >
+          <CalendarClock size={16} className="sh-tab-icon" aria-hidden="true" />
+          Scheduled
+        </button>
+        <button
+          type="button"
           className={`sh-tab-btn is-disabled ${activeTab === 'comingsoon' ? 'active' : ''}`}
           role="tab"
           aria-selected={activeTab === 'comingsoon'}
@@ -1081,6 +1093,8 @@ const SocialHub: React.FC = () => {
           </div>
         </>
       )}
+      {/* Scheduled Tab Content */}
+      {activeTab === 'scheduled' && <ScheduledPostsPanel token={token} />}
 
       {/* Coming Soon Tab Content */}
       {activeTab === 'comingsoon' && (
