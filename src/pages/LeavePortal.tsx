@@ -1304,7 +1304,6 @@ const EmployeeView = () => {
               type="date"
               required
               className="leave-date-input"
-              min={getMinDate()}
               value={fromDate}
               onChange={(e) => {
                 setFromDate(e.target.value);
@@ -1323,7 +1322,7 @@ const EmployeeView = () => {
                 type="date"
                 required
                 className="leave-date-input"
-                min={fromDate || getMinDate()}
+                min={fromDate || undefined}
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
                 aria-describedby={durationLabel ? "duration-hint" : undefined}
