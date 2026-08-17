@@ -799,6 +799,9 @@ const styles = `
     .section-actions .btn { flex: 1 1 auto; justify-content: center; }
     .form-row { grid-template-columns: 1fr !important; gap: 12px; }
     .form-row.three { grid-template-columns: 1fr !important; }
+    /* 16px stops iOS Safari's auto-zoom-on-focus (the desktop 0.87rem
+       size below that threshold was triggering it on every form field). */
+    .form-input, .form-textarea, .form-select { font-size: 16px; }
     .modal-overlay { padding: 0; align-items: flex-end; }
     .modal-box { border-radius: 20px 20px 0 0; max-height: 92vh; max-width: 100%; }
     .modal-header { padding: 18px 16px 0; }

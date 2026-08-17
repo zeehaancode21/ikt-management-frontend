@@ -102,8 +102,54 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    /* Prevents the whole page from being able to pan sideways if any one
+       element momentarily overflows (belt-and-braces alongside the
+       per-page overflow-x fixes). */
+    overflow-x: hidden;
+    width: 100%;
+    /* Lets `1rem` respond to the OS-level text-size setting while keeping
+       our own layout math (which assumes 16px) predictable. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-background text-foreground;
+    overflow-x: hidden;
+    min-width: 320px;
+  }
+
+  /* Any tap target should be a comfortable thumb size on touch devices. */
+  button,
+  a,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
+  }
+}
+
+/* ── Mobile safety nets ──────────────────────────────────────────────────
+   Applied last, at the ≤600px breakpoint only, so desktop/tablet layouts
+   are completely untouched. These are deliberately generic (not scoped to
+   one page) because the same two bugs — iOS auto-zoom on small inputs,
+   and horizontal scroll from a single oversized element — showed up across
+   many pages in this app. */
+@media (max-width: 600px) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+
+  table {
+    font-size: 0.9em;
   }
 }
 input[type="date"]::-webkit-calendar-picker-indicator {

@@ -140,6 +140,21 @@ export default function ChangePasswordModal({ onClose }: Props) {
           height: 3px; flex: 1; border-radius: 2px;
           transition: background 0.3s;
         }
+
+        @media (max-width: 480px) {
+          .cp-overlay { padding: 16px; align-items: flex-end; }
+          .cp-card {
+            width: 100%;
+            padding: 24px 20px 20px;
+            border-radius: 16px 16px 0 0;
+            max-height: 88vh;
+            overflow-y: auto;
+          }
+          /* 16px stops iOS Safari from auto-zooming the page on focus. */
+          .cp-input { font-size: 16px; }
+          .cp-close, .cp-eye { min-width: 32px; min-height: 32px; }
+          .cp-actions { flex-direction: column-reverse; }
+        }
       `}</style>
 
       <div className="cp-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>

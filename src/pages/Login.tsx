@@ -531,6 +531,29 @@ export default function Login() {
           background-clip: text;
           animation: shimmer 4s linear infinite;
         }
+
+        /* Mobile: tighten spacing, keep every field/button at a comfortable
+           touch target, and let the card use the available width instead
+           of fighting the 420px desktop size. */
+        @media (max-width: 480px) {
+          .login-root { padding: 12px; }
+          .login-card {
+            width: 100%;
+            max-width: 100%;
+            padding: 32px 22px 28px;
+            border-radius: 16px;
+          }
+          .login-title { font-size: 22px; }
+          .login-sub { margin-bottom: 26px; }
+          .login-input { padding-top: 14px; padding-bottom: 14px; font-size: 16px; }
+          .login-btn { padding: 15px 0; min-height: 48px; }
+          .eye-btn, .admin-link { min-height: 40px; }
+          .blob-1, .blob-2, .blob-3 { filter: blur(50px); }
+        }
+
+        @media (max-width: 340px) {
+          .login-card { padding: 26px 16px 22px; }
+        }
       `}</style>
 
       <div className="login-root">

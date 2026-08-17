@@ -120,7 +120,7 @@ export default function Announcements() {
   const PREVIEW_LENGTH = 120;
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 max-w-3xl mx-auto space-y-4 sm:space-y-6">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -265,10 +265,10 @@ export default function Announcements() {
 
       {/* Toast */}
       {toastVisible && (
-        <div className="fixed top-5 right-5 z-50 animate-in slide-in-from-top-2">
+        <div className="fixed top-5 left-4 right-4 sm:left-auto sm:right-5 z-50 animate-in slide-in-from-top-2">
           <div
             ref={toastRef}
-            className="bg-white rounded-2xl shadow-2xl border border-green-100 p-4 min-w-[300px] flex items-start gap-3"
+            className="bg-white rounded-2xl shadow-2xl border border-green-100 p-4 w-full sm:min-w-[300px] sm:w-auto sm:max-w-sm flex items-start gap-3"
           >
             <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
               <span className="text-green-600 text-sm font-bold">✓</span>

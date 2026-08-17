@@ -86,7 +86,7 @@ const getOrCreateDraftId = (): string => {
   return created;
 };
 
-type ContentMode = 'ai' | 'prompted';
+type ContentMode = 'ai' | 'prompted' | 'scheduled';
 
 // API Base URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
@@ -240,7 +240,7 @@ const SocialHub: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isPosting, setIsPosting] = useState<boolean>(false);
   const [showClearConfirm, setShowClearConfirm] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'linkedin' | 'scheduled' | 'comingsoon'>('linkedin');
+  const [activeTab, setActiveTab] = useState<'linkedin' | 'comingsoon'>('linkedin');
   // AI-generated topics loaded on demand via "Load More", keyed by category id.
   // These are appended to that category's built-in topic list/column and
   // behave exactly like any other topic once selected.
@@ -329,7 +329,8 @@ const SocialHub: React.FC = () => {
   };
 
   // The prompt/topic that will be used for the next generation call.
-  const activeTopic = contentMode === 'ai' ? selectedTopic : customPrompt.trim();
+  // (Scheduled mode doesn't generate content here, so it has no topic.)
+  const activeTopic = contentMode === 'ai' ? selectedTopic : contentMode === 'prompted' ? customPrompt.trim() : '';
 
   // Whether the LinkedIn connection is considered "live" — i.e. an access
   // token is configured, so posting can proceed without any extra auth step.
@@ -668,16 +669,6 @@ const SocialHub: React.FC = () => {
         </button>
         <button
           type="button"
-          className={`sh-tab-btn sh-tab-btn--scheduled ${activeTab === 'scheduled' ? 'active' : ''}`}
-          role="tab"
-          aria-selected={activeTab === 'scheduled'}
-          onClick={() => setActiveTab('scheduled')}
-        >
-          <CalendarClock size={16} className="sh-tab-icon" aria-hidden="true" />
-          Scheduled
-        </button>
-        <button
-          type="button"
           className={`sh-tab-btn is-disabled ${activeTab === 'comingsoon' ? 'active' : ''}`}
           role="tab"
           aria-selected={activeTab === 'comingsoon'}
@@ -742,8 +733,22 @@ const SocialHub: React.FC = () => {
               Prompted
               <StatusDot active={contentMode === 'prompted'} label="Prompted mode" />
             </button>
+            <button
+              type="button"
+              className={`sh-subtab-btn ${contentMode === 'scheduled' ? 'active' : ''}`}
+              role="tab"
+              aria-selected={contentMode === 'scheduled'}
+              onClick={() => handleContentModeChange('scheduled')}
+            >
+              <CalendarClock size={15} className="sh-subtab-icon" aria-hidden="true" />
+              Scheduled
+              <StatusDot active={contentMode === 'scheduled'} label="Scheduled mode" />
+            </button>
           </div>
 
+          {contentMode === 'scheduled' ? (
+            <ScheduledPostsPanel token={token} />
+          ) : (
           <div className="hub-main">
             {contentMode === 'ai' && (
               <aside className="categories-sidebar">
@@ -1091,10 +1096,9 @@ const SocialHub: React.FC = () => {
               )}
             </div>
           </div>
+          )}
         </>
       )}
-      {/* Scheduled Tab Content */}
-      {activeTab === 'scheduled' && <ScheduledPostsPanel token={token} />}
 
       {/* Coming Soon Tab Content */}
       {activeTab === 'comingsoon' && (

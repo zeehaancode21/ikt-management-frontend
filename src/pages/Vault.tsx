@@ -312,19 +312,19 @@ export default function Vault() {
 
   // ── Unlocked ──────────────────────────────────────────────────────────────
   return (
-    <div style={{ ...styles.root, maxWidth: 720 }}>
+    <div className="vault-root-unlocked" style={{ ...styles.root, maxWidth: 720 }}>
       <style>{keyframes}</style>
 
       {/* Unlock Celebration Overlay */}
       {isUnlocked && (
         <div style={styles.unlockOverlay}>
-          <div style={styles.unlockContainer}>
+          <div className="vault-unlock-container" style={styles.unlockContainer}>
             <div className="vault-unlock-burst">
               <div style={styles.unlockCircle}>
                 <CheckCircle2 size={48} style={{ color: "#10b981" }} />
               </div>
             </div>
-            <div style={styles.unlockText}>
+            <div className="vault-unlock-text" style={styles.unlockText}>
               <Sparkles size={20} style={{ color: "#fbbf24" }} />
               <span>Vault Unlocked!</span>
               <Sparkles size={20} style={{ color: "#fbbf24" }} />
@@ -350,6 +350,7 @@ export default function Vault() {
       {/* Document Viewer Modal */}
       {viewingDoc && (
         <div 
+          className="vault-viewer-overlay"
           style={{
             ...styles.viewerOverlay,
             ...(isFullscreen ? styles.viewerFullscreen : {})
@@ -364,7 +365,7 @@ export default function Vault() {
             onClick={(e) => e.stopPropagation()}
             className="vault-viewer-popup"
           >
-            <div style={styles.viewerHeader}>
+            <div className="vault-viewer-header" style={styles.viewerHeader}>
               <div style={styles.viewerTitle}>
                 <FileText size={18} style={{ color: "#2563EB" }} />
                 <span>{viewingDoc.name}</span>
@@ -386,7 +387,7 @@ export default function Vault() {
                 </button>
               </div>
             </div>
-            <div style={styles.viewerBody}>
+            <div className="vault-viewer-body" style={styles.viewerBody}>
   {viewerLoading ? (
     <Loader2 size={32} className="animate-spin" style={{ color: "#2563EB" }} />
   ) : viewerError || !viewerUrl ? (
@@ -1380,5 +1381,44 @@ const keyframes = `
   
   .vault-viewer-download:active {
     transform: scale(0.95) !important;
+  }
+
+  /* ── Mobile ─────────────────────────────────────────────────────────────
+     The inline style objects above use fixed px padding (built for
+     desktop's centered-card look). On phones that padding eats most of
+     the width, so override it here with !important, which — unlike a
+     plain class — can beat an inline style attribute. */
+  @media (max-width: 640px) {
+    .vault-unlock-container {
+      padding: 28px 20px !important;
+      width: calc(100vw - 32px) !important;
+      max-width: 360px !important;
+    }
+    .vault-unlock-text {
+      font-size: 19px !important;
+      text-align: center;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .vault-viewer-overlay {
+      padding: 0 !important;
+      align-items: flex-end !important;
+    }
+    .vault-viewer-popup {
+      max-width: 100% !important;
+      width: 100% !important;
+      max-height: 92vh !important;
+      border-radius: 16px 16px 0 0 !important;
+    }
+    .vault-viewer-header {
+      padding: 12px 14px !important;
+    }
+    .vault-viewer-body {
+      padding: 1rem !important;
+      min-height: 220px !important;
+    }
+    .vault-root-unlocked {
+      max-width: 100% !important;
+    }
   }
 `;
