@@ -162,9 +162,11 @@ export const AppLayout = () => {
         /* Layout Container */
         .app-layout-container {
           display: flex;
-          min-height: 100vh;
+          height: 100vh;
+          height: 100dvh; /* real visible viewport height on mobile browsers (accounts for address bar) */
           width: 100%;
           position: relative;
+          overflow: hidden; /* the shell itself never scrolls — only .page-main does */
           background: hsl(var(--background));
           color: hsl(var(--foreground));
         }
@@ -195,15 +197,13 @@ export const AppLayout = () => {
         .sidebar-wrapper {
           position: relative;
           z-index: 100;
+          flex-shrink: 0; /* never let the flex row squeeze the sidebar */
         }
 
         .sidebar-container {
           width: 220px;
+          height: 100%; /* fills the fixed-height, overflow-hidden shell — it can never scroll */
           background: hsl(var(--sidebar-background));
-          height: 100vh;
-          height: 100dvh; /* real visible viewport height on mobile browsers (accounts for address bar) */
-          position: sticky;
-          top: 0;
           overflow: hidden; /* the inner AppSidebar handles its own nav scrolling; footer must never be clipped */
           transition: transform 0.3s ease;
           border-right: 1px solid hsl(var(--sidebar-border));
@@ -229,6 +229,8 @@ export const AppLayout = () => {
           display: flex;
           flex-direction: column;
           min-width: 0;
+          min-height: 0; /* required so the flex child below can actually scroll instead of stretching the shell */
+          height: 100%;
           background: hsl(var(--background));
           overflow-x: hidden;
         }
@@ -238,6 +240,7 @@ export const AppLayout = () => {
           position: sticky;
           top: 0;
           z-index: 10;
+          flex-shrink: 0; /* keep header height fixed, never compressed by the scroll area below it */
           display: flex;
           height: 56px;
           align-items: center;
@@ -265,12 +268,16 @@ export const AppLayout = () => {
         .page-main {
           flex: 1;
           min-width: 0;
+          min-height: 0; /* the key flexbox fix: lets this item scroll instead of stretching its parent */
           overflow-x: hidden;
           overflow-y: auto;
         }
 
         .page-content {
           padding: 24px 32px;
+          max-width: 100%;
+          overflow-wrap: break-word; /* long text/messages wrap instead of overflowing the content column */
+          word-break: break-word;
         }
 
         /* Messages specific styles */
@@ -302,6 +309,8 @@ export const AppLayout = () => {
             position: fixed;
             top: 0;
             left: 0;
+            height: 100vh;
+            height: 100dvh;
             transform: translateX(-100%);
             transition: transform 0.3s ease;
             z-index: 100;
