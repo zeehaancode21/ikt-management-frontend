@@ -1686,6 +1686,19 @@
     padding: 16px;
   }
 
+  /* The two-column categories/content layout doesn't fit small screens —
+     stack the sidebar above the main content instead of squeezing it into
+     a fixed 300px column. */
+  .hub-main {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .categories-sidebar {
+    position: static;
+    top: auto;
+  }
+
   .hub-header {
     padding: 20px 18px;
     border-radius: 16px;

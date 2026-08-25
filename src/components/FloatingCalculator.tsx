@@ -272,7 +272,7 @@ export function FloatingCalculator() {
   useEffect(() => { writeLS(LS_MODE, mode);   }, [mode]);
   useEffect(() => { writeLS(LS_POS, pos);     }, [pos]);
 
-  /* ── Keep panel on-screen on resize ─────────── */
+  /* ── Keep panel on-screen on resize (and on mount, for small phones) ── */
   useEffect(() => {
     const onResize = () => {
       const w = panelRef.current?.offsetWidth  ?? PANEL_WIDTH;
@@ -282,6 +282,7 @@ export function FloatingCalculator() {
         y: Math.min(Math.max(8, p.y), window.innerHeight - h - 8),
       }));
     };
+    onResize();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -735,7 +736,16 @@ export function FloatingCalculator() {
         </button>
 
         {isOpen && (
-          <div className="fc-panel" ref={panelRef} style={{ left: pos.x, top: pos.y, width: PANEL_WIDTH }}>
+          <div
+            className="fc-panel"
+            ref={panelRef}
+            style={{
+              left: pos.x,
+              top: pos.y,
+              width: typeof window !== 'undefined' ? Math.min(PANEL_WIDTH, window.innerWidth - 16) : PANEL_WIDTH,
+              maxWidth: 'calc(100vw - 16px)',
+            }}
+          >
 
             {/* ── Header ── */}
             <div className="fc-header"
