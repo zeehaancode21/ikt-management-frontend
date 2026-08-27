@@ -127,11 +127,72 @@ interface Report {
   workType: WorkType;
   client: string;
   project: string;
-  // Timestamp the record was created on the server (ISO string).
-  // NOTE: rename this if your backend's field/JSON key is different
-  // (e.g. "submittedAt") — used to gate the 10-minute delete window.
   createdAt?: string;
 }
+
+/**
+ * Normalizes a raw report record coming from the API into the shape the UI
+ * expects.
+ */
+const normalizeReport = (raw: any): Report => {
+  const description =
+    raw?.description ??
+    raw?.userDescription ??
+    raw?.user_description ??
+    raw?.desc ??
+    raw?.notes ??
+    "";
+
+  const workType =
+    raw?.workType ??
+    raw?.work_type ??
+    raw?.type ??
+    raw?.reportType ??
+    raw?.report_type ??
+    "";
+
+  const employeeName =
+    raw?.employeeName ??
+    raw?.employee_name ??
+    raw?.userName ??
+    raw?.user_name ??
+    raw?.name ??
+    raw?.fullName ??
+    raw?.full_name ??
+    raw?.employee?.name ??
+    raw?.employee?.fullName ??
+    raw?.employee?.employeeName ??
+    raw?.user?.name ??
+    raw?.user?.fullName ??
+    raw?.user?.username ??
+    raw?.username ??
+    "";
+
+  const client =
+    raw?.client ??
+    raw?.clientName ??
+    raw?.client_name ??
+    raw?.clientTitle ??
+    raw?.client?.name ??
+    "";
+
+  const project =
+    raw?.project ??
+    raw?.projectName ??
+    raw?.project_name ??
+    raw?.projectTitle ??
+    raw?.project?.name ??
+    "";
+
+  return {
+    ...raw,
+    description,
+    workType,
+    employeeName,
+    client,
+    project,
+  } as Report;
+};
 
 /** A single (year, project) pairing returned by the grouped-by-year projects endpoint. */
 interface ProjectYearOption {
@@ -148,15 +209,7 @@ interface ProjectYearGroup {
 /**
  * Groups a flat list of (year, project) pairs into year-labeled sections,
  * newest year first, with projects sorted alphabetically within each year
- * and de-duplicated. Powers the "all projects, grouped by year" dropdown
- * used by both the Lead (Owner) and User (Employee) views, so the full
- * project history stays browsable in a single control instead of being
- * filtered down to one year at a time.
- *
- * Thin wrapper around the shared `groupByYear` helper (see
- * `@/lib/yearGrouping`) so other pages — e.g. the Owner's Hours
- * Dashboard's Client/Project dropdowns — can reuse the exact same
- * grouping/sorting behavior without duplicating it.
+ * and de-duplicated.
  */
 const groupProjectsByYear = (options: ProjectYearOption[]): ProjectYearGroup[] =>
   groupByYear(options.map(({ year, projectName }) => ({ year, name: projectName }))).map(
@@ -201,18 +254,18 @@ const toDateKey = (d: string) => {
   }
 };
 
-// True for Saturday/Sunday. Used to visually flag weekend rows in report tables.
+// True for Saturday/Sunday.
 const isWeekend = (d: string) => {
   if (!d) return false;
   try {
-    const day = new Date(d).getDay(); // 0 = Sunday, 6 = Saturday
+    const day = new Date(d).getDay();
     return day === 0 || day === 6;
   } catch {
     return false;
   }
 };
 
-// "Saturday" / "Sunday" — used for the small weekend label in tables.
+// "Saturday" / "Sunday"
 const weekendLabel = (d: string) => {
   if (!d) return "";
   try {
@@ -224,9 +277,6 @@ const weekendLabel = (d: string) => {
 
 /**
  * Every calendar date-key (yyyy-MM-dd) from startKey to endKey, inclusive.
- * Used to walk day-by-day through a reporting period so weekend days with
- * zero submitted records can still get a divider line instead of just
- * silently disappearing from the list.
  */
 const getDatesInRange = (startKey: string, endKey: string): string[] => {
   const dates: string[] = [];
@@ -242,16 +292,7 @@ const getDatesInRange = (startKey: string, endKey: string): string[] => {
 
 /**
  * Builds a latest-first (descending) ordering of calendar dates between
- * startKey and endKey, treating Saturday+Sunday as ONE weekend unit rather
- * than two separate days:
- *   - Weekdays with no data are dropped (same as before).
- *   - A weekend pair with NO data at all collapses into a single
- *     "weekend-empty" segment (one line, not two).
- *   - A weekend pair that DOES have data keeps its individual day(s) as
- *     normal 'date' segments — Saturday and Sunday just sit next to each
- *     other with nothing splitting them apart.
- *   - Exactly one divider is inserted at the boundary where the weekend
- *     ends and the (older) Friday begins.
+ * startKey and endKey.
  */
 type DateSegment =
   | { type: "date"; dateKey: string }
@@ -306,22 +347,14 @@ const buildDescendingDateSegments = (
 };
 
 // A record can only be deleted within this many minutes of its creation.
-// Keep this in sync with whatever window the backend enforces.
 const DELETE_WINDOW_MINUTES = 10;
 
 /**
  * Returns true if the record was created within the last DELETE_WINDOW_MINUTES.
- * If createdAt is missing (e.g. backend hasn't been updated to send it yet),
- * this fails open (returns true) so the button doesn't just silently vanish
- * for everyone — remove that fallback once createdAt is reliably present.
  */
 const isWithinDeleteWindow = (createdAt?: string) => {
   if (!createdAt) return true;
 
-  // Backend sends naive timestamps like "2026-07-23T07:03:06.307732"
-  // with no timezone info, which the backend actually generates in UTC.
-  // Without a timezone suffix, JS's Date parser wrongly assumes local time,
-  // so we normalize by appending "Z" when one isn't already present.
   const normalized = /[Zz]|[+-]\d{2}:\d{2}$/.test(createdAt)
     ? createdAt
     : `${createdAt}Z`;
@@ -482,18 +515,24 @@ const animationStyles = `
   }
 
   [data-work-report-table] thead tr {
-    border-bottom: 1px solid rgb(226 232 240) !important;
+    border-bottom: 2px solid rgb(199 210 254) !important;
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.03), rgba(139, 92, 246, 0.03));
   }
 
   .dark [data-work-report-table] thead tr {
-    border-bottom: 1px solid rgb(51 65 85) !important;
+    border-bottom: 2px solid rgb(67 56 202 / 0.5) !important;
   }
 
   [data-work-report-table] thead th {
     border-bottom: none !important;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: 0.04em;
+  }
+
+  [data-work-report-table] thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
   }
 
   .progress-bar-fill {
@@ -512,6 +551,14 @@ const animationStyles = `
   .table-row-animate {
     animation: floatUp 0.36s ease-out forwards;
     opacity: 0;
+  }
+
+  [data-work-report-table] .owner-row-zebra:nth-child(even) {
+    background: rgba(99, 102, 241, 0.025);
+  }
+
+  .dark [data-work-report-table] .owner-row-zebra:nth-child(even) {
+    background: rgba(99, 102, 241, 0.05);
   }
 
   .custom-scrollbar::-webkit-scrollbar       { width: 6px; height: 6px; }
@@ -660,11 +707,13 @@ const animationStyles = `
     color: #e2e8f0 !important;
   }
 
+  /* Gradient "clip" text */
   .gradient-text {
     background: linear-gradient(135deg, #6366f1, #8b5cf6, #a78bfa);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    color: transparent;
   }
 
   .filter-pill {
@@ -699,8 +748,7 @@ const animationStyles = `
     border-color: rgba(99, 102, 241, 0.2);
   }
 
-  /* Accessible, visible focus ring for every interactive element in this page,
-     including custom (non-shadcn) buttons that don't ship their own focus style. */
+  /* Accessible, visible focus ring for every interactive element */
   [data-work-report-root] a:focus-visible,
   [data-work-report-root] button:focus-visible,
   [data-work-report-root] input:focus-visible,
@@ -724,20 +772,18 @@ const animationStyles = `
 
 if (typeof document !== "undefined") {
   const styleId = "work-report-animations";
-  if (!document.getElementById(styleId)) {
-    const s = document.createElement("style");
-    s.id = styleId;
-    s.textContent = animationStyles;
-    document.head.appendChild(s);
-  }
+  const existing = document.getElementById(styleId);
+  if (existing) existing.remove();
+  const s = document.createElement("style");
+  s.id = styleId;
+  s.textContent = animationStyles;
+  document.head.appendChild(s);
 }
 
 /* =========================================================
    Confirm Dialog
    A small, reusable, aesthetically-consistent replacement for the
-   native window.confirm() browser popup (which renders as an ugly
-   generic "localhost says…" box). Used anywhere a destructive action
-   (like deleting a report entry) needs explicit confirmation.
+   native window.confirm() browser popup.
 ========================================================= */
 const ConfirmDialog = ({
   open,
@@ -836,12 +882,6 @@ const ConfirmDialog = ({
 
 /* =========================================================
    Date Detail Modal
-   NOTE: now takes onDeleteEntry + deletingId so each entry card can be
-   deleted directly from the modal. Deletion is enforced server-side to
-   the current user's own records — the button below is simply hidden
-   whenever the entry isn't the current user's (see EmployeeView usage;
-   in EmployeeView "my reports" every entry already belongs to the
-   viewer, so the button always applies there).
 ========================================================= */
 const DateDetailModal = ({
   open,
@@ -1027,8 +1067,6 @@ const EmployeeView = () => {
   const [isEditMode, setIsEditMode] = useState(false);
 
   const [clients, setClients] = useState<string[]>([]);
-  // Every project a client has ever had, grouped by year, so the dropdown
-  // can show the full history instead of filtering to one year.
   const [projectsCache, setProjectsCache] = useState<Record<string, ProjectYearGroup[]>>({});
   const [loadingProjects, setLoadingProjects] = useState<Record<string, boolean>>({});
 
@@ -1039,16 +1077,12 @@ const EmployeeView = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailDate, setDetailDate] = useState("");
   const [deletingEntryId, setDeletingEntryId] = useState<string | number | null>(null);
-  // Entry pending confirmation before it's actually deleted (replaces window.confirm)
   const [pendingDeleteEntryId, setPendingDeleteEntryId] = useState<string | number | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(false);
   const [clientsError, setClientsError] = useState(false);
 
-  // Draft date used only in Step 1, before the user has committed to it.
-  // Default to today's date instead of leaving the native date input empty
-  // (an empty value renders as an unfriendly "dd/mm/yyyy" placeholder).
   const [draftDate, setDraftDate] = useState(today);
 
   const totalHours = entries.reduce((s, e) => s + (parseFloat(e.time) || 0), 0);
@@ -1058,11 +1092,10 @@ const EmployeeView = () => {
   );
   const showProgress = hasInteracted && (hasAnyData || totalHours > 0);
 
-  // Step 2 (the entry form) only appears once a date has been committed.
   const hasDate = Boolean(date);
 
   const reportsByDate = reports.reduce<Record<string, Report[]>>((acc, r) => {
-    if (!r.date) return acc; // Skip reports without date
+    if (!r.date) return acc;
     const k = toDateKey(r.date);
     if (!acc[k]) acc[k] = [];
     acc[k].push(r);
@@ -1070,11 +1103,6 @@ const EmployeeView = () => {
   }, {});
   const groupedDates = Object.keys(reportsByDate).sort((a, b) => a.localeCompare(b));
 
-  // Latest-first order. Saturday+Sunday are treated as one weekend unit —
-  // a weekend with zero entries collapses into a single divider line
-  // instead of two, and exactly one divider marks the boundary where the
-  // weekend ends and Friday begins. Weekdays with no data are still simply
-  // omitted, same as before.
   const reportDateSegments: DateSegment[] =
     groupedDates.length === 0
       ? []
@@ -1088,9 +1116,6 @@ const EmployeeView = () => {
     ? reports.some((r) => toDateKey(r.date) === draftDate)
     : false;
 
-  // Helper function to check if the selected work type(s) require client/project.
-  // Only optional when EVERY selected type is one of the no-client types (e.g. Training).
-  // If mixed with a real work type (e.g. E Plan + Training), client/project is still required.
   const isClientProjectOptional = (workTypes: WorkType[]) => {
     return workTypes.length > 0 && workTypes.every((wt) => OPTIONAL_WORK_TYPES.has(wt));
   };
@@ -1125,7 +1150,7 @@ const EmployeeView = () => {
     try {
       const { data } = await api.get<Report[]>("/reports/my");
       const reportsData = Array.isArray(data)
-        ? data.filter(report => report.date && report.date.trim() !== '') // Filter out reports without date
+        ? data.filter(report => report.date && report.date.trim() !== '')
         : [];
       setReports(reportsData);
     } catch (err) {
@@ -1138,13 +1163,11 @@ const EmployeeView = () => {
 
   useEffect(() => { loadReports(); }, [loadReports]);
 
-  /** Open the confirm dialog for a single already-submitted work report entry. */
   const handleDeleteEntry = (id: string | number) => {
     if (deletingEntryId) return;
     setPendingDeleteEntryId(id);
   };
 
-  /** Actually deletes the entry once the user confirms in the dialog. Own records only — enforced server-side. */
   const confirmDeleteEntry = async () => {
     const id = pendingDeleteEntryId;
     if (!id) return;
@@ -1169,14 +1192,12 @@ const EmployeeView = () => {
     }
   };
 
-  // Auto-close the detail modal once its date group has no entries left.
   useEffect(() => {
     if (detailOpen && detailDate && !(reportsByDate[detailDate]?.length)) {
       setDetailOpen(false);
     }
   }, [detailOpen, detailDate, reportsByDate]);
 
-  /* Fetch all of a client's projects, grouped by year, for the Projects dropdown */
   const fetchProjects = useCallback(
     async (client: string) => {
       if (!client || projectsCache[client] !== undefined) return;
@@ -1203,17 +1224,12 @@ const EmployeeView = () => {
     [projectsCache]
   );
 
-  /* ── Step 1 → Step 2: commit the chosen date and load (or reset) entries ── */
   const commitDate = (newDate: string) => {
     if (!newDate) return;
 
     const existingReports = reports.filter((r) => toDateKey(r.date) === newDate);
 
     if (existingReports.length > 0) {
-      // Enter edit mode: pre-fill entries from existing reports.
-      // Reports that share the same client/project/description are merged into
-      // a single row with multiple work types selected (multi-select support),
-      // with their individual times summed back into the row's total time.
       setIsEditMode(true);
       const groups = new Map<string, WorkEntry & { _ids: string[] }>();
       existingReports.forEach((r) => {
@@ -1246,7 +1262,6 @@ const EmployeeView = () => {
       );
       setEntries(loadedEntries);
 
-      // Pre-fetch projects for all clients present in existing entries
       const uniqueClients = [...new Set(existingReports.map((r) => r.client).filter(Boolean))];
       uniqueClients.forEach((c) => fetchProjects(c));
 
@@ -1257,7 +1272,6 @@ const EmployeeView = () => {
         duration: 2000,
       });
     } else {
-      // New date — reset to fresh entry
       setIsEditMode(false);
       setEntries([createEntry()]);
       toast({
@@ -1272,12 +1286,10 @@ const EmployeeView = () => {
     setHasInteracted(true);
   };
 
-  /* ── Row "Edit" action from the reports table jumps straight to Step 2 ── */
   const handleDateChange = (newDate: string) => {
     commitDate(newDate);
   };
 
-  /* ── Go back to Step 1 (change date / cancel edit) ── */
   const handleChangeDate = () => {
     setIsEditMode(false);
     setEntries([createEntry()]);
@@ -1288,7 +1300,6 @@ const EmployeeView = () => {
 
   const handleCancelEdit = () => handleChangeDate();
 
-  /* Entry helpers */
   const updateEntry = (localId: string, field: "client" | "project" | "time" | "description", value: string) => {
     if (!hasInteracted) setHasInteracted(true);
     setEntries((prev) =>
@@ -1301,9 +1312,6 @@ const EmployeeView = () => {
     );
   };
 
-  // Toggle a work type on/off for a given row (multi-select),
-  // with TRAINING / PRACTICING / MISCELLANEOUS / ESTIMATION treated as exclusive:
-  // picking one of them clears every other selection (and vice versa).
   const toggleWorkType = (localId: string, workType: WorkType) => {
     if (!hasInteracted) setHasInteracted(true);
     setEntries((prev) =>
@@ -1313,15 +1321,10 @@ const EmployeeView = () => {
 
         let updatedTypes: WorkType[];
         if (isSelected) {
-          // Just deselecting — simple removal.
           updatedTypes = e.workTypes.filter((t) => t !== workType);
         } else if (OPTIONAL_WORK_TYPES.has(workType)) {
-          // Selecting an exclusive type (Training/Practicing/Misc) — clear all other types so
-          // it becomes the ONLY selected type.
           updatedTypes = [workType];
         } else {
-          // Selecting a normal type: drop any exclusive type that was
-          // previously selected, then add this one alongside the rest.
           updatedTypes = [
             ...e.workTypes.filter((t) => !OPTIONAL_WORK_TYPES.has(t)),
             workType,
@@ -1352,14 +1355,12 @@ const EmployeeView = () => {
     setEntries((prev) => prev.filter((e) => e.localId !== localId));
   };
 
-  /* ── Submit / Update ── */
   const handleFinalSubmit = async () => {
     if (!date) {
       toast({ title: "No date selected", description: "Please pick a date first.", variant: "destructive" });
       return;
     }
 
-    // Check for incomplete entries
     const incompleteEntry = entries.find((e) => {
       if (e.workTypes.length === 0) return true;
       if (isClientProjectOptional(e.workTypes)) {
@@ -1381,10 +1382,6 @@ const EmployeeView = () => {
 
     setSubmitting(true);
     try {
-      // Each row can have multiple work types selected. Since a single backend
-      // record only stores one work type, expand each row into one record per
-      // selected type (client/project/description shared; time split evenly
-      // across the selected types so totals stay accurate downstream).
       const payload = entries.flatMap((e) => {
         const optional = isClientProjectOptional(e.workTypes);
         const splitTime = parseFloat((parseFloat(e.time) / e.workTypes.length).toFixed(2));
@@ -1394,12 +1391,11 @@ const EmployeeView = () => {
           workType: wt,
           time: splitTime,
           description: e.description.trim(),
-          date: date, // Include date in the payload
+          date: date,
         }));
       });
 
       if (isEditMode) {
-        // ── UPDATE existing report ──
         await api.put(`/reports/update/${date}`, payload);
         toast({
           title: "Report updated",
@@ -1407,7 +1403,6 @@ const EmployeeView = () => {
           className: "bg-amber-500 text-white border-none text-xs animate-success-bounce",
         });
       } else {
-        // ── CREATE new report ──
         await api.post("/reports/submit", payload);
         toast({
           title: "Submitted successfully",
@@ -1719,8 +1714,6 @@ const EmployeeView = () => {
                               </DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               {(Object.keys(WORK_TYPE_LABELS) as WorkType[]).map((k) => {
-                                // If an exclusive type (Training/Practicing/Misc) is already
-                                // selected, block every other option until it's deselected.
                                 const hasExclusiveSelected = entry.workTypes.some((t) =>
                                   OPTIONAL_WORK_TYPES.has(t)
                                 );
@@ -1912,8 +1905,6 @@ const EmployeeView = () => {
                 </TableHeader>
                 <TableBody>
                   {reportDateSegments.map((item, index) => {
-                    // Plain divider — marks the boundary between the
-                    // weekend block (above) and Friday's row (below).
                     if (item.type === "divider") {
                       return (
                         <TableRow key={`divider-${index}`} className="weekend-divider-row">
@@ -1924,8 +1915,6 @@ const EmployeeView = () => {
                       );
                     }
 
-                    // Weekend pair with zero submitted entries — one
-                    // combined divider line for both days, not two.
                     if (item.type === "weekend-empty") {
                       const [first, second] = item.dateKeys;
                       const label = second
@@ -1993,7 +1982,6 @@ const EmployeeView = () => {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1.5">
-                            {/* View button */}
                             <Button
                               type="button"
                               variant="outline"
@@ -2005,7 +1993,6 @@ const EmployeeView = () => {
                               <Eye className="h-3 w-3" aria-hidden="true" />
                               View
                             </Button>
-                            {/* Edit button */}
                             <Button
                               type="button"
                               variant="outline"
@@ -2062,7 +2049,6 @@ const OwnerView = () => {
   const [error, setError] = useState<string | null>(null);
   const [missingDatesCount, setMissingDatesCount] = useState(0);
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
-  // Record pending confirmation before it's actually deleted (replaces window.confirm)
   const [pendingDelete, setPendingDelete] = useState<Report | null>(null);
 
   const [dateFilterMode, setDateFilterMode] = useState<"single" | "range">("single");
@@ -2081,10 +2067,13 @@ const OwnerView = () => {
         const reportsData = Array.isArray(data) ? data : [];
         const missingCount = reportsData.filter((r) => !r.date).length;
         setMissingDatesCount(missingCount);
-        const processedReports = reportsData.map((report) => ({
-          ...report,
-          date: report.date || new Date().toISOString().split("T")[0],
-        }));
+        const processedReports = reportsData.map((report) => {
+          const normalized = normalizeReport(report);
+          return {
+            ...normalized,
+            date: normalized.date || new Date().toISOString().split("T")[0],
+          };
+        });
         if (!cancelled) {
           setReports(processedReports);
           setError(null);
@@ -2098,13 +2087,11 @@ const OwnerView = () => {
     return () => { cancelled = true; };
   }, []);
 
-  /** Open the confirm dialog for a single record from the org-wide table. */
   const handleDelete = (r: Report) => {
     if (deletingId) return;
     setPendingDelete(r);
   };
 
-  /** Actually deletes the record once the user confirms in the dialog. Own records only — enforced server-side. */
   const confirmDelete = async () => {
     const r = pendingDelete;
     if (!r) return;
@@ -2173,10 +2160,6 @@ const OwnerView = () => {
     ...new Set(reports.map((r) => r.client).filter(Boolean)),
   ].sort() as string[];
 
-  // All projects (optionally scoped to the selected client), grouped by the
-  // year of the report entries they appear in — so a project stays
-  // reachable under every year it has activity in, rather than the
-  // dropdown being narrowed to a single year.
   const projectsByYear: ProjectYearGroup[] = groupProjectsByYear(
     reports
       .filter((r) => (filterClient === "all" || r.client === filterClient) && r.project)
@@ -2205,10 +2188,6 @@ const OwnerView = () => {
     filterClient !== "all" ||
     filterProject !== "all";
 
-  // Latest-first order. Saturday+Sunday are treated as one weekend unit —
-  // a weekend with zero records collapses into a single divider line
-  // instead of two, and exactly one divider marks the boundary where the
-  // weekend ends and Friday begins.
   type OwnerRowItem =
     | { type: "record"; record: Report }
     | { type: "weekend-empty"; dateKeys: string[] }
@@ -2249,14 +2228,13 @@ const OwnerView = () => {
   const totalFilteredHours = filtered.reduce((sum, r) => sum + (r.time || 0), 0);
   const uniqueFilteredEmployees = new Set(filtered.map((r) => r.employeeName)).size;
 
-  // Enhanced stats
   const totalEmployees = uniqueEmployees.length;
   const totalClients = uniqueClients.length;
   const avgHoursPerReport = reports.length > 0 ? (reports.reduce((s, r) => s + (r.time || 0), 0) / reports.length) : 0;
 
   return (
     <div data-work-report-root="" className="space-y-3">
-      {/* Stats Overview - responsive grid: 2 cols on mobile, up to 5 on desktop */}
+      {/* Stats Overview */}
       {!loading && !error && reports.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 animate-fade-in-up">
           <div className="stats-card flex items-center gap-2 py-2.5 px-3">
@@ -2352,7 +2330,7 @@ const OwnerView = () => {
           )}
         </div>
 
-        {/* Filter Bar — stacks vertically on mobile, wraps into rows on larger screens */}
+        {/* Filter Bar */}
         {!loading && !error && reports.length > 0 && (
           <div className="mb-3 p-3 glass-effect rounded-lg border border-slate-200/50 dark:border-slate-700/50 animate-fade-in-up">
             <div className="flex items-center gap-1.5 mb-2.5">
@@ -2594,7 +2572,7 @@ const OwnerView = () => {
           </div>
         )}
 
-        {/* Table */}
+        {/* Table - All content in single line with full description visible */}
         {loading ? (
           <div className="flex justify-center py-8">
             <FullSpinner />
@@ -2621,23 +2599,21 @@ const OwnerView = () => {
             )}
           </div>
         ) : (
-          <div data-work-report-table="" className="overflow-x-auto rounded-lg border border-slate-200/50 dark:border-slate-700/50 custom-scrollbar">
-            <Table className="min-w-[760px]">
+          <div data-work-report-table="" className="overflow-x-auto rounded-lg border border-slate-200/50 dark:border-slate-700/50 custom-scrollbar max-h-[70vh]">
+            <Table className="min-w-[900px]">
               <TableHeader>
-                <TableRow className="bg-gradient-to-r from-slate-50/80 to-slate-100/80 dark:from-slate-800/60 dark:to-slate-800/40">
-                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide py-2">Date</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide py-2">Employee</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide py-2">Client</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide py-2">Project</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide py-2">Type</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide py-2">Time</TableHead>
-                  <TableHead className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide py-2">Description</TableHead>
+                <TableRow className="bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-950/60 dark:to-purple-950/60">
+                  <TableHead className="text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-2.5 whitespace-nowrap">Date</TableHead>
+                  <TableHead className="text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-2.5 whitespace-nowrap">Employee</TableHead>
+                  <TableHead className="text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-2.5 whitespace-nowrap">Client</TableHead>
+                  <TableHead className="text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-2.5 whitespace-nowrap">Project</TableHead>
+                  <TableHead className="text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-2.5 whitespace-nowrap">Type</TableHead>
+                  <TableHead className="text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-2.5 whitespace-nowrap">Time</TableHead>
+                  <TableHead className="text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-2.5 min-w-[300px]">Description</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {ownerRowItems.map((item, index) => {
-                  // Plain divider — marks the boundary between the weekend
-                  // block (above) and Friday's records (below).
                   if (item.type === "divider") {
                     return (
                       <TableRow key={`divider-${index}`} className="weekend-divider-row">
@@ -2648,8 +2624,6 @@ const OwnerView = () => {
                     );
                   }
 
-                  // Weekend pair with zero matching records — one combined
-                  // divider line for both days, not two.
                   if (item.type === "weekend-empty") {
                     const [first, second] = item.dateKeys;
                     const label = second
@@ -2674,48 +2648,51 @@ const OwnerView = () => {
                   const r = item.record;
                   const weekend = isWeekend(r.date);
                   return (
-                  <TableRow
-                    key={r.id}
-                    className={`entry-row table-row-animate ${weekend ? "weekend-row" : ""}`}
-                    style={{ animationDelay: `${index * 0.02}s` }}
-                  >
-                    <TableCell className="text-xs whitespace-nowrap font-semibold text-slate-700 dark:text-slate-300 py-2">
-                      {fmt(r.date)}
-                      {!r.date && <span className="ml-1 text-[10px] text-amber-500">(auto)</span>}
-                      {weekend && (
-                        <span className="weekend-badge">
-                          <span className="weekend-dot" />
-                          {weekendLabel(r.date)}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs font-semibold py-2">
-                      <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                        {r.employeeName || "—"}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-600 dark:text-slate-400 py-2">{r.client || "—"}</TableCell>
-                    <TableCell className="text-xs text-slate-600 dark:text-slate-400 py-2">{r.project || "—"}</TableCell>
-                    <TableCell className="py-2">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${WORK_TYPE_COLORS[r.workType as WorkType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-                          }`}
-                      >
-                        {WORK_TYPE_LABELS[r.workType as WorkType] ?? r.workType}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-xs font-bold py-2">
-                      <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                        {r.time}h
-                      </span>
-                    </TableCell>
-                    <TableCell
-                      className="text-xs max-w-[180px] truncate text-slate-500 dark:text-slate-400 py-2"
-                      title={r.description}
+                    <TableRow
+                      key={r.id}
+                      className={`entry-row owner-row-zebra table-row-animate ${weekend ? "weekend-row" : ""}`}
+                      style={{ animationDelay: `${index * 0.02}s` }}
                     >
-                      {r.description || "—"}
-                    </TableCell>
-                  </TableRow>
+                      <TableCell className="text-xs whitespace-nowrap font-semibold text-slate-700 dark:text-slate-300 py-2 align-middle">
+                        {fmt(r.date)}
+                        {!r.date && <span className="ml-1 text-[10px] text-amber-500">(auto)</span>}
+                        {weekend && (
+                          <span className="weekend-badge">
+                            <span className="weekend-dot" />
+                            {weekendLabel(r.date)}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs font-semibold py-2 align-middle whitespace-nowrap">
+                        <span className="text-slate-800 dark:text-slate-100 font-semibold">
+                          {r.employeeName || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-xs font-medium text-slate-700 dark:text-slate-300 py-2 align-middle whitespace-nowrap">
+                        {r.client || "—"}
+                      </TableCell>
+                      <TableCell className="text-xs font-medium text-slate-700 dark:text-slate-300 py-2 align-middle whitespace-nowrap">
+                        {r.project || "—"}
+                      </TableCell>
+                      <TableCell className="py-2 align-middle whitespace-nowrap">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap ${WORK_TYPE_COLORS[r.workType as WorkType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                            }`}
+                        >
+                          {WORK_TYPE_LABELS[r.workType as WorkType] || r.workType || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-xs font-bold py-2 align-middle whitespace-nowrap">
+                        <span className="inline-flex items-center text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 px-2 py-0.5 rounded-full font-bold">
+                          {r.time}h
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        className="text-xs max-w-[400px] break-words leading-relaxed text-slate-600 dark:text-slate-300 py-2 align-middle"
+                      >
+                        {r.description || "—"}
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
               </TableBody>
