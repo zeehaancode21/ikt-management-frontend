@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { format } from "date-fns";
 import api, { getErrorMessage } from "@/lib/api";
 import { groupByYear } from "@/lib/yearGrouping";
@@ -57,6 +57,11 @@ import {
   TrendingUp,
   BarChart3,
   Users,
+  Search,
+  Download,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 
 /* ─── Types ─────────────────────────────────────────────── */
@@ -2041,7 +2046,8 @@ const EmployeeView = () => {
 };
 
 /* =========================================================
-   OWNER VIEW - Team performance overview with filters
+   OWNER VIEW - Team performance overview with filters,
+   search, sorting, a "By employee" rollup, and CSV export.
 ========================================================= */
 const OwnerView = () => {
   const [reports, setReports] = useState<Report[]>([]);
@@ -2058,6 +2064,13 @@ const OwnerView = () => {
   const [filterEmployee, setFilterEmployee] = useState<string>("all");
   const [filterClient, setFilterClient] = useState<string>("all");
   const [filterProject, setFilterProject] = useState<string>("all");
+
+  // ── New: search, view mode, sorting, collapsible filters ──
+  const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"date" | "employee">("date");
+  const [sortField, setSortField] = useState<"date" | "employee" | "time">("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -2140,6 +2153,8 @@ const OwnerView = () => {
     setFilterProject("all");
   };
 
+  const clearSearch = () => setSearchQuery("");
+
   const isDateFilterActive = dateFilterMode === "single"
     ? filterDate !== "all"
     : filterDateFrom !== "" || filterDateTo !== "";
@@ -2178,7 +2193,13 @@ const OwnerView = () => {
     const empMatch = filterEmployee === "all" || r.employeeName === filterEmployee;
     const clientMatch = filterClient === "all" || r.client === filterClient;
     const projectMatch = filterProject === "all" || r.project === filterProject;
-    return dateMatch && empMatch && clientMatch && projectMatch;
+    const query = searchQuery.trim().toLowerCase();
+    const searchMatch =
+      !query ||
+      [r.employeeName, r.client, r.project, r.description].some((f) =>
+        (f || "").toLowerCase().includes(query)
+      );
+    return dateMatch && empMatch && clientMatch && projectMatch && searchMatch;
   });
 
   const hasFilter =
@@ -2186,7 +2207,8 @@ const OwnerView = () => {
     (dateFilterMode === "range" && (filterDateFrom !== "" || filterDateTo !== "")) ||
     filterEmployee !== "all" ||
     filterClient !== "all" ||
-    filterProject !== "all";
+    filterProject !== "all" ||
+    searchQuery.trim() !== "";
 
   type OwnerRowItem =
     | { type: "record"; record: Report }
@@ -2215,6 +2237,89 @@ const OwnerView = () => {
           return [seg];
         });
 
+  // Flat sort used whenever the owner sorts by a column other than the
+  // default (newest-first) date grouping, or reverses the date sort.
+  const sortedFilteredFlat = [...filtered].sort((a, b) => {
+    let cmp = 0;
+    if (sortField === "date") cmp = toDateKey(a.date).localeCompare(toDateKey(b.date));
+    else if (sortField === "employee") cmp = (a.employeeName || "").localeCompare(b.employeeName || "");
+    else if (sortField === "time") cmp = (a.time || 0) - (b.time || 0);
+    return sortDirection === "asc" ? cmp : -cmp;
+  });
+
+  const useDateGrouping = sortField === "date";
+  const displayRowItems: OwnerRowItem[] = useDateGrouping
+    ? (sortDirection === "desc" ? ownerRowItems : [...ownerRowItems].reverse())
+    : sortedFilteredFlat.map((record) => ({ type: "record" as const, record }));
+
+  const handleSort = (field: "date" | "employee" | "time") => {
+    if (sortField === field) {
+      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDirection("desc");
+    }
+  };
+
+  // Per-employee rollup for the "By employee" view — respects active filters.
+  const employeeSummaries = useMemo(() => {
+    const map = new Map<
+      string,
+      { employee: string; totalTime: number; records: number; days: Set<string>; clients: Set<string> }
+    >();
+    filtered.forEach((r) => {
+      const key = r.employeeName || "Unassigned";
+      if (!map.has(key)) {
+        map.set(key, { employee: key, totalTime: 0, records: 0, days: new Set(), clients: new Set() });
+      }
+      const entry = map.get(key)!;
+      entry.totalTime += r.time || 0;
+      entry.records += 1;
+      entry.days.add(toDateKey(r.date));
+      if (r.client) entry.clients.add(r.client);
+    });
+    return Array.from(map.values())
+      .map((e) => ({
+        employee: e.employee,
+        totalTime: e.totalTime,
+        records: e.records,
+        days: e.days.size,
+        clients: e.clients.size,
+        avgPerDay: e.days.size ? e.totalTime / e.days.size : 0,
+      }))
+      .sort((a, b) => b.totalTime - a.totalTime);
+  }, [filtered]);
+
+  const exportToCSV = () => {
+    const headers = ["Date", "Employee", "Client", "Project", "Type", "Time (h)", "Description"];
+    const escape = (val: string | number) => `"${String(val ?? "").replace(/"/g, '""')}"`;
+    const rows = sortedFilteredFlat.map((r) => [
+      fmt(r.date),
+      r.employeeName || "",
+      r.client || "",
+      r.project || "",
+      WORK_TYPE_LABELS[r.workType as WorkType] || r.workType || "",
+      r.time,
+      r.description || "",
+    ]);
+    const csvContent = [headers, ...rows].map((row) => row.map(escape).join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `work-report-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast({
+      title: "Export ready",
+      description: `${rows.length} record(s) exported.`,
+      className: "bg-emerald-500 text-white border-none text-xs",
+      duration: 1500,
+    });
+  };
+
   const clearFilters = () => {
     setDateFilterMode("single");
     setFilterDate("all");
@@ -2223,6 +2328,7 @@ const OwnerView = () => {
     setFilterEmployee("all");
     setFilterClient("all");
     setFilterProject("all");
+    setSearchQuery("");
   };
 
   const totalFilteredHours = filtered.reduce((sum, r) => sum + (r.time || 0), 0);
@@ -2232,60 +2338,102 @@ const OwnerView = () => {
   const totalClients = uniqueClients.length;
   const avgHoursPerReport = reports.length > 0 ? (reports.reduce((s, r) => s + (r.time || 0), 0) / reports.length) : 0;
 
+  const SortIcon = ({ field }: { field: "date" | "employee" | "time" }) => {
+    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 opacity-30" aria-hidden="true" />;
+    return sortDirection === "asc" ? (
+      <ArrowUp className="h-3 w-3" aria-hidden="true" />
+    ) : (
+      <ArrowDown className="h-3 w-3" aria-hidden="true" />
+    );
+  };
+
   return (
     <div data-work-report-root="" className="space-y-3">
-      {/* Stats Overview */}
+      {/* Stats Overview - Professional Cards */}
       {!loading && !error && reports.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 animate-fade-in-up">
-          <div className="stats-card flex items-center gap-2 py-2.5 px-3">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/20 flex-shrink-0">
-              <FileText className="h-3.5 w-3.5 text-white" aria-hidden="true" />
-            </div>
-            <div className="flex items-baseline gap-1.5 min-w-0">
-              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">Reports</span>
-              <span className="text-sm font-bold gradient-text">{reports.length}</span>
-            </div>
-          </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 animate-fade-in-up mb-4">
+          {[
+            {
+              label: "Reports",
+              value: reports.length,
+              suffix: "",
+              sub: "Total entries",
+              icon: FileText,
+              gradient: "from-indigo-500 to-purple-600",
+              shadow: "shadow-indigo-500/20",
+            },
+            {
+              label: "Employees",
+              value: totalEmployees,
+              suffix: "",
+              sub: "Team members",
+              icon: Users,
+              gradient: "from-emerald-500 to-teal-600",
+              shadow: "shadow-emerald-500/20",
+            },
+            {
+              label: "Clients",
+              value: totalClients,
+              suffix: "",
+              sub: "Active clients",
+              icon: Briefcase,
+              gradient: "from-amber-500 to-orange-600",
+              shadow: "shadow-amber-500/20",
+            },
+            {
+              label: "Avg Hours",
+              value: avgHoursPerReport.toFixed(1),
+              suffix: "h",
+              sub: "Per report avg",
+              icon: Clock,
+              gradient: "from-rose-500 to-pink-600",
+              shadow: "shadow-rose-500/20",
+            },
+            {
+              label: "Total Hours",
+              value: reports.reduce((s, r) => s + (r.time || 0), 0).toFixed(1),
+              suffix: "h",
+              sub: "Total tracked",
+              icon: TrendingUp,
+              gradient: "from-cyan-500 to-blue-600",
+              shadow: "shadow-cyan-500/20",
+            },
+          ].map(({ label, value, suffix, sub, icon: Icon, gradient, shadow }) => (
+            <div
+              key={label}
+              className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-700/60 p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden"
+            >
+              {/* Icon + label share a row, both individually truncatable */}
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div
+                  className={`h-6 w-6 sm:h-7 sm:w-7 rounded-md bg-gradient-to-br ${gradient} flex items-center justify-center shadow-sm ${shadow} flex-shrink-0`}
+                >
+                  <Icon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white" aria-hidden="true" />
+                </div>
+                <p className="text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate min-w-0">
+                  {label}
+                </p>
+              </div>
 
-          <div className="stats-card flex items-center gap-2 py-2.5 px-3">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/20 flex-shrink-0">
-              <Users className="h-3.5 w-3.5 text-white" aria-hidden="true" />
-            </div>
-            <div className="flex items-baseline gap-1.5 min-w-0">
-              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">Employees</span>
-              <span className="text-sm font-bold gradient-text">{totalEmployees}</span>
-            </div>
-          </div>
+              {/* Value gets the full card width on its own line, so it never
+                  competes with — or renders under — the icon badge above. */}
+              <p
+                className="mt-2 text-lg sm:text-2xl font-bold text-slate-800 dark:text-slate-100 leading-none whitespace-nowrap overflow-hidden text-ellipsis"
+                title={`${value}${suffix || ""}`}
+              >
+                {value}
+                {suffix && (
+                  <span className="text-xs sm:text-base font-medium text-slate-400 ml-0.5">
+                    {suffix}
+                  </span>
+                )}
+              </p>
 
-          <div className="stats-card flex items-center gap-2 py-2.5 px-3">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-500/20 flex-shrink-0">
-              <Briefcase className="h-3.5 w-3.5 text-white" aria-hidden="true" />
+              <p className="mt-1.5 text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                {sub}
+              </p>
             </div>
-            <div className="flex items-baseline gap-1.5 min-w-0">
-              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">Clients</span>
-              <span className="text-sm font-bold gradient-text">{totalClients}</span>
-            </div>
-          </div>
-
-          <div className="stats-card flex items-center gap-2 py-2.5 px-3">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 shadow-lg shadow-rose-500/20 flex-shrink-0">
-              <Clock className="h-3.5 w-3.5 text-white" aria-hidden="true" />
-            </div>
-            <div className="flex items-baseline gap-1.5 min-w-0">
-              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">Avg hrs</span>
-              <span className="text-sm font-bold gradient-text">{avgHoursPerReport.toFixed(1)}h</span>
-            </div>
-          </div>
-
-          <div className="stats-card flex items-center gap-2 py-2.5 px-3">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 shadow-lg shadow-cyan-500/20 flex-shrink-0">
-              <TrendingUp className="h-3.5 w-3.5 text-white" aria-hidden="true" />
-            </div>
-            <div className="flex items-baseline gap-1.5 min-w-0">
-              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">Total hrs</span>
-              <span className="text-sm font-bold gradient-text">{reports.reduce((s, r) => s + (r.time || 0), 0).toFixed(1)}h</span>
-            </div>
-          </div>
+          ))}
         </div>
       )}
 
@@ -2330,249 +2478,359 @@ const OwnerView = () => {
           )}
         </div>
 
+        {/* Search + view toggle + export */}
+        {!loading && !error && reports.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3 animate-fade-in-up">
+            <div className="relative flex-1 min-w-[180px] max-w-sm">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+              <Input
+                type="text"
+                placeholder="Search employee, client, project, notes…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-8 pl-8 pr-7 text-xs border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                aria-label="Search reports"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500 transition-colors"
+                >
+                  <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-0.5" role="group" aria-label="View mode">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("date")}
+                  aria-pressed={viewMode === "date"}
+                  className={`flex items-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-semibold transition-colors duration-150 ${
+                    viewMode === "date"
+                      ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm"
+                      : "text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                  }`}
+                >
+                  <Calendar className="h-3 w-3" aria-hidden="true" /> By date
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("employee")}
+                  aria-pressed={viewMode === "employee"}
+                  className={`flex items-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-semibold transition-colors duration-150 ${
+                    viewMode === "employee"
+                      ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm"
+                      : "text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                  }`}
+                >
+                  <Users className="h-3 w-3" aria-hidden="true" /> By employee
+                </button>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={exportToCSV}
+                disabled={filtered.length === 0}
+                className="h-8 gap-1.5 text-xs border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden="true" /> Export
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Filter Bar */}
         {!loading && !error && reports.length > 0 && (
           <div className="mb-3 p-3 glass-effect rounded-lg border border-slate-200/50 dark:border-slate-700/50 animate-fade-in-up">
             <div className="flex items-center gap-1.5 mb-2.5">
               <Filter className="h-3.5 w-3.5 text-indigo-500" aria-hidden="true" />
               <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Filters</span>
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
-              {/* Date Filter */}
-              <div className="flex flex-col gap-1.5 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 border border-slate-200 dark:border-slate-700">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Date</span>
-                  <div className="flex items-center gap-1" role="group" aria-label="Date filter mode">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDateFilterMode("single");
-                        setFilterDateFrom("");
-                        setFilterDateTo("");
-                      }}
-                      aria-pressed={dateFilterMode === "single"}
-                      className={`h-6 px-2 rounded text-[10px] font-semibold transition-colors duration-150 ${dateFilterMode === "single"
-                          ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm"
-                          : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
-                        }`}
-                    >
-                      Single
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDateFilterMode("range");
-                        setFilterDate("all");
-                      }}
-                      aria-pressed={dateFilterMode === "range"}
-                      className={`h-6 px-2 rounded text-[10px] font-semibold transition-colors duration-150 ${dateFilterMode === "range"
-                          ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm"
-                          : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
-                        }`}
-                    >
-                      Range
-                    </button>
-                    {isDateFilterActive && (
-                      <button
-                        onClick={clearDateFilter}
-                        aria-label="Clear date filter"
-                        className="text-slate-400 hover:text-rose-500 transition-colors ml-0.5"
-                      >
-                        <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {dateFilterMode === "single" ? (
-                  <Select value={filterDate} onValueChange={setFilterDate}>
-                    <SelectTrigger aria-label="Filter by date" className="h-8 text-xs w-full sm:w-[140px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
-                      <SelectValue placeholder="All dates" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all" className="text-xs">All dates</SelectItem>
-                      {uniqueDates.map((d) => (
-                        <SelectItem key={d} value={d} className="text-xs">{fmt(d)}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <div className="flex items-center gap-1.5">
-                    <Label htmlFor="owner-date-from" className="sr-only">From date</Label>
-                    <Input
-                      id="owner-date-from"
-                      type="date"
-                      value={filterDateFrom}
-                      onChange={(e) => setFilterDateFrom(e.target.value)}
-                      className="owner-date-input h-8 text-xs w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 rounded-md cursor-pointer hover:border-indigo-400 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/20 transition-colors duration-150"
-                    />
-                    <span className="text-xs text-slate-400 font-bold flex-shrink-0" aria-hidden="true">→</span>
-                    <Label htmlFor="owner-date-to" className="sr-only">To date</Label>
-                    <Input
-                      id="owner-date-to"
-                      type="date"
-                      value={filterDateTo}
-                      onChange={(e) => setFilterDateTo(e.target.value)}
-                      className="owner-date-input h-8 text-xs w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 rounded-md cursor-pointer hover:border-indigo-400 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/20 transition-colors duration-150"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Employee Filter */}
-              <div className="flex flex-col gap-1.5 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 border border-slate-200 dark:border-slate-700">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Employee</span>
-                  {isEmployeeFilterActive && (
-                    <button
-                      onClick={clearEmployeeFilter}
-                      aria-label="Clear employee filter"
-                      className="text-slate-400 hover:text-rose-500 transition-colors"
-                    >
-                      <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
-                <Select value={filterEmployee} onValueChange={setFilterEmployee}>
-                  <SelectTrigger aria-label="Filter by employee" className="h-8 text-xs w-full sm:w-[130px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all" className="text-xs">All employees</SelectItem>
-                    {uniqueEmployees.map((emp) => (
-                      <SelectItem key={emp} value={emp} className="text-xs">{emp}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Client Filter */}
-              <div className="flex flex-col gap-1.5 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 border border-slate-200 dark:border-slate-700">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Client</span>
-                  {isClientFilterActive && (
-                    <button
-                      onClick={clearClientFilter}
-                      aria-label="Clear client filter"
-                      className="text-slate-400 hover:text-rose-500 transition-colors"
-                    >
-                      <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
-                <Select value={filterClient} onValueChange={handleClientFilterChange}>
-                  <SelectTrigger aria-label="Filter by client" className="h-8 text-xs w-full sm:w-[120px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all" className="text-xs">All clients</SelectItem>
-                    {uniqueClients.map((c) => (
-                      <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Project Filter */}
-              <div className="flex flex-col gap-1.5 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 border border-slate-200 dark:border-slate-700">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Project</span>
-                  {isProjectFilterActive && (
-                    <button
-                      onClick={clearProjectFilter}
-                      aria-label="Clear project filter"
-                      className="text-slate-400 hover:text-rose-500 transition-colors"
-                    >
-                      <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
-                <Select value={filterProject} onValueChange={setFilterProject}>
-                  <SelectTrigger aria-label="Filter by project" className="h-8 text-xs w-full sm:w-[130px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent className="year-grouped-select-content max-h-[320px] overflow-y-auto custom-scrollbar">
-                    <SelectItem value="all" className="text-xs">All projects</SelectItem>
-                    {projectsByYear.length > 0 && (
-                      <SelectSeparator className="my-1.5 bg-slate-200 dark:bg-slate-700" />
-                    )}
-                    {projectsByYear.map((group, idx) => (
-                      <SelectGroup key={group.year}>
-                        {idx > 0 && <SelectSeparator className="my-1.5 bg-slate-200 dark:bg-slate-700" />}
-                        <SelectLabel className="year-group-label sticky top-0 z-10 flex items-center gap-1.5 py-1.5 pl-2 pr-2 text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50/90 dark:bg-indigo-950/40 backdrop-blur-sm rounded-sm">
-                          <Calendar className="h-3 w-3" aria-hidden="true" />
-                          {group.year}
-                          <span className="ml-auto font-medium text-slate-400 dark:text-slate-500 normal-case tracking-normal">
-                            {group.projects.length}
-                          </span>
-                        </SelectLabel>
-                        {group.projects.map((p) => (
-                          <SelectItem key={`${group.year}-${p}`} value={p} className="year-group-item text-xs pl-6">
-                            {p}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Clear All */}
               {hasFilter && (
-                <button
-                  onClick={clearFilters}
-                  className="flex items-center justify-center gap-1 h-8 px-3 text-xs font-medium text-rose-600 dark:text-rose-400 hover:text-rose-700 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-lg transition-colors duration-150 self-start sm:self-end"
-                >
-                  <XCircle className="h-3 w-3" aria-hidden="true" />
-                  Clear all
-                </button>
+                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-950/50 rounded-full px-1.5 py-0.5">
+                  active
+                </span>
               )}
+              <button
+                type="button"
+                onClick={() => setFiltersCollapsed((c) => !c)}
+                className="ml-auto flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                aria-expanded={!filtersCollapsed}
+              >
+                {filtersCollapsed ? "Show" : "Hide"}
+                <ChevronDown
+                  className={`h-3 w-3 transition-transform duration-200 ${filtersCollapsed ? "" : "rotate-180"}`}
+                  aria-hidden="true"
+                />
+              </button>
             </div>
 
-            {/* Active Filter Pills */}
-            {hasFilter && (
-              <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2.5 border-t border-slate-200 dark:border-slate-700">
-                {dateFilterMode === "single" && filterDate !== "all" && (
-                  <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-950/40 dark:to-purple-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                    <Calendar className="h-2.5 w-2.5" aria-hidden="true" />
-                    {fmt(filterDate)}
-                    <button onClick={clearDateFilter} aria-label="Clear date filter" className="ml-0.5 hover:text-rose-500">✕</button>
-                  </span>
+            {!filtersCollapsed && (
+              <>
+                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
+                  {/* Date Filter */}
+                  <div className="flex flex-col gap-1.5 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 border border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Date</span>
+                      <div className="flex items-center gap-1" role="group" aria-label="Date filter mode">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDateFilterMode("single");
+                            setFilterDateFrom("");
+                            setFilterDateTo("");
+                          }}
+                          aria-pressed={dateFilterMode === "single"}
+                          className={`h-6 px-2 rounded text-[10px] font-semibold transition-colors duration-150 ${dateFilterMode === "single"
+                              ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm"
+                              : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                            }`}
+                        >
+                          Single
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDateFilterMode("range");
+                            setFilterDate("all");
+                          }}
+                          aria-pressed={dateFilterMode === "range"}
+                          className={`h-6 px-2 rounded text-[10px] font-semibold transition-colors duration-150 ${dateFilterMode === "range"
+                              ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm"
+                              : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                            }`}
+                        >
+                          Range
+                        </button>
+                        {isDateFilterActive && (
+                          <button
+                            onClick={clearDateFilter}
+                            aria-label="Clear date filter"
+                            className="text-slate-400 hover:text-rose-500 transition-colors ml-0.5"
+                          >
+                            <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {dateFilterMode === "single" ? (
+                      <Select value={filterDate} onValueChange={setFilterDate}>
+                        <SelectTrigger aria-label="Filter by date" className="h-8 text-xs w-full sm:w-[140px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                          <SelectValue placeholder="All dates" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all" className="text-xs">All dates</SelectItem>
+                          {uniqueDates.map((d) => (
+                            <SelectItem key={d} value={d} className="text-xs">{fmt(d)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor="owner-date-from" className="sr-only">From date</Label>
+                        <Input
+                          id="owner-date-from"
+                          type="date"
+                          value={filterDateFrom}
+                          onChange={(e) => setFilterDateFrom(e.target.value)}
+                          className="owner-date-input h-8 text-xs w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 rounded-md cursor-pointer hover:border-indigo-400 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/20 transition-colors duration-150"
+                        />
+                        <span className="text-xs text-slate-400 font-bold flex-shrink-0" aria-hidden="true">→</span>
+                        <Label htmlFor="owner-date-to" className="sr-only">To date</Label>
+                        <Input
+                          id="owner-date-to"
+                          type="date"
+                          value={filterDateTo}
+                          onChange={(e) => setFilterDateTo(e.target.value)}
+                          className="owner-date-input h-8 text-xs w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 rounded-md cursor-pointer hover:border-indigo-400 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/20 transition-colors duration-150"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Employee Filter */}
+                  <div className="flex flex-col gap-1.5 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 border border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Employee</span>
+                      {isEmployeeFilterActive && (
+                        <button
+                          onClick={clearEmployeeFilter}
+                          aria-label="Clear employee filter"
+                          className="text-slate-400 hover:text-rose-500 transition-colors"
+                        >
+                          <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                    <Select value={filterEmployee} onValueChange={setFilterEmployee}>
+                      <SelectTrigger aria-label="Filter by employee" className="h-8 text-xs w-full sm:w-[130px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all" className="text-xs">All employees</SelectItem>
+                        {uniqueEmployees.map((emp) => (
+                          <SelectItem key={emp} value={emp} className="text-xs">{emp}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Client Filter */}
+                  <div className="flex flex-col gap-1.5 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 border border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Client</span>
+                      {isClientFilterActive && (
+                        <button
+                          onClick={clearClientFilter}
+                          aria-label="Clear client filter"
+                          className="text-slate-400 hover:text-rose-500 transition-colors"
+                        >
+                          <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                    <Select value={filterClient} onValueChange={handleClientFilterChange}>
+                      <SelectTrigger aria-label="Filter by client" className="h-8 text-xs w-full sm:w-[120px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all" className="text-xs">All clients</SelectItem>
+                        {uniqueClients.map((c) => (
+                          <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Project Filter */}
+                  <div className="flex flex-col gap-1.5 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 border border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Project</span>
+                      {isProjectFilterActive && (
+                        <button
+                          onClick={clearProjectFilter}
+                          aria-label="Clear project filter"
+                          className="text-slate-400 hover:text-rose-500 transition-colors"
+                        >
+                          <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                    <Select value={filterProject} onValueChange={setFilterProject}>
+                      <SelectTrigger aria-label="Filter by project" className="h-8 text-xs w-full sm:w-[130px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent className="year-grouped-select-content max-h-[320px] overflow-y-auto custom-scrollbar">
+                        <SelectItem value="all" className="text-xs">All projects</SelectItem>
+                        {projectsByYear.length > 0 && (
+                          <SelectSeparator className="my-1.5 bg-slate-200 dark:bg-slate-700" />
+                        )}
+                        {projectsByYear.map((group, idx) => (
+                          <SelectGroup key={group.year}>
+                            {idx > 0 && <SelectSeparator className="my-1.5 bg-slate-200 dark:bg-slate-700" />}
+                            <SelectLabel className="year-group-label sticky top-0 z-10 flex items-center gap-1.5 py-1.5 pl-2 pr-2 text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50/90 dark:bg-indigo-950/40 backdrop-blur-sm rounded-sm">
+                              <Calendar className="h-3 w-3" aria-hidden="true" />
+                              {group.year}
+                              <span className="ml-auto font-medium text-slate-400 dark:text-slate-500 normal-case tracking-normal">
+                                {group.projects.length}
+                              </span>
+                            </SelectLabel>
+                            {group.projects.map((p) => (
+                              <SelectItem key={`${group.year}-${p}`} value={p} className="year-group-item text-xs pl-6">
+                                {p}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Clear All */}
+                  {hasFilter && (
+                    <button
+                      onClick={clearFilters}
+                      className="flex items-center justify-center gap-1 h-8 px-3 text-xs font-medium text-rose-600 dark:text-rose-400 hover:text-rose-700 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-lg transition-colors duration-150 self-start sm:self-end"
+                    >
+                      <XCircle className="h-3 w-3" aria-hidden="true" />
+                      Clear all
+                    </button>
+                  )}
+                </div>
+
+                {/* Active Filter Pills */}
+                {hasFilter && (
+                  <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2.5 border-t border-slate-200 dark:border-slate-700">
+                    {searchQuery.trim() !== "" && (
+                      <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-slate-200 to-slate-100 dark:from-slate-800 dark:to-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600">
+                        <Search className="h-2.5 w-2.5" aria-hidden="true" />
+                        "{searchQuery}"
+                        <button onClick={clearSearch} aria-label="Clear search" className="ml-0.5 hover:text-rose-500">✕</button>
+                      </span>
+                    )}
+                    {dateFilterMode === "single" && filterDate !== "all" && (
+                      <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-950/40 dark:to-purple-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                        <Calendar className="h-2.5 w-2.5" aria-hidden="true" />
+                        {fmt(filterDate)}
+                        <button onClick={clearDateFilter} aria-label="Clear date filter" className="ml-0.5 hover:text-rose-500">✕</button>
+                      </span>
+                    )}
+                    {dateFilterMode === "range" && (filterDateFrom || filterDateTo) && (
+                      <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-950/40 dark:to-purple-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                        <Calendar className="h-2.5 w-2.5" aria-hidden="true" />
+                        {filterDateFrom ? fmt(filterDateFrom) : "…"} → {filterDateTo ? fmt(filterDateTo) : "…"}
+                        <button onClick={clearDateFilter} aria-label="Clear date range filter" className="ml-0.5 hover:text-rose-500">✕</button>
+                      </span>
+                    )}
+                    {filterEmployee !== "all" && (
+                      <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-950/40 dark:to-pink-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                        <User className="h-2.5 w-2.5" aria-hidden="true" />
+                        {filterEmployee}
+                        <button onClick={clearEmployeeFilter} aria-label="Clear employee filter" className="ml-0.5 hover:text-rose-500">✕</button>
+                      </span>
+                    )}
+                    {filterClient !== "all" && (
+                      <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-emerald-100 to-teal-100 dark:from-emerald-950/40 dark:to-teal-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        <Briefcase className="h-2.5 w-2.5" aria-hidden="true" />
+                        {filterClient}
+                        <button onClick={clearClientFilter} aria-label="Clear client filter" className="ml-0.5 hover:text-rose-500">✕</button>
+                      </span>
+                    )}
+                    {filterProject !== "all" && (
+                      <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-950/40 dark:to-orange-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                        <Tag className="h-2.5 w-2.5" aria-hidden="true" />
+                        {filterProject}
+                        <button onClick={clearProjectFilter} aria-label="Clear project filter" className="ml-0.5 hover:text-rose-500">✕</button>
+                      </span>
+                    )}
+                  </div>
                 )}
-                {dateFilterMode === "range" && (filterDateFrom || filterDateTo) && (
-                  <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-950/40 dark:to-purple-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                    <Calendar className="h-2.5 w-2.5" aria-hidden="true" />
-                    {filterDateFrom ? fmt(filterDateFrom) : "…"} → {filterDateTo ? fmt(filterDateTo) : "…"}
-                    <button onClick={clearDateFilter} aria-label="Clear date range filter" className="ml-0.5 hover:text-rose-500">✕</button>
-                  </span>
-                )}
-                {filterEmployee !== "all" && (
-                  <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-950/40 dark:to-pink-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                    <User className="h-2.5 w-2.5" aria-hidden="true" />
-                    {filterEmployee}
-                    <button onClick={clearEmployeeFilter} aria-label="Clear employee filter" className="ml-0.5 hover:text-rose-500">✕</button>
-                  </span>
-                )}
-                {filterClient !== "all" && (
-                  <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-emerald-100 to-teal-100 dark:from-emerald-950/40 dark:to-teal-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                    <Briefcase className="h-2.5 w-2.5" aria-hidden="true" />
-                    {filterClient}
-                    <button onClick={clearClientFilter} aria-label="Clear client filter" className="ml-0.5 hover:text-rose-500">✕</button>
-                  </span>
-                )}
-                {filterProject !== "all" && (
-                  <span className="filter-pill inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-950/40 dark:to-orange-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                    <Tag className="h-2.5 w-2.5" aria-hidden="true" />
-                    {filterProject}
-                    <button onClick={clearProjectFilter} aria-label="Clear project filter" className="ml-0.5 hover:text-rose-500">✕</button>
-                  </span>
-                )}
-              </div>
+              </>
             )}
           </div>
         )}
 
-        {/* Table - All content in single line with full description visible */}
+        {/*
+          Team-performance table.
+
+          Uses a natural (non `table-fixed`) layout with a `min-w` floor so
+          columns get comfortable, professional breathing room — the table
+          scrolls horizontally on narrow screens (`overflow-x-auto` on the
+          wrapper) instead of being squeezed to fit, which is what made it
+          feel congested. Each column has a sensible `min-w` so short values
+          (Date, Time, Type) don't get stretched by neighbouring long ones,
+          while Employee / Client / Project truncate gracefully with a
+          native tooltip for the full value. Row and cell padding is
+          generous (`py-2.5 px-4`) for a cleaner, less cramped feel.
+
+          Date / Employee / Time headers are sortable, and the owner can
+          switch between the day-by-day table and a per-employee rollup.
+        */}
         {loading ? (
           <div className="flex justify-center py-8">
             <FullSpinner />
@@ -2590,7 +2848,7 @@ const OwnerView = () => {
               <Filter className="h-6 w-6 text-slate-400 dark:text-slate-500" aria-hidden="true" />
             </div>
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              {hasFilter ? "No records match filters" : "No reports yet"}
+              {hasFilter ? "No records match your filters" : "No reports yet"}
             </p>
             {hasFilter && (
               <button onClick={clearFilters} className="mt-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
@@ -2598,26 +2856,105 @@ const OwnerView = () => {
               </button>
             )}
           </div>
-        ) : (
-          <div data-work-report-table="" className="overflow-x-auto rounded-lg border border-slate-200/50 dark:border-slate-700/50 custom-scrollbar max-h-[70vh]">
-            <Table className="min-w-[900px]">
+        ) : viewMode === "employee" ? (
+          <div data-work-report-table="" className="rounded-lg border border-slate-200/50 dark:border-slate-700/50 custom-scrollbar max-h-[70vh] overflow-auto">
+            <Table className="min-w-[680px] w-full border-separate" style={{ borderSpacing: 0 }}>
               <TableHeader>
                 <TableRow className="bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-950/60 dark:to-purple-950/60">
-                  <TableHead className="text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-2.5 whitespace-nowrap">Date</TableHead>
-                  <TableHead className="text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-2.5 whitespace-nowrap">Employee</TableHead>
-                  <TableHead className="text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-2.5 whitespace-nowrap">Client</TableHead>
-                  <TableHead className="text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-2.5 whitespace-nowrap">Project</TableHead>
-                  <TableHead className="text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-2.5 whitespace-nowrap">Type</TableHead>
-                  <TableHead className="text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-2.5 whitespace-nowrap">Time</TableHead>
-                  <TableHead className="text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-2.5 min-w-[300px]">Description</TableHead>
+                  <TableHead className="min-w-[160px] text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-3 px-4">Employee</TableHead>
+                  <TableHead className="min-w-[100px] text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-3 px-4">Records</TableHead>
+                  <TableHead className="min-w-[100px] text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-3 px-4">Days active</TableHead>
+                  <TableHead className="min-w-[110px] text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-3 px-4">Total hours</TableHead>
+                  <TableHead className="min-w-[110px] text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-3 px-4">Avg h/day</TableHead>
+                  <TableHead className="min-w-[90px] text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-3 px-4">Clients</TableHead>
+                  <TableHead className="w-20 text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-3 px-4">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {ownerRowItems.map((item, index) => {
+                {employeeSummaries.map((e, idx) => (
+                  <TableRow
+                    key={e.employee}
+                    className="entry-row owner-row-zebra table-row-animate"
+                    style={{ animationDelay: `${idx * 0.03}s` }}
+                  >
+                    <TableCell className="text-xs font-semibold text-slate-800 dark:text-slate-100 py-3 px-4 align-middle">
+                      {e.employee}
+                    </TableCell>
+                    <TableCell className="text-xs py-3 px-4 align-middle">
+                      <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                        {e.records}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-xs text-slate-600 dark:text-slate-300 py-3 px-4 align-middle">{e.days}</TableCell>
+                    <TableCell className="text-xs font-bold py-3 px-4 align-middle">
+                      <span className="inline-flex items-center text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 px-2.5 py-1 rounded-full font-bold">
+                        {e.totalTime.toFixed(1)}h
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-xs text-slate-600 dark:text-slate-300 py-3 px-4 align-middle">{e.avgPerDay.toFixed(1)}h</TableCell>
+                    <TableCell className="text-xs text-slate-600 dark:text-slate-300 py-3 px-4 align-middle">{e.clients}</TableCell>
+                    <TableCell className="py-3 px-4 align-middle">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-[11px] gap-1 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors btn-hover-scale"
+                        onClick={() => { setFilterEmployee(e.employee); setViewMode("date"); }}
+                        aria-label={`View records for ${e.employee}`}
+                      >
+                        <Eye className="h-3 w-3" aria-hidden="true" />
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div data-work-report-table="" className="rounded-lg border border-slate-200/50 dark:border-slate-700/50 custom-scrollbar max-h-[70vh] overflow-auto">
+            <Table className="min-w-[1080px] w-full border-separate" style={{ borderSpacing: 0 }}>
+              <TableHeader>
+                <TableRow className="bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-950/60 dark:to-purple-950/60">
+                  <TableHead className="min-w-[120px] text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-3 px-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("date")}
+                      className="flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    >
+                      Date <SortIcon field="date" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="min-w-[140px] text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-3 px-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("employee")}
+                      className="flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    >
+                      Employee <SortIcon field="employee" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="min-w-[130px] text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-3 px-4">Client</TableHead>
+                  <TableHead className="min-w-[150px] text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-3 px-4">Project</TableHead>
+                  <TableHead className="min-w-[130px] text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-3 px-4">Type</TableHead>
+                  <TableHead className="min-w-[90px] text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-3 px-4">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("time")}
+                      className="flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    >
+                      Time <SortIcon field="time" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="min-w-[320px] text-[11px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider py-3 px-4">Description</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {displayRowItems.map((item, index) => {
                   if (item.type === "divider") {
                     return (
                       <TableRow key={`divider-${index}`} className="weekend-divider-row">
-                        <TableCell colSpan={7} className="py-0">
+                        <TableCell colSpan={7} className="py-0 px-4">
                           <div className="weekend-divider-line" />
                         </TableCell>
                       </TableRow>
@@ -2631,8 +2968,8 @@ const OwnerView = () => {
                       : `Weekend · ${fmt(first)} · no records`;
                     return (
                       <TableRow key={`weekend-empty-${first}`} className="weekend-divider-row">
-                        <TableCell colSpan={7} className="py-0">
-                          <div className="flex items-center gap-3 px-1">
+                        <TableCell colSpan={7} className="py-0 px-4">
+                          <div className="flex items-center gap-3">
                             <div className="weekend-divider-line flex-1" />
                             <span className="weekend-badge whitespace-nowrap">
                               <span className="weekend-dot" />
@@ -2653,7 +2990,7 @@ const OwnerView = () => {
                       className={`entry-row owner-row-zebra table-row-animate ${weekend ? "weekend-row" : ""}`}
                       style={{ animationDelay: `${index * 0.02}s` }}
                     >
-                      <TableCell className="text-xs whitespace-nowrap font-semibold text-slate-700 dark:text-slate-300 py-2 align-middle">
+                      <TableCell className="text-xs whitespace-nowrap font-semibold text-slate-700 dark:text-slate-300 py-3 px-1 align-middle">
                         {fmt(r.date)}
                         {!r.date && <span className="ml-1 text-[10px] text-amber-500">(auto)</span>}
                         {weekend && (
@@ -2663,32 +3000,41 @@ const OwnerView = () => {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs font-semibold py-2 align-middle whitespace-nowrap">
+                      <TableCell
+                        className="text-xs font-semibold py-3 px-4 align-middle max-w-[180px] truncate"
+                        title={r.employeeName || undefined}
+                      >
                         <span className="text-slate-800 dark:text-slate-100 font-semibold">
                           {r.employeeName || "—"}
                         </span>
                       </TableCell>
-                      <TableCell className="text-xs font-medium text-slate-700 dark:text-slate-300 py-2 align-middle whitespace-nowrap">
+                      <TableCell
+                        className="text-xs font-medium text-slate-700 dark:text-slate-300 py-3 px-4 align-middle max-w-[170px] truncate"
+                        title={r.client || undefined}
+                      >
                         {r.client || "—"}
                       </TableCell>
-                      <TableCell className="text-xs font-medium text-slate-700 dark:text-slate-300 py-2 align-middle whitespace-nowrap">
+                      <TableCell
+                        className="text-xs font-medium text-slate-700 dark:text-slate-300 py-3 px-4 align-middle max-w-[200px] truncate"
+                        title={r.project || undefined}
+                      >
                         {r.project || "—"}
                       </TableCell>
-                      <TableCell className="py-2 align-middle whitespace-nowrap">
+                      <TableCell className="py-3 px-4 align-middle whitespace-nowrap">
                         <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap ${WORK_TYPE_COLORS[r.workType as WorkType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                          className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold whitespace-nowrap ${WORK_TYPE_COLORS[r.workType as WorkType] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
                             }`}
                         >
                           {WORK_TYPE_LABELS[r.workType as WorkType] || r.workType || "—"}
                         </span>
                       </TableCell>
-                      <TableCell className="text-xs font-bold py-2 align-middle whitespace-nowrap">
-                        <span className="inline-flex items-center text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 px-2 py-0.5 rounded-full font-bold">
+                      <TableCell className="text-xs font-bold py-3 px-4 align-middle whitespace-nowrap">
+                        <span className="inline-flex items-center text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 px-2.5 py-1 rounded-full font-bold">
                           {r.time}h
                         </span>
                       </TableCell>
                       <TableCell
-                        className="text-xs max-w-[400px] break-words leading-relaxed text-slate-600 dark:text-slate-300 py-2 align-middle"
+                        className="text-xs break-words leading-relaxed text-slate-600 dark:text-slate-300 py-3 px-4 align-middle"
                       >
                         {r.description || "—"}
                       </TableCell>
