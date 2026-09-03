@@ -26,6 +26,7 @@ import MyProfile from "./pages/MyProfile";
 import WeekendAttendance from "./pages/WeekendAttendance";
 import WeekendAttendanceDashboard from "./pages/WeekendAttendanceDashboard";
 import EmployeeHub from "./pages/EmployeeHub";
+import MyRequests from "./pages/MyRequests";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
@@ -110,6 +111,7 @@ function App() {
                   />
                   <Route path="/reports" element={<WorkReport />} />
                   <Route path="/employee-hub" element={<OwnerOnly><EmployeeHub /></OwnerOnly>} />
+                  <Route path="/my-requests" element={<MyRequests />} />
                   <Route path="/messages" element={<Messages />} />
                   <Route path="/my-documents" element={<OwnerOrLead><MyDocuments /></OwnerOrLead>} />
                   <Route path="/vault" element={<OwnerOnly><Vault /></OwnerOnly>} />

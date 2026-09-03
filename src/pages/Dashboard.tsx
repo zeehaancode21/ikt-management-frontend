@@ -665,7 +665,7 @@ const styles = `
   @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes fadeSlideOut { from { opacity: 1; } to { opacity: 0; transform: translateX(10px); } }
 
-  .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; font-family: 'JetBrains Mono', monospace; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
   .badge-approved { background: var(--green-dim); color: var(--green); border: 1px solid rgba(30,123,75,0.2); }
   .badge-pending  { background: var(--amber-dim);  color: var(--amber);  border: 1px solid rgba(180,83,9,0.2); }
   .badge-rejected { background: var(--rose-dim);   color: var(--rose);   border: 1px solid rgba(185,28,58,0.2); }
@@ -675,9 +675,20 @@ const styles = `
   .co-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
   .co-title { font-family: 'Playfair Display', serif; font-size: 1.15rem; font-weight: 700; color: var(--text); }
   .co-table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow-sm); -webkit-overflow-scrolling: touch; }
-  .co-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; min-width: 900px; background: var(--surface); }
-  .co-table th { background: var(--surface-2); color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; padding: 11px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  .co-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text); }
+  .co-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; min-width: 1500px; background: var(--surface); table-layout: fixed; }
+  .co-table th { background: var(--surface-2); color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .co-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text); }
+  .co-table th:nth-child(1), .co-table td:nth-child(1) { width: 50px; }
+  .co-table th:nth-child(2), .co-table td:nth-child(2) { width: 110px; }
+  .co-table th:nth-child(3), .co-table td:nth-child(3) { width: 260px; }
+  .co-table th:nth-child(4), .co-table td:nth-child(4) { width: 170px; white-space: nowrap; }
+  .co-table th:nth-child(5), .co-table td:nth-child(5) { width: 110px; }
+  .co-table th:nth-child(6), .co-table td:nth-child(6) { width: 140px; }
+  .co-table th:nth-child(7), .co-table td:nth-child(7) { width: 80px; }
+  .co-table th:nth-child(8), .co-table td:nth-child(8) { width: 140px; }
+  .co-table th:nth-child(9), .co-table td:nth-child(9) { width: 80px; }
+  .co-table th:nth-child(10), .co-table td:nth-child(10) { width: 220px; }
+  .co-table th:nth-child(11), .co-table td:nth-child(11) { width: 140px; }
   .co-table tr:last-child td { border-bottom: none; }
   .co-table tr:hover td { background: var(--surface-2); }
   .co-table-input { background: var(--surface-2); border: 1px solid var(--border-dark); border-radius: 6px; color: var(--text); font-family: 'Outfit', sans-serif; font-size: 0.8rem; padding: 5px 8px; width: 100%; outline: none; min-width: 70px; transition: border-color .2s, box-shadow .2s; }
@@ -686,7 +697,7 @@ const styles = `
   .co-table-select:focus { border-color: var(--indigo); }
   .co-table-select option { background: var(--surface); }
   .co-empty { text-align: center; padding: 40px; color: var(--text-muted); font-size: 0.88rem; }
-  .co-idx { color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; text-align: center; }
+  .co-idx { color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; text-align: left; }
 
   .section-actions { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 18px; flex-wrap: wrap; }
   .back-btn { display: inline-flex; align-items: center; gap: 7px; background: var(--surface); border: 1px solid var(--border-dark); color: var(--text-muted); font-size: 0.78rem; padding: 7px 14px; border-radius: 8px; cursor: pointer; transition: all .2s; font-family: 'Outfit', sans-serif; margin-bottom: 28px; box-shadow: var(--shadow-sm); font-weight: 500; }
@@ -2031,14 +2042,14 @@ export default function Dashboard() {
                                       <tr className={co._optimistic ? "co-row-new" : ""}>
                                         <td className="co-idx">{idx + 1}</td>
                                         <td style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color: "var(--copper)" }}>{co.co || "—"}</td>
-                                        <td style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={co.description}>{co.description || "—"}</td>
+                                        <td style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4 }}>{co.description || "—"}</td>
                                         <td><span className={getBadgeClass(co.status)}>{co.status}</span></td>
                                         <td style={{ fontFamily: "'JetBrains Mono',monospace" }}>${(co.amount || 0).toLocaleString()}</td>
                                         <td>{co.ifaDate || "—"}</td>
                                         <td>{co.ifaPer || "—"}</td>
                                         <td>{co.iffDate || "—"}</td>
                                         <td>{co.iffPer || "—"}</td>
-                                        <td style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={co.remarks}>{co.remarks || "—"}</td>
+                                        <td style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4 }}>{co.remarks || "—"}</td>
                                         <td style={{ whiteSpace: "nowrap", display: "flex", gap: 6, padding: "10px 8px" }}>
                                           <button className="btn btn-ghost btn-sm" disabled={co._optimistic} onClick={() => { setEditingCoId(co.id); setEditCoData({ ...co }); }}>Edit</button>
                                           <button className="btn btn-danger btn-sm" disabled={deletingCoId === co.id || co._optimistic} onClick={() => handleDeleteCo(co.id, co.co)}>
