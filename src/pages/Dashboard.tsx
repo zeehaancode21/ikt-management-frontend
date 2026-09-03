@@ -677,7 +677,7 @@ const styles = `
   .co-table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow-sm); -webkit-overflow-scrolling: touch; }
   .co-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; min-width: 1500px; background: var(--surface); table-layout: fixed; }
   .co-table th { background: var(--surface-2); color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  .co-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text); }
+  .co-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--text); }
   .co-table th:nth-child(1), .co-table td:nth-child(1) { width: 50px; }
   .co-table th:nth-child(2), .co-table td:nth-child(2) { width: 110px; }
   .co-table th:nth-child(3), .co-table td:nth-child(3) { width: 260px; }
@@ -2031,30 +2031,34 @@ export default function Dashboard() {
                                         <td><label className="sr-only" htmlFor={`co-iff-${co.id}`}>IFF date</label><input id={`co-iff-${co.id}`} type="date" className="co-table-input" value={editCoData.iffDate || ""} onChange={e => setEditCoData(p => ({ ...p, iffDate: e.target.value }))} onClick={(e) => { try { e.target.showPicker && e.target.showPicker(); } catch (_) {} }} /></td>
                                         <td><label className="sr-only" htmlFor={`co-iffp-${co.id}`}>IFF percent</label><input id={`co-iffp-${co.id}`} className="co-table-input" style={{ minWidth: 55 }} value={editCoData.iffPer || ""} onChange={e => setEditCoData(p => ({ ...p, iffPer: e.target.value }))} /></td>
                                         <td><label className="sr-only" htmlFor={`co-remarks-${co.id}`}>Remarks</label><input id={`co-remarks-${co.id}`} className="co-table-input" value={editCoData.remarks || ""} onChange={e => setEditCoData(p => ({ ...p, remarks: e.target.value }))} /></td>
-                                        <td style={{ whiteSpace: "nowrap", display: "flex", gap: 6, padding: "10px 8px" }}>
-                                          <button className="btn btn-gold btn-sm" onClick={handleSaveCo} disabled={savingCo}>
-                                            {savingCo ? <><BtnSpinner />&nbsp;Saving</> : "Save"}
-                                          </button>
-                                          <button className="btn btn-ghost btn-sm" aria-label="Cancel editing change order" onClick={() => setEditingCoId(null)}><X size={13} /></button>
+                                        <td style={{ verticalAlign: "top" }}>
+                                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                            <button className="btn btn-gold btn-sm" onClick={handleSaveCo} disabled={savingCo}>
+                                              {savingCo ? <><BtnSpinner />&nbsp;Saving</> : "Save"}
+                                            </button>
+                                            <button className="btn btn-ghost btn-sm" aria-label="Cancel editing change order" onClick={() => setEditingCoId(null)}><X size={13} /></button>
+                                          </div>
                                         </td>
                                       </tr>
                                     ) : (
                                       <tr className={co._optimistic ? "co-row-new" : ""}>
                                         <td className="co-idx">{idx + 1}</td>
                                         <td style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color: "var(--copper)" }}>{co.co || "—"}</td>
-                                        <td style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4 }}>{co.description || "—"}</td>
+                                        <td style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4, verticalAlign: "top" }}>{co.description || "—"}</td>
                                         <td><span className={getBadgeClass(co.status)}>{co.status}</span></td>
                                         <td style={{ fontFamily: "'JetBrains Mono',monospace" }}>${(co.amount || 0).toLocaleString()}</td>
                                         <td>{co.ifaDate || "—"}</td>
                                         <td>{co.ifaPer || "—"}</td>
                                         <td>{co.iffDate || "—"}</td>
                                         <td>{co.iffPer || "—"}</td>
-                                        <td style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4 }}>{co.remarks || "—"}</td>
-                                        <td style={{ whiteSpace: "nowrap", display: "flex", gap: 6, padding: "10px 8px" }}>
-                                          <button className="btn btn-ghost btn-sm" disabled={co._optimistic} onClick={() => { setEditingCoId(co.id); setEditCoData({ ...co }); }}>Edit</button>
-                                          <button className="btn btn-danger btn-sm" disabled={deletingCoId === co.id || co._optimistic} onClick={() => handleDeleteCo(co.id, co.co)}>
-                                            {deletingCoId === co.id ? <BtnSpinner /> : "Del"}
-                                          </button>
+                                        <td style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4, verticalAlign: "top" }}>{co.remarks || "—"}</td>
+                                        <td style={{ verticalAlign: "top" }}>
+                                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                            <button className="btn btn-ghost btn-sm" disabled={co._optimistic} onClick={() => { setEditingCoId(co.id); setEditCoData({ ...co }); }}>Edit</button>
+                                            <button className="btn btn-danger btn-sm" disabled={deletingCoId === co.id || co._optimistic} onClick={() => handleDeleteCo(co.id, co.co)}>
+                                              {deletingCoId === co.id ? <BtnSpinner /> : "Del"}
+                                            </button>
+                                          </div>
                                         </td>
                                       </tr>
                                     )}
