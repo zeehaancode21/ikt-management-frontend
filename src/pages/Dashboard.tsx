@@ -697,7 +697,7 @@ const styles = `
   .co-table-select:focus { border-color: var(--indigo); }
   .co-table-select option { background: var(--surface); }
   .co-empty { text-align: center; padding: 40px; color: var(--text-muted); font-size: 0.88rem; }
-  .co-idx { color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; text-align: left; }
+  .co-idx { color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; line-height: 1.4; text-align: left; }
 
   .section-actions { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 18px; flex-wrap: wrap; }
   .back-btn { display: inline-flex; align-items: center; gap: 7px; background: var(--surface); border: 1px solid var(--border-dark); color: var(--text-muted); font-size: 0.78rem; padding: 7px 14px; border-radius: 8px; cursor: pointer; transition: all .2s; font-family: 'Outfit', sans-serif; margin-bottom: 28px; box-shadow: var(--shadow-sm); font-weight: 500; }
@@ -832,6 +832,20 @@ const styles = `
 `;
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
+// Sorts change orders ascending by their CO number. Uses a "numeric" locale
+// compare so "2" sorts before "10" (not lexicographically), and change
+// orders with no CO number yet are pushed to the end.
+function sortChangeOrdersByCo(list = []) {
+  return [...list].sort((a, b) => {
+    const coA = (a.co || "").toString().trim();
+    const coB = (b.co || "").toString().trim();
+    if (!coA && !coB) return 0;
+    if (!coA) return 1;
+    if (!coB) return -1;
+    return coA.localeCompare(coB, undefined, { numeric: true, sensitivity: "base" });
+  });
+}
+
 function getBadgeClass(status = "") {
   const s = status.toUpperCase();
   if (s === "APPROVED" || s === "COMPLETED") return "badge badge-approved";
@@ -2012,11 +2026,11 @@ export default function Dashboard() {
                               <tbody>
                                 {changeOrders.length === 0 ? (
                                   <tr><td colSpan={11} className="co-empty">No change orders yet. Add one above to get started.</td></tr>
-                                ) : changeOrders.map((co, idx) => (
+                                ) : sortChangeOrdersByCo(changeOrders).map((co, idx) => (
                                   <React.Fragment key={co.id}>
                                     {editingCoId === co.id ? (
                                       <tr style={{ background: "var(--indigo-dim)" }}>
-                                        <td className="co-idx">{idx + 1}</td>
+                                        <td className="co-idx">{editCoData.co || idx + 1}</td>
                                         <td><label className="sr-only" htmlFor={`co-num-${co.id}`}>CO number</label><input id={`co-num-${co.id}`} className="co-table-input" value={editCoData.co || ""} onChange={e => setEditCoData(p => ({ ...p, co: e.target.value }))} /></td>
                                         <td><label className="sr-only" htmlFor={`co-desc-${co.id}`}>Description</label><input id={`co-desc-${co.id}`} className="co-table-input" value={editCoData.description || ""} onChange={e => setEditCoData(p => ({ ...p, description: e.target.value }))} /></td>
                                         <td>
@@ -2042,8 +2056,8 @@ export default function Dashboard() {
                                       </tr>
                                     ) : (
                                       <tr className={co._optimistic ? "co-row-new" : ""}>
-                                        <td className="co-idx">{idx + 1}</td>
-                                        <td style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color: "var(--copper)" }}>{co.co || "—"}</td>
+                                        <td className="co-idx">{co.co || idx + 1}</td>
+                                        <td style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color: "var(--copper)", fontSize: "0.72rem", lineHeight: 1.4 }}>{co.co || "—"}</td>
                                         <td style={{ whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4, verticalAlign: "top" }}>{co.description || "—"}</td>
                                         <td><span className={getBadgeClass(co.status)}>{co.status}</span></td>
                                         <td style={{ fontFamily: "'JetBrains Mono',monospace" }}>${(co.amount || 0).toLocaleString()}</td>
@@ -2174,9 +2188,9 @@ export default function Dashboard() {
                               </tr>
                             </thead>
                             <tbody>
-                              {viewData.changeOrders.map((co, idx) => (
+                              {sortChangeOrdersByCo(viewData.changeOrders).map((co, idx) => (
                                 <tr key={co.id}>
-                                  <td>{idx + 1}</td>
+                                  <td>{co.co || idx + 1}</td>
                                   <td style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color: "var(--copper)" }}>{co.co || "—"}</td>
                                   <td>{co.description || "—"}</td>
                                   <td><span className={getBadgeClass(co.status)}>{co.status}</span></td>
@@ -2306,9 +2320,9 @@ export default function Dashboard() {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {cos.map((co, idx) => (
+                                    {sortChangeOrdersByCo(cos).map((co, idx) => (
                                       <tr key={co.id}>
-                                        <td>{idx + 1}</td>
+                                        <td>{co.co || idx + 1}</td>
                                         <td style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, color: "var(--copper)" }}>{co.co || "—"}</td>
                                         <td>{co.description || "—"}</td>
                                         <td><span className={getBadgeClass(co.status)}>{co.status}</span></td>
