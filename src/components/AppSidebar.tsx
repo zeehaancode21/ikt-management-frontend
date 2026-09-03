@@ -737,12 +737,6 @@ export const AppSidebar = () => {
   // permissions list instead of stacking more name checks here.
   const isZeeshan = (name || "").trim().toLowerCase() === "zeeshan";
 
-  // ── Nav data ────────────────────────────────────────────────────────────
-  // OWNER keeps the original flat list — untouched. LEAD / EMPLOYEE also get
-  // a plain flat list (no group headers), just fewer links: Leave Portal,
-  // Permission Portal and Weekend Entry are now one "My Requests" link that
-  // opens a tabbed page (src/pages/MyRequests.tsx) instead of three separate
-  // sidebar entries.
   const navItems =
     role === "OWNER"
       ? [
@@ -760,14 +754,18 @@ export const AppSidebar = () => {
           { to: "/reports", label: "Work Report", icon: FileText },
           { to: "/dashboard", label: "Projects", icon: Briefcase },
           { to: "/documents", label: "Documents", icon: FolderOpen },
-          { to: "/my-requests", label: "My Requests", icon: CalendarDays },
+          { to: "/leave", label: "Leave Report", icon: CalendarDays },
+          { to: "/permission", label: "Permission Portal", icon: Timer },
+          { to: "/weekend-attendance", label: "Weekend Entry", icon: CalendarCheck },
           { to: "/messages", label: "Messages", icon: MessageSquare },
         ]
       : [
           ...(isZeeshan ? [{ to: "/social-hub", label: "Media Hub", icon: Share2 }] : []),
           { to: "/reports", label: "Work Report", icon: FileText },
+          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
+          { to: "/permission", label: "Permission Portal", icon: Timer },
+          { to: "/weekend-attendance", label: "Weekend Entry", icon: CalendarCheck },
           { to: "/documents", label: "Documents", icon: FolderOpen },
-          { to: "/my-requests", label: "My Requests", icon: CalendarDays },
           { to: "/messages", label: "Messages", icon: MessageSquare },
         ];
 
@@ -891,12 +889,12 @@ export const AppSidebar = () => {
           </div>
         </button>
 
-        {/* NAV — single flat list, one left sidebar, no group headers. */}
+        {/* NAV */}
         <nav className="sb-nav min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-3">
           {navItems.map((item) => {
             const badgeModule = ROUTE_NOTIFICATION_MODULE[item.to];
             const badgeCount =
-              item.to === "/employee-hub" || item.to === "/my-requests"
+              item.to === "/employee-hub"
                 ? counts.leave + counts.permission
                 : badgeModule
                 ? counts[badgeModule]

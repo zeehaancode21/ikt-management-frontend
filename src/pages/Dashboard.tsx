@@ -1143,7 +1143,7 @@ export default function Dashboard() {
   const [allProjects, setAllProjects] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [selectedYear, setSelectedYear] = useState(null);
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear().toString());
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedProject, setSelectedProject] = useState(null);
   const [activeTab, setActiveTab] = useState("main");
