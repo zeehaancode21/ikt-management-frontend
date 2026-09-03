@@ -260,6 +260,7 @@ const DocumentManager: React.FC = () => {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderDesc, setNewFolderDesc] = useState('');
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
@@ -349,6 +350,8 @@ const DocumentManager: React.FC = () => {
   // ── Create folder ──────────────────────────────────────────────────────────
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
+    if (isCreatingFolder) return; // guard against double Enter / double click
+    setIsCreatingFolder(true);
     try {
       const parentId = currentFolder?.id ?? null;
       const created: FolderItem = await apiFetch(`/folders`, {
@@ -377,6 +380,8 @@ const DocumentManager: React.FC = () => {
       setNewFolderDesc('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create folder');
+    } finally {
+      setIsCreatingFolder(false);
     }
   };
 
@@ -987,7 +992,8 @@ const DocumentManager: React.FC = () => {
                   placeholder="e.g. Q4 Reports"
                   className={FIELD_INPUT}
                   autoFocus
-                  onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
+                  disabled={isCreatingFolder}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateFolder(); } }}
                 />
               </div>
               <div>
@@ -1001,7 +1007,8 @@ const DocumentManager: React.FC = () => {
                   onChange={e => setNewFolderDesc(e.target.value)}
                   placeholder="Short description"
                   className={FIELD_INPUT}
-                  onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
+                  disabled={isCreatingFolder}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateFolder(); } }}
                 />
               </div>
             </div>
@@ -1009,16 +1016,17 @@ const DocumentManager: React.FC = () => {
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
               <button
                 onClick={() => { setShowCreateFolder(false); setNewFolderName(''); setNewFolderDesc(''); }}
+                disabled={isCreatingFolder}
                 className={BTN_SECONDARY}
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateFolder}
-                disabled={!newFolderName.trim()}
+                disabled={!newFolderName.trim() || isCreatingFolder}
                 className={BTN_PRIMARY}
               >
-                Create
+                {isCreatingFolder ? 'Creating…' : 'Create'}
               </button>
             </div>
           </div>
