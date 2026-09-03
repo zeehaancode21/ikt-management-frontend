@@ -10,6 +10,8 @@ import {
   RefreshCw,
   Users,
   Eye,
+  Send,
+  History,
 } from "lucide-react";
 import {
   Tooltip,
@@ -929,6 +931,9 @@ const EmployeeView = () => {
   const { name } = useAuth();
   const historyPanelId = useId();
 
+  // Toggle between "Apply" (form) and "History" (view) modes
+  const [employeeMode, setEmployeeMode] = useState<"apply" | "history">("apply");
+
   const [leaveType, setLeaveType] = useState("SICK");
   const [dateMode, setDateMode] = useState<"single" | "range" | "half">("single");
   const [halfSession, setHalfSession] = useState<"FIRST_HALF" | "SECOND_HALF">("FIRST_HALF");
@@ -1249,11 +1254,63 @@ const EmployeeView = () => {
   // ── Render ────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* LEAVE QUOTA SUMMARY — days remaining this year, shown first so
-         it's the first thing visible when the Leave Portal opens. */}
-      <LeaveQuotaSummary leaves={leaves} leaveLimit={leaveLimit} />
+      {/* MODE TOGGLE - Apply / History */}
+      <div className="inline-flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
+        <button
+          type="button"
+          className={`leave-tab-btn ${employeeMode === "apply" ? "active" : ""}`}
+          role="tab"
+          aria-selected={employeeMode === "apply"}
+          onClick={() => setEmployeeMode("apply")}
+          style={{
+            padding: "0.375rem 0.875rem",
+            borderRadius: "0.5rem",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.375rem",
+            fontSize: "0.875rem",
+            fontWeight: "500",
+            cursor: "pointer",
+            border: "1px solid transparent",
+            transition: "all 0.2s ease-in-out",
+            backgroundColor: employeeMode === "apply" ? "hsl(var(--primary))" : "transparent",
+            color: employeeMode === "apply" ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))",
+          }}
+        >
+          <Send size={15} aria-hidden="true" />
+          Apply
+        </button>
+        <button
+          type="button"
+          className={`leave-tab-btn ${employeeMode === "history" ? "active" : ""}`}
+          role="tab"
+          aria-selected={employeeMode === "history"}
+          onClick={() => setEmployeeMode("history")}
+          style={{
+            padding: "0.375rem 0.875rem",
+            borderRadius: "0.5rem",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.375rem",
+            fontSize: "0.875rem",
+            fontWeight: "500",
+            cursor: "pointer",
+            border: "1px solid transparent",
+            transition: "all 0.2s ease-in-out",
+            backgroundColor: employeeMode === "history" ? "hsl(var(--primary))" : "transparent",
+            color: employeeMode === "history" ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))",
+          }}
+        >
+          <History size={15} aria-hidden="true" />
+          History
+        </button>
+      </div>
 
-      {/* APPLY FORM */}
+      {/* LEAVE QUOTA SUMMARY - Show only in Apply mode */}
+      {employeeMode === "apply" && <LeaveQuotaSummary leaves={leaves} leaveLimit={leaveLimit} />}
+
+      {/* APPLY FORM - Show only in Apply mode */}
+      {employeeMode === "apply" && (
       <section className="animate-fade-in-up card-hover overflow-visible rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
         <div className="mb-4 flex items-center gap-2">
           <div className="rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 p-1.5">
@@ -1386,8 +1443,10 @@ const EmployeeView = () => {
           </div>
         </form>
       </section>
+      )}
 
-      {/* LEAVE HISTORY */}
+      {/* LEAVE HISTORY - Show only in History mode */}
+      {employeeMode === "history" && (
       <section className="animate-slide-right card-hover overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         {/* Header */}
         <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 sm:px-6">
@@ -1514,6 +1573,7 @@ const EmployeeView = () => {
           )}
         </div>
       </section>
+      )}
 
       {/* Reapproval Modal */}
       {reapprovalTarget && (

@@ -13,6 +13,8 @@ import {
   CalendarX2,
   CalendarSearch,
   CalendarRange,
+  Send,
+  History,
 } from "lucide-react";
 import api, { getErrorMessage } from "../lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -593,6 +595,9 @@ const EmployeeView = () => {
   const { name } = useAuth();
   const historyPanelId = useId();
 
+  // Toggle between "Apply" (form) and "History" (view) modes
+  const [employeeMode, setEmployeeMode] = useState<"apply" | "history">("apply");
+
   const [permissionType, setPermissionType] = useState("PERSONAL");
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("");
@@ -875,10 +880,63 @@ const EmployeeView = () => {
 
   return (
     <div className="space-y-6">
-      {/* QUOTA SUMMARY */}
-      <QuotaSummary quota={quota} label="Your permission quota" />
+      {/* MODE TOGGLE - Apply / History */}
+      <div className="inline-flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
+        <button
+          type="button"
+          className={`permission-tab-btn ${employeeMode === "apply" ? "active" : ""}`}
+          role="tab"
+          aria-selected={employeeMode === "apply"}
+          onClick={() => setEmployeeMode("apply")}
+          style={{
+            padding: "0.375rem 0.875rem",
+            borderRadius: "0.5rem",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.375rem",
+            fontSize: "0.875rem",
+            fontWeight: "500",
+            cursor: "pointer",
+            border: "1px solid transparent",
+            transition: "all 0.2s ease-in-out",
+            backgroundColor: employeeMode === "apply" ? "hsl(var(--primary))" : "transparent",
+            color: employeeMode === "apply" ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))",
+          }}
+        >
+          <Send size={15} aria-hidden="true" />
+          Apply
+        </button>
+        <button
+          type="button"
+          className={`permission-tab-btn ${employeeMode === "history" ? "active" : ""}`}
+          role="tab"
+          aria-selected={employeeMode === "history"}
+          onClick={() => setEmployeeMode("history")}
+          style={{
+            padding: "0.375rem 0.875rem",
+            borderRadius: "0.5rem",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.375rem",
+            fontSize: "0.875rem",
+            fontWeight: "500",
+            cursor: "pointer",
+            border: "1px solid transparent",
+            transition: "all 0.2s ease-in-out",
+            backgroundColor: employeeMode === "history" ? "hsl(var(--primary))" : "transparent",
+            color: employeeMode === "history" ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))",
+          }}
+        >
+          <History size={15} aria-hidden="true" />
+          History
+        </button>
+      </div>
 
-      {/* APPLY FORM */}
+      {/* QUOTA SUMMARY - Show only in Apply mode */}
+      {employeeMode === "apply" && <QuotaSummary quota={quota} label="Your permission quota" />}
+
+      {/* APPLY FORM - Show only in Apply mode */}
+      {employeeMode === "apply" && (
       <section className="card-hover overflow-visible rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
         <div className="mb-4 flex items-center gap-2">
           <div className="rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 p-1.5">
@@ -959,8 +1017,10 @@ const EmployeeView = () => {
           </div>
         </form>
       </section>
+      )}
 
-      {/* HISTORY */}
+      {/* HISTORY - Show only in History mode */}
+      {employeeMode === "history" && (
       <section className="card-hover overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 sm:px-6">
           <div>
@@ -1082,6 +1142,7 @@ const EmployeeView = () => {
           )}
         </div>
       </section>
+      )}
 
       {/* ── Reapproval (Request Change) Modal ─────────────────────────── */}
       {reapprovalTarget && (
