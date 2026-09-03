@@ -1057,13 +1057,17 @@ function EmployeesTab() {
     }
   };
 
-  const filtered = employees.filter(
-    (em) =>
-      em.username?.toLowerCase().includes(search.toLowerCase()) ||
-      em.email?.toLowerCase().includes(search.toLowerCase()) ||
-      em.role?.toLowerCase().includes(search.toLowerCase()) ||
-      em.roleName?.toLowerCase().includes(search.toLowerCase())
-  );
+  // Owners always see the roster alphabetically (by username) so it reads
+  // like a directory rather than insertion/creation order.
+  const filtered = employees
+    .filter(
+      (em) =>
+        em.username?.toLowerCase().includes(search.toLowerCase()) ||
+        em.email?.toLowerCase().includes(search.toLowerCase()) ||
+        em.role?.toLowerCase().includes(search.toLowerCase()) ||
+        em.roleName?.toLowerCase().includes(search.toLowerCase())
+    )
+    .sort((a, b) => a.username?.localeCompare(b.username ?? "", undefined, { sensitivity: "base" }) ?? 0);
 
   const clearSearch = () => setSearch("");
 
@@ -1216,30 +1220,64 @@ function EmployeesTab() {
             )}
           </motion.div>
         ) : (
-          <div className="ac-emp-list" role="list" aria-label="Employees">
+          <div className="ac-emp-list" role="list" aria-label="Employees, alphabetical">
             <AnimatePresence>
               {filtered.map((em, i) => {
                 const color = roleColor(em.role);
                 return (
                   <motion.div
                     key={em.id}
-                    className="ac-emp-row"
+                    className="ac-emp-tile"
                     role="listitem"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ delay: i * 0.05, type: "spring", stiffness: 300 }}
-                    whileHover={{ scale: 1.01, x: 5, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                    style={{ ["--tile-accent" as any]: color }}
+                    initial={{ opacity: 0, y: 18, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.92 }}
+                    transition={{ delay: Math.min(i * 0.03, 0.4), type: "spring", stiffness: 300, damping: 22 }}
+                    whileHover={{ y: -6 }}
                   >
+                    <span className="ac-emp-tile-glow" aria-hidden="true" />
+
+                    <div className="ac-emp-tile-actions">
+                      {(em.role?.toUpperCase() === "USER" || em.role?.toUpperCase() === "LEAD") && (
+                        <motion.button
+                          type="button"
+                          className="ac-edit-btn"
+                          onClick={() => setEditEmployee(em)}
+                          aria-label={`Edit role for ${em.username}`}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                        </motion.button>
+                      )}
+                      <motion.button
+                        type="button"
+                        className="ac-delete-btn"
+                        onClick={() => { if (!deleting && deleteId === null) setDeleteId(em.id); }}
+                        aria-label={`Remove ${em.username}`}
+                        disabled={deleting || deleteId !== null}
+                        whileHover={{ scale: (deleting || deleteId !== null) ? 1 : 1.1 }}
+                        whileTap={{ scale: (deleting || deleteId !== null) ? 1 : 0.95 }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                        </svg>
+                      </motion.button>
+                    </div>
+
                     <motion.div
                       className="ac-emp-avatar"
-                      style={{ background: color + "22", color, border: `1.5px solid ${color}40` }}
+                      style={{ background: color + "1f", color, border: `2px solid ${color}55`, boxShadow: `0 6px 16px ${color}2e` }}
                       aria-hidden="true"
-                      whileHover={{ scale: 1.1 }}
+                      whileHover={{ scale: 1.08, rotate: 3 }}
                       transition={{ type: "spring", stiffness: 400 }}
                     >
                       {initials(em.username)}
                     </motion.div>
+
                     <div className="ac-emp-info">
                       <span className="ac-emp-name">{em.username}</span>
                       <span className="ac-emp-email">{em.email}</span>
@@ -1247,6 +1285,7 @@ function EmployeesTab() {
                         <span className="ac-emp-role-name">{em.roleName}</span>
                       )}
                     </div>
+
                     <motion.span
                       className="ac-emp-badge"
                       style={{ background: color + "18", color, border: `1px solid ${color}30` }}
@@ -1254,33 +1293,6 @@ function EmployeesTab() {
                     >
                       {em.role}
                     </motion.span>
-                    {(em.role?.toUpperCase() === "USER" || em.role?.toUpperCase() === "LEAD") && (
-                      <motion.button
-                        type="button"
-                        className="ac-edit-btn"
-                        onClick={() => setEditEmployee(em)}
-                        aria-label={`Edit role for ${em.username}`}
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                        </svg>
-                      </motion.button>
-                    )}
-                    <motion.button
-                      type="button"
-                      className="ac-delete-btn"
-                      onClick={() => { if (!deleting && deleteId === null) setDeleteId(em.id); }}
-                      aria-label={`Remove ${em.username}`}
-                      disabled={deleting || deleteId !== null}
-                      whileHover={{ scale: (deleting || deleteId !== null) ? 1 : 1.1 }}
-                      whileTap={{ scale: (deleting || deleteId !== null) ? 1 : 0.95 }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                      </svg>
-                    </motion.button>
                   </motion.div>
                 );
               })}
@@ -2002,65 +2014,131 @@ export default function AdminConsole() {
           color: hsl(32 95% 38%);
         }
 
-        /* Employee list */
+        /* Employee list — alphabetical tile grid */
         .ac-emp-list {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+          gap: 16px;
+        }
+
+        .ac-emp-tile {
+          position: relative;
           display: flex;
           flex-direction: column;
-          gap: 10px;
-        }
-
-        .ac-emp-row {
-          display: flex;
           align-items: center;
-          gap: 16px;
-          padding: 14px 20px;
-          border-radius: 14px;
+          text-align: center;
+          gap: 6px;
+          padding: 28px 18px 18px;
+          border-radius: 18px;
           border: 1px solid hsl(var(--border));
-          background: hsl(var(--background));
-          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-          flex-wrap: wrap;
+          background:
+            linear-gradient(hsl(var(--background)), hsl(var(--background))) padding-box,
+            hsl(var(--background));
+          overflow: hidden;
+          isolation: isolate;
+          transition: border-color 0.25s ease, box-shadow 0.25s ease;
         }
 
-        .ac-emp-row:hover {
-          border-color: hsl(var(--primary) / 0.4);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+        /* Thin gradient accent bar along the top, tinted per-employee by
+           their role color (passed in via the --tile-accent CSS var). */
+        .ac-emp-tile::before {
+          content: '';
+          position: absolute;
+          inset: 0 0 auto 0;
+          height: 5px;
+          background: linear-gradient(90deg, var(--tile-accent), color-mix(in srgb, var(--tile-accent) 40%, transparent));
+        }
+
+        /* Soft radial glow that fades in behind the tile on hover — purely
+           decorative, kept out of the flow and out of the way of pointer
+           events so it never blocks clicks on the content above it. */
+        .ac-emp-tile-glow {
+          position: absolute;
+          inset: -40% -40% auto auto;
+          width: 140px;
+          height: 140px;
+          border-radius: 50%;
+          background: radial-gradient(circle, var(--tile-accent) 0%, transparent 70%);
+          opacity: 0;
+          filter: blur(6px);
+          transition: opacity 0.3s ease;
+          pointer-events: none;
+          z-index: -1;
+        }
+
+        .ac-emp-tile:hover {
+          border-color: var(--tile-accent);
+          box-shadow: 0 14px 28px -12px rgba(0, 0, 0, 0.18), 0 0 0 1px color-mix(in srgb, var(--tile-accent) 25%, transparent);
+        }
+
+        .ac-emp-tile:hover .ac-emp-tile-glow {
+          opacity: 0.16;
+        }
+
+        .ac-emp-tile-actions {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          display: flex;
+          gap: 4px;
+          opacity: 0;
+          transform: translateY(-4px);
+          transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .ac-emp-tile:hover .ac-emp-tile-actions,
+        .ac-emp-tile:focus-within .ac-emp-tile-actions {
+          opacity: 1;
+          transform: translateY(0);
+        }
+
+        .ac-emp-tile-actions .ac-edit-btn,
+        .ac-emp-tile-actions .ac-delete-btn {
+          width: 26px;
+          height: 26px;
+          border-radius: 7px;
+          background: hsl(var(--background) / 0.9);
+          backdrop-filter: blur(4px);
         }
 
         .ac-emp-avatar {
-          width: 40px;
-          height: 40px;
+          width: 56px;
+          height: 56px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 13px;
+          font-size: 16px;
           font-weight: 700;
           flex-shrink: 0;
+          margin-bottom: 4px;
           transition: all 0.2s ease;
-        }
-
-        .ac-emp-avatar:hover {
-          transform: scale(1.05);
         }
 
         .ac-emp-info {
           display: flex;
           flex-direction: column;
-          gap: 4px;
-          flex: 1 1 160px;
+          align-items: center;
+          gap: 3px;
           min-width: 0;
+          max-width: 100%;
         }
 
         .ac-emp-name {
           font-size: 14px;
           font-weight: 600;
           color: hsl(var(--foreground));
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .ac-emp-email {
           font-size: 12px;
           color: hsl(var(--muted-foreground));
           font-family: 'Inter', monospace;
+          max-width: 100%;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -2068,16 +2146,22 @@ export default function AdminConsole() {
 
         .ac-emp-role-name {
           font-size: 11px;
+          font-style: italic;
           color: hsl(var(--muted-foreground));
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .ac-emp-badge {
           font-size: 11px;
           font-weight: 600;
-          padding: 4px 10px;
+          padding: 4px 12px;
           border-radius: 20px;
           white-space: nowrap;
           flex-shrink: 0;
+          margin-top: 8px;
           transition: all 0.2s ease;
         }
 
@@ -2086,7 +2170,9 @@ export default function AdminConsole() {
         }
 
         @media (max-width: 520px) {
-          .ac-emp-row { padding: 12px 14px; gap: 10px; }
+          .ac-emp-list { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+          .ac-emp-tile { padding: 24px 12px 16px; }
+          .ac-emp-tile-actions { opacity: 1; transform: none; position: static; justify-content: center; margin-top: 8px; }
         }
 
         /* Empty / loading */

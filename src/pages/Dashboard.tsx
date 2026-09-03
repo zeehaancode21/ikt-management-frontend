@@ -693,6 +693,11 @@ const styles = `
   .co-table tr:hover td { background: var(--surface-2); }
   .co-table-input { background: var(--surface-2); border: 1px solid var(--border-dark); border-radius: 6px; color: var(--text); font-family: 'Outfit', sans-serif; font-size: 0.8rem; padding: 5px 8px; width: 100%; outline: none; min-width: 70px; transition: border-color .2s, box-shadow .2s; }
   .co-table-input:focus { border-color: var(--indigo); box-shadow: 0 0 0 2px var(--indigo-dim); }
+  /* Remarks in the change-order table need to show full typed text clearly,
+     so it gets its own multi-line, resizable textarea style instead of the
+     cramped single-line .co-table-input used by the other narrow columns. */
+  .co-table-textarea { background: var(--surface-2); border: 1px solid var(--border-dark); border-radius: 6px; color: var(--text); font-family: 'Outfit', sans-serif; font-size: 0.82rem; line-height: 1.45; padding: 8px 10px; width: 100%; min-width: 180px; min-height: 64px; resize: vertical; outline: none; transition: border-color .2s, box-shadow .2s; }
+  .co-table-textarea:focus { border-color: var(--indigo); box-shadow: 0 0 0 2px var(--indigo-dim); }
   .co-table-select { background: var(--surface-2); border: 1px solid var(--border-dark); border-radius: 6px; color: var(--text); font-family: 'Outfit', sans-serif; font-size: 0.78rem; padding: 5px 6px; outline: none; width: 100%; min-width: 120px; transition: border-color .2s; }
   .co-table-select:focus { border-color: var(--indigo); }
   .co-table-select option { background: var(--surface); }
@@ -2044,7 +2049,10 @@ export default function Dashboard() {
                                         <td><label className="sr-only" htmlFor={`co-ifap-${co.id}`}>IFA percent</label><input id={`co-ifap-${co.id}`} className="co-table-input" style={{ minWidth: 55 }} value={editCoData.ifaPer || ""} onChange={e => setEditCoData(p => ({ ...p, ifaPer: e.target.value }))} /></td>
                                         <td><label className="sr-only" htmlFor={`co-iff-${co.id}`}>IFF date</label><input id={`co-iff-${co.id}`} type="date" className="co-table-input" value={editCoData.iffDate || ""} onChange={e => setEditCoData(p => ({ ...p, iffDate: e.target.value }))} onClick={(e) => { try { e.target.showPicker && e.target.showPicker(); } catch (_) {} }} /></td>
                                         <td><label className="sr-only" htmlFor={`co-iffp-${co.id}`}>IFF percent</label><input id={`co-iffp-${co.id}`} className="co-table-input" style={{ minWidth: 55 }} value={editCoData.iffPer || ""} onChange={e => setEditCoData(p => ({ ...p, iffPer: e.target.value }))} /></td>
-                                        <td><label className="sr-only" htmlFor={`co-remarks-${co.id}`}>Remarks</label><input id={`co-remarks-${co.id}`} className="co-table-input" value={editCoData.remarks || ""} onChange={e => setEditCoData(p => ({ ...p, remarks: e.target.value }))} /></td>
+                                        {/* Remarks: switched from a single-line input to a resizable
+                                            textarea so the full text being typed stays visible instead
+                                            of scrolling out of view inside a narrow input box. */}
+                                        <td><label className="sr-only" htmlFor={`co-remarks-${co.id}`}>Remarks</label><textarea id={`co-remarks-${co.id}`} className="co-table-textarea" rows={3} value={editCoData.remarks || ""} onChange={e => setEditCoData(p => ({ ...p, remarks: e.target.value }))} /></td>
                                         <td style={{ verticalAlign: "top" }}>
                                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                                             <button className="btn btn-gold btn-sm" onClick={handleSaveCo} disabled={savingCo}>
@@ -3059,7 +3067,10 @@ function CoEditRow({ data, setData, onSave, onCancel, saving }) {
       </div>
       <div className="form-row">
         <div className="form-group"><label className="form-label" htmlFor="co-new-amount">Amount ($)</label><input id="co-new-amount" type="number" className="form-input" value={f("amount") === 0 || f("amount") === "" ? "" : f("amount")} onChange={e => { const val = e.target.value; s("amount")(val === "" ? "" : parseFloat(val) || 0); }} placeholder="0" /></div>
-        <div className="form-group"><label className="form-label" htmlFor="co-new-remarks">Remarks</label><input id="co-new-remarks" className="form-input" value={f("remarks")} onChange={e => s("remarks")(e.target.value)} /></div>
+        {/* Remarks: switched from a single-line input to a resizable multi-line
+            textarea (form-textarea) so what you type stays fully visible
+            instead of scrolling sideways in a cramped one-line box. */}
+        <div className="form-group"><label className="form-label" htmlFor="co-new-remarks">Remarks</label><textarea id="co-new-remarks" className="form-textarea" rows={3} value={f("remarks")} onChange={e => s("remarks")(e.target.value)} /></div>
       </div>
       <div className="form-row" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
         <div className="form-group">
