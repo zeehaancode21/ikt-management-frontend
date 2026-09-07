@@ -9,6 +9,8 @@ import {
   CalendarCheck2,
   Timer,
   Users,
+  UserRoundGroup,
+  ClipboardPenLine,
   Eye,
   CalendarX2,
   CalendarSearch,
@@ -225,15 +227,17 @@ const TabButton = ({
     aria-controls={controls}
     tabIndex={active ? 0 : -1}
     onClick={onClick}
-    className={`flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${FOCUS_RING} ${fullWidthOnMobile ? "flex-1 sm:flex-none" : ""
-      } min-w-[76px] ${active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+    className={`flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${FOCUS_RING} ${
+      fullWidthOnMobile ? "flex-1 sm:flex-none" : ""
+    } min-w-[76px] ${active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
   >
     {Icon && <Icon className="h-3.5 w-3.5" aria-hidden="true" />}
     <span>{label}</span>
     {typeof count === "number" && count > 0 && (
       <span
-        className={`ml-0.5 min-w-[1.1rem] rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none ${active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-          }`}
+        className={`ml-0.5 min-w-[1.1rem] rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none ${
+          active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+        }`}
       >
         {count}
       </span>
@@ -282,10 +286,11 @@ const QuotaSummary = ({ quota, label }: { quota: Quota; label?: string }) => {
   return (
     <div
       role="status"
-      className={`rounded-lg border px-4 py-2 ${hasSurplus
+      className={`rounded-lg border px-4 py-2 ${
+        hasSurplus
           ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30"
           : "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30"
-        }`}
+      }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
@@ -386,10 +391,11 @@ const EmployeeSummaryTable = ({
                 </td>
                 <td className="hidden px-2 py-3 sm:table-cell sm:px-4">
                   <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${isTight
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      isTight
                         ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
                         : "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
-                      }`}
+                    }`}
                   >
                     {formatHours(quota.hoursRemainingThisMonth)}h left
                   </span>
@@ -894,22 +900,22 @@ const EmployeeView = () => {
   const groupedPermissions =
     historyViewMode === "all"
       ? (
-        [
-          { key: "pending", label: "Pending", icon: CalendarClock, items: monthFilteredPermissions.filter((p) => p.status?.toUpperCase() === "PENDING") },
-          { key: "reapproval", label: "Reapproval pending", icon: CalendarClock, items: monthFilteredPermissions.filter((p) => p.status?.toUpperCase() === "REAPPROVAL_PENDING") },
-          { key: "approved", label: "Approved", icon: CalendarCheck2, items: monthFilteredPermissions.filter((p) => p.status?.toUpperCase() === "APPROVED") },
-          { key: "rejected", label: "Rejected", icon: CalendarX2, items: monthFilteredPermissions.filter((p) => p.status?.toUpperCase() === "REJECTED") },
-          {
-            key: "other",
-            label: "Other",
-            icon: CalendarRange,
-            items: monthFilteredPermissions.filter((p) => {
-              const s = p.status?.toUpperCase();
-              return s !== "PENDING" && s !== "REAPPROVAL_PENDING" && s !== "APPROVED" && s !== "REJECTED";
-            }),
-          },
-        ] as const
-      ).filter((g) => g.items.length > 0)
+          [
+            { key: "pending", label: "Pending", icon: CalendarClock, items: monthFilteredPermissions.filter((p) => p.status?.toUpperCase() === "PENDING") },
+            { key: "reapproval", label: "Reapproval pending", icon: CalendarClock, items: monthFilteredPermissions.filter((p) => p.status?.toUpperCase() === "REAPPROVAL_PENDING") },
+            { key: "approved", label: "Approved", icon: CalendarCheck2, items: monthFilteredPermissions.filter((p) => p.status?.toUpperCase() === "APPROVED") },
+            { key: "rejected", label: "Rejected", icon: CalendarX2, items: monthFilteredPermissions.filter((p) => p.status?.toUpperCase() === "REJECTED") },
+            {
+              key: "other",
+              label: "Other",
+              icon: CalendarRange,
+              items: monthFilteredPermissions.filter((p) => {
+                const s = p.status?.toUpperCase();
+                return s !== "PENDING" && s !== "REAPPROVAL_PENDING" && s !== "APPROVED" && s !== "REJECTED";
+              }),
+            },
+          ] as const
+        ).filter((g) => g.items.length > 0)
       : [];
 
   return (
@@ -978,227 +984,227 @@ const EmployeeView = () => {
           constrained to the viewport width so the border stays fully
           visible without triggering a scrollbar. */}
       {employeeMode === "apply" && (
-        <section className="animate-fade-in-up card-hover w-full max-w-full overflow-visible rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
-          <div className="mb-2 flex items-center gap-2">
-            <div className="rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 p-1.5">
-              <Timer className="h-4 w-4 text-white" aria-hidden="true" />
-            </div>
-            <h2 className="text-sm font-semibold sm:text-base">Request permission</h2>
+      <section className="animate-fade-in-up card-hover w-full max-w-full overflow-visible rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
+        <div className="mb-2 flex items-center gap-2">
+          <div className="rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 p-1.5">
+            <Timer className="h-4 w-4 text-white" aria-hidden="true" />
+          </div>
+          <h2 className="text-sm font-semibold sm:text-base">Request permission</h2>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex w-full max-w-full flex-col gap-2 overflow-visible sm:gap-3" noValidate>
+          <div className="min-w-0 space-y-1 overflow-visible">
+            <Label htmlFor="perm-type">Permission type</Label>
+            <Select value={permissionType} onValueChange={setPermissionType}>
+              <SelectTrigger id="perm-type" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="z-50 overflow-visible">
+                <SelectItem value="PERSONAL">Personal</SelectItem>
+                <SelectItem value="MEDICAL">Medical</SelectItem>
+                <SelectItem value="OFFICIAL">Official</SelectItem>
+                <SelectItem value="EMERGENCY">Emergency</SelectItem>
+                <SelectItem value="OTHER">Other</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex w-full max-w-full flex-col gap-2 overflow-visible sm:gap-3" noValidate>
-            <div className="min-w-0 space-y-1 overflow-visible">
-              <Label htmlFor="perm-type">Permission type</Label>
-              <Select value={permissionType} onValueChange={setPermissionType}>
-                <SelectTrigger id="perm-type" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="z-50 overflow-visible">
-                  <SelectItem value="PERSONAL">Personal</SelectItem>
-                  <SelectItem value="MEDICAL">Medical</SelectItem>
-                  <SelectItem value="OFFICIAL">Official</SelectItem>
-                  <SelectItem value="EMERGENCY">Emergency</SelectItem>
-                  <SelectItem value="OTHER">Other</SelectItem>
-                </SelectContent>
-              </Select>
+          <div className="min-w-0 w-full max-w-full space-y-1">
+            <Label htmlFor="perm-date">Date</Label>
+            <Input
+              id="perm-date"
+              type="date"
+              required
+              min={getToday()}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="date-input-mobile-safe box-border block w-full min-w-0 max-w-full"
+            />
+          </div>
+
+          <div className="grid w-full max-w-full grid-cols-2 gap-2 sm:gap-3">
+            <div className="min-w-0 space-y-1">
+              <Label htmlFor="perm-start">Start time</Label>
+              <ClockTimePicker id="perm-start" required value={startTime} onChange={setStartTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
             </div>
 
-            <div className="min-w-0 w-full max-w-full space-y-1">
-              <Label htmlFor="perm-date">Date</Label>
-              <Input
-                id="perm-date"
-                type="date"
-                required
-                min={getToday()}
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="date-input-mobile-safe box-border block w-full min-w-0 max-w-full"
-              />
+            <div className="min-w-0 space-y-1">
+              <Label htmlFor="perm-end">End time</Label>
+              <ClockTimePicker id="perm-end" required value={endTime} onChange={setEndTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
             </div>
+          </div>
+          {livePreviewHours !== null && (
+            <p className="-mt-1 hidden text-xs text-muted-foreground sm:block" aria-live="polite">
+              Duration: {formatHours(livePreviewHours)}h · Max {formatHours(quota.maxHoursPerDay)}h/day · {formatHours(quota.hoursRemainingThisMonth)}h remaining this month
+            </p>
+          )}
 
-            <div className="grid w-full max-w-full grid-cols-2 gap-2 sm:gap-3">
-              <div className="min-w-0 space-y-1">
-                <Label htmlFor="perm-start">Start time</Label>
-                <ClockTimePicker id="perm-start" required value={startTime} onChange={setStartTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-              </div>
+          <div className="space-y-1">
+            <Label htmlFor="perm-reason">Reason</Label>
+            <Textarea
+              id="perm-reason"
+              required
+              rows={2}
+              maxLength={500}
+              minLength={10}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Please provide a detailed reason for your permission request..."
+              aria-describedby="perm-reason-count"
+              className="resize-none"
+            />
+            <p id="perm-reason-count" className="text-right text-xs text-muted-foreground">
+              {reason.length}/500 characters
+            </p>
+          </div>
 
-              <div className="min-w-0 space-y-1">
-                <Label htmlFor="perm-end">End time</Label>
-                <ClockTimePicker id="perm-end" required value={endTime} onChange={setEndTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-              </div>
-            </div>
-            {livePreviewHours !== null && (
-              <p className="-mt-1 hidden text-xs text-muted-foreground sm:block" aria-live="polite">
-                Duration: {formatHours(livePreviewHours)}h · Max {formatHours(quota.maxHoursPerDay)}h/day · {formatHours(quota.hoursRemainingThisMonth)}h remaining this month
-              </p>
-            )}
-
-            <div className="space-y-1">
-              <Label htmlFor="perm-reason">Reason</Label>
-              <Textarea
-                id="perm-reason"
-                required
-                rows={2}
-                maxLength={500}
-                minLength={10}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Please provide a detailed reason for your permission request..."
-                aria-describedby="perm-reason-count"
-                className="resize-none"
-              />
-              <p id="perm-reason-count" className="text-right text-xs text-muted-foreground">
-                {reason.length}/500 characters
-              </p>
-            </div>
-
-            <div className="flex flex-row gap-2">
-              <Button type="submit" disabled={submitting} className="btn-hover-scale flex-1 sm:flex-none">
-                {submitting ? (
-                  <>
-                    <Spinner className="mr-2 text-primary-foreground" />
-                    Submitting...
-                  </>
-                ) : (
-                  "Submit request"
-                )}
-              </Button>
-              <Button type="button" variant="outline" onClick={resetForm} disabled={submitting} className="btn-hover-scale flex-1 sm:flex-none">
-                Reset
-              </Button>
-            </div>
-          </form>
-        </section>
+          <div className="flex flex-row gap-2">
+            <Button type="submit" disabled={submitting} className="btn-hover-scale flex-1 sm:flex-none">
+              {submitting ? (
+                <>
+                  <Spinner className="mr-2 text-primary-foreground" />
+                  Submitting...
+                </>
+              ) : (
+                "Submit request"
+              )}
+            </Button>
+            <Button type="button" variant="outline" onClick={resetForm} disabled={submitting} className="btn-hover-scale flex-1 sm:flex-none">
+              Reset
+            </Button>
+          </div>
+        </form>
+      </section>
       )}
 
       {/* HISTORY - Show only in History mode */}
       {employeeMode === "history" && (
-        <section className="card-hover overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 sm:px-6">
-            <div>
-              <h2 className="text-base font-semibold leading-tight">Permission history</h2>
-              <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                <span>
-                  {monthFilteredPermissions.length} request{monthFilteredPermissions.length !== 1 ? "s" : ""}
-                  {historyViewMode === "filter" ? ` in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}` : ""}
+      <section className="card-hover overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 sm:px-6">
+          <div>
+            <h2 className="text-base font-semibold leading-tight">Permission history</h2>
+            <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+              <span>
+                {monthFilteredPermissions.length} request{monthFilteredPermissions.length !== 1 ? "s" : ""}
+                {historyViewMode === "filter" ? ` in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}` : ""}
+              </span>
+              {pendingCount > 0 && (
+                <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
+                  {pendingCount} Pending Request{pendingCount !== 1 ? "s" : ""}
                 </span>
-                {pendingCount > 0 && (
-                  <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
-                    {pendingCount} Pending Request{pendingCount !== 1 ? "s" : ""}
-                  </span>
-                )}
-                {approvedCount > 0 && (
-                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
-                    {approvedCount} Approved Request{approvedCount !== 1 ? "s" : ""}
-                  </span>
-                )}
-                {rejectedCount > 0 && (
-                  <span className="inline-flex items-center rounded-full bg-rose-100 px-1.5 py-0.5 text-[11px] font-medium text-rose-700 dark:bg-rose-950/50 dark:text-rose-400">
-                    {rejectedCount} Rejected Request{rejectedCount !== 1 ? "s" : ""}
-                  </span>
-                )}
-                {reapprovalCount > 0 && (
-                  <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
-                    {reapprovalCount} Reapproval Pending
-                  </span>
-                )}
-              </p>
-            </div>
+              )}
+              {approvedCount > 0 && (
+                <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                  {approvedCount} Approved Request{approvedCount !== 1 ? "s" : ""}
+                </span>
+              )}
+              {rejectedCount > 0 && (
+                <span className="inline-flex items-center rounded-full bg-rose-100 px-1.5 py-0.5 text-[11px] font-medium text-rose-700 dark:bg-rose-950/50 dark:text-rose-400">
+                  {rejectedCount} Rejected Request{rejectedCount !== 1 ? "s" : ""}
+                </span>
+              )}
+              {reapprovalCount > 0 && (
+                <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
+                  {reapprovalCount} Reapproval Pending
+                </span>
+              )}
+            </p>
+          </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              {/* All / Filter toggle — "All" drops the month picker and the
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            {/* All / Filter toggle — "All" drops the month picker and the
                 Pending/All/Approved/Rejected tabs below and groups every
                 permission request into status sections instead. "Filter"
                 (default) keeps the month-scoped single-tab view, defaulting
                 to the current month. */}
-              <div className="space-y-1.5">
-                <Label className="text-xs">View</Label>
-                <div role="tablist" aria-label="Show all records or filter by month/status" className="inline-flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
-                  <TabButton active={historyViewMode === "all"} onClick={() => setHistoryViewMode("all")} label="All" controls={historyPanelId} />
-                  <TabButton active={historyViewMode === "filter"} onClick={() => setHistoryViewMode("filter")} label="Filter" controls={historyPanelId} />
-                </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">View</Label>
+              <div role="tablist" aria-label="Show all records or filter by month/status" className="inline-flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
+                <TabButton active={historyViewMode === "all"} onClick={() => setHistoryViewMode("all")} label="All" controls={historyPanelId} />
+                <TabButton active={historyViewMode === "filter"} onClick={() => setHistoryViewMode("filter")} label="Filter" controls={historyPanelId} />
               </div>
-
-              {historyViewMode === "filter" && (
-                <div className="w-full max-w-[180px] space-y-1.5">
-                  <Label htmlFor="employee-history-month" className="text-xs">Month</Label>
-                  <Input
-                    id="employee-history-month"
-                    type="month"
-                    value={historyMonth}
-                    onChange={(e) => setHistoryMonth(e.target.value)}
-                    className="h-9"
-                  />
-                </div>
-              )}
             </div>
 
             {historyViewMode === "filter" && (
-              <div role="tablist" aria-label="Filter permission history" className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:inline-flex sm:w-full sm:flex-wrap">
-                <TabButton active={historyTab === "pending"} onClick={() => setHistoryTab("pending")} icon={CalendarClock} label="Pending" count={pendingCount} controls={historyPanelId} />
-                <TabButton active={historyTab === "all"} onClick={() => setHistoryTab("all")} icon={CalendarRange} label="All" count={allCount} controls={historyPanelId} />
-                <TabButton active={historyTab === "approved"} onClick={() => setHistoryTab("approved")} icon={CalendarCheck2} label="Approved" count={approvedCount} controls={historyPanelId} />
-                <TabButton active={historyTab === "rejected"} onClick={() => setHistoryTab("rejected")} icon={CalendarX2} label="Rejected" count={rejectedCount} controls={historyPanelId} />
+              <div className="w-full max-w-[180px] space-y-1.5">
+                <Label htmlFor="employee-history-month" className="text-xs">Month</Label>
+                <Input
+                  id="employee-history-month"
+                  type="month"
+                  value={historyMonth}
+                  onChange={(e) => setHistoryMonth(e.target.value)}
+                  className="h-9"
+                />
               </div>
             )}
           </div>
 
-          {/* Only this results area scrolls — the tabs/filters above stay put
+          {historyViewMode === "filter" && (
+            <div role="tablist" aria-label="Filter permission history" className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:inline-flex sm:w-full sm:flex-wrap">
+              <TabButton active={historyTab === "pending"} onClick={() => setHistoryTab("pending")} icon={CalendarClock} label="Pending" count={pendingCount} controls={historyPanelId} />
+              <TabButton active={historyTab === "all"} onClick={() => setHistoryTab("all")} icon={CalendarRange} label="All" count={allCount} controls={historyPanelId} />
+              <TabButton active={historyTab === "approved"} onClick={() => setHistoryTab("approved")} icon={CalendarCheck2} label="Approved" count={approvedCount} controls={historyPanelId} />
+              <TabButton active={historyTab === "rejected"} onClick={() => setHistoryTab("rejected")} icon={CalendarX2} label="Rejected" count={rejectedCount} controls={historyPanelId} />
+            </div>
+          )}
+        </div>
+
+        {/* Only this results area scrolls — the tabs/filters above stay put
             and only the list of permission cards scrolls internally once it
             grows past a viewport-relative max height. */}
-          <div id={historyPanelId} role="tabpanel" className="p-4 sm:p-6">
-            <div className="custom-scrollbar max-h-[65vh] overflow-y-auto pr-1">
-              {loading ? (
-                <div className="flex justify-center py-8">
-                  <FullSpinner />
-                </div>
-              ) : error ? (
-                <ErrorState message={error} onRetry={load} />
-              ) : historyViewMode === "all" ? (
-                groupedPermissions.length === 0 ? (
-                  <EmptyState message="No permission requests found." />
-                ) : (
-                  <div className="space-y-5">
-                    {groupedPermissions.map((group) => (
-                      <div key={group.key} className="space-y-2">
-                        <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                          <group.icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                          <span>{group.label}</span>
-                          <span className="ml-0.5 min-w-[1.1rem] rounded-full bg-muted px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-muted-foreground">
-                            {group.items.length}
-                          </span>
-                        </div>
-                        <div className="space-y-3">
-                          {group.items.map((p) => (
-                            <PermissionCard key={p.id} p={p} onRequestChange={openReapproval} onCancelReapproval={cancelReapproval} cancelingId={cancelingId} />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              ) : sortedPermissions.length === 0 ? (
-                <EmptyState
-                  message={
-                    historyTab === "pending"
-                      ? `No pending permission requests in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
-                      : historyTab === "all"
-                        ? `No permission requests in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
-                        : historyTab === "approved"
-                          ? `No approved permissions in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
-                          : `No rejected permissions in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
-                  }
-                />
+        <div id={historyPanelId} role="tabpanel" className="p-4 sm:p-6">
+          <div className="custom-scrollbar max-h-[65vh] overflow-y-auto pr-1">
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <FullSpinner />
+              </div>
+            ) : error ? (
+              <ErrorState message={error} onRetry={load} />
+            ) : historyViewMode === "all" ? (
+              groupedPermissions.length === 0 ? (
+                <EmptyState message="No permission requests found." />
               ) : (
-                <div className="space-y-3">
-                  {sortedPermissions.map((p) => (
-                    <PermissionCard key={p.id} p={p} onRequestChange={openReapproval} onCancelReapproval={cancelReapproval} cancelingId={cancelingId} />
+                <div className="space-y-5">
+                  {groupedPermissions.map((group) => (
+                    <div key={group.key} className="space-y-2">
+                      <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                        <group.icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                        <span>{group.label}</span>
+                        <span className="ml-0.5 min-w-[1.1rem] rounded-full bg-muted px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-muted-foreground">
+                          {group.items.length}
+                        </span>
+                      </div>
+                      <div className="space-y-3">
+                        {group.items.map((p) => (
+                          <PermissionCard key={p.id} p={p} onRequestChange={openReapproval} onCancelReapproval={cancelReapproval} cancelingId={cancelingId} />
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
-              )}
-            </div>
+              )
+            ) : sortedPermissions.length === 0 ? (
+              <EmptyState
+                message={
+                  historyTab === "pending"
+                    ? `No pending permission requests in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                    : historyTab === "all"
+                    ? `No permission requests in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                    : historyTab === "approved"
+                    ? `No approved permissions in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                    : `No rejected permissions in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                }
+              />
+            ) : (
+              <div className="space-y-3">
+                {sortedPermissions.map((p) => (
+                  <PermissionCard key={p.id} p={p} onRequestChange={openReapproval} onCancelReapproval={cancelReapproval} cancelingId={cancelingId} />
+                ))}
+              </div>
+            )}
           </div>
-        </section>
+        </div>
+      </section>
       )}
 
       {/* ── Reapproval (Request Change) Modal ─────────────────────────── */}
@@ -1571,17 +1577,17 @@ const OwnerView = () => {
             {ownerTab === "pending"
               ? `${permissions.length} pending request${permissions.length !== 1 ? "s" : ""}`
               : ownerTab === "summary"
-                ? "Permission hours used and remaining for every employee this month"
-                : selectedEmployee
-                  ? `Showing permission history for ${selectedEmployee}`
-                  : "Select an employee to view their permission history"}
+              ? "Permission hours used and remaining for every employee this month"
+              : selectedEmployee
+              ? `Showing permission history for ${selectedEmployee}`
+              : "Select an employee to view their permission history"}
           </p>
         </div>
 
-        <div role="tablist" aria-label="Permission management sections" className="inline-flex w-full items-center rounded-lg border border-border bg-muted/40 p-1 sm:w-auto">
-          <TabButton active={ownerTab === "pending"} onClick={() => setOwnerTab("pending")} icon={CalendarClock} label="Queue" count={permissions.length} controls={ownerPanelId} />
-          <TabButton active={ownerTab === "summary"} onClick={() => setOwnerTab("summary")} icon={Users} label="Staff" controls={ownerPanelId} />
-          <TabButton active={ownerTab === "employee"} onClick={() => setOwnerTab("employee")} icon={Users} label="Tracking" controls={ownerPanelId} />
+        <div role="tablist" aria-label="Permission management sections" className="inline-flex w-full items-center gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:w-auto">
+          <TabButton active={ownerTab === "pending"} onClick={() => setOwnerTab("pending")} label="Pending" count={permissions.length} controls={ownerPanelId} />
+          <TabButton active={ownerTab === "summary"} onClick={() => setOwnerTab("summary")} icon={UserRoundGroup} label="All employees" controls={ownerPanelId} />
+          <TabButton active={ownerTab === "employee"} onClick={() => setOwnerTab("employee")} icon={ClipboardPenLine} label="Employee history" controls={ownerPanelId} />
         </div>
       </div>
 
@@ -1734,8 +1740,9 @@ const OwnerView = () => {
                     in "All" mode. */}
                 {filteredEmpPermissions.length === 0 ? (
                   <EmptyState
-                    message={`No ${empHistoryTab === "all" ? "" : empHistoryTab + " "}permission records found for ${selectedEmployee}${empViewMode === "filter" ? ` in ${empMonth}` : ""
-                      }.`}
+                    message={`No ${empHistoryTab === "all" ? "" : empHistoryTab + " "}permission records found for ${selectedEmployee}${
+                      empViewMode === "filter" ? ` in ${empMonth}` : ""
+                    }.`}
                   />
                 ) : (
                   <div className="space-y-3">

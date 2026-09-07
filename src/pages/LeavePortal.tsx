@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, FormEvent, useCallback, useId } from "react";
 import { format, differenceInCalendarDays } from "date-fns";
-import { CalendarRange, InfoIcon } from "lucide-react";
+import { CalendarRange, ClipboardPenLine, InfoIcon } from "lucide-react";
 import {
   CalendarCheck2,
   CalendarClock,
@@ -9,6 +9,8 @@ import {
   AlertCircle,
   RefreshCw,
   Users,
+  UserRoundGroup,
+  ClipboardPenLine,
   Eye,
   Send,
   History,
@@ -2053,7 +2055,12 @@ const OwnerView = () => {
           </p>
         </div>
 
-               {/* Tab toggle - using the shared TabButton component from above */}
+        {/* Tab toggle */}
+        <div role="tablist" aria-label="Leave management sections" className="inline-flex w-full items-center rounded-lg border border-border bg-muted/40 p-1 sm:w-auto">
+          <TabButton active={ownerTab === "pending"} onClick={() => setOwnerTab("pending")} icon={CalendarClock} label="Queue" count={leaves.length} controls={ownerPanelId} />
+          <TabButton active={ownerTab === "summary"} onClick={() => setOwnerTab("summary")} icon={UserRoundGroup} label="Staff" controls={ownerPanelId} />
+          <TabButton active={ownerTab === "employee"} onClick={() => setOwnerTab("employee")} icon={ClipboardPenLine} label="Tracking" controls={ownerPanelId} />
+        </div>
       </div>
 
       <div id={ownerPanelId} role="tabpanel" className="p-4 sm:p-6">
