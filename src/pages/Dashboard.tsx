@@ -807,8 +807,8 @@ const styles = `
     .year-card { padding: 28px 12px; }
     .year-card-num { font-size: 2.4rem; }
     .client-grid { grid-template-columns: 1fr; gap: 10px; }
-    .client-card-name { padding-right: 0; margin-bottom: 24px; }
-    .client-card-actions { top: auto; bottom: 14px; left: 22px; right: auto; }
+    .client-card-name { padding-right: 0; }
+    .client-card-actions { position: static; margin-top: 14px; }
     .project-card { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 16px; }
     .project-info { width: 100%; min-width: 0; }
     .project-name { white-space: normal; overflow-wrap: break-word; word-break: break-word; }
