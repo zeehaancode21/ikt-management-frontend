@@ -284,7 +284,7 @@ const QuotaSummary = ({ quota, label }: { quota: Quota; label?: string }) => {
   return (
     <div
       role="status"
-      className={`rounded-lg border px-4 py-3 ${
+      className={`rounded-lg border px-4 py-2 ${
         hasSurplus
           ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30"
           : "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30"
@@ -300,11 +300,11 @@ const QuotaSummary = ({ quota, label }: { quota: Quota; label?: string }) => {
             {formatHours(quota.hoursUsedThisMonth)} / {formatHours(quota.maxHoursPerMonth)} free hrs used this month ·{" "}
             {quota.requestsUsedThisMonth} / {quota.maxRequestsPerMonth} requests used
           </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">
             Max {formatHours(quota.maxHoursPerDay)}h/day · {formatHours(quota.maxHoursPerMonth)}h free/month · {quota.maxRequestsPerMonth} requests/month
           </p>
           {hasSurplus && (
-            <p className="mt-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+            <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">
               {quota.surplusLeaveDays >= 1 ? "Full-Day Permission" : "Half-Day Permission"}:{" "}
               {formatHours(quota.approvedHoursThisMonth)}h of approved permission this month has been auto-recorded as{" "}
               {quota.surplusLeaveDays >= 1 ? "1 day" : "half a day"} of leave (see Leave Portal)
@@ -879,7 +879,7 @@ const EmployeeView = () => {
       : [];
 
   return (
-    <div className="space-y-6">
+    <div className={employeeMode === "apply" ? "space-y-3" : "space-y-6"}>
       {/* MODE TOGGLE - Apply / History */}
       <div className="inline-flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
         <button
@@ -937,16 +937,16 @@ const EmployeeView = () => {
 
       {/* APPLY FORM - Show only in Apply mode */}
       {employeeMode === "apply" && (
-      <section className="card-hover overflow-visible rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
-        <div className="mb-4 flex items-center gap-2">
+      <section className="card-hover overflow-visible rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
+        <div className="mb-2 flex items-center gap-2">
           <div className="rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 p-1.5">
             <Timer className="h-4 w-4 text-white" aria-hidden="true" />
           </div>
-          <h2 className="text-base font-semibold">Request permission</h2>
+          <h2 className="text-sm font-semibold sm:text-base">Request permission</h2>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid gap-4 overflow-visible sm:grid-cols-2" noValidate>
-          <div className="space-y-2 overflow-visible">
+        <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-2 overflow-visible sm:gap-3" noValidate>
+          <div className="space-y-1 overflow-visible">
             <Label htmlFor="perm-type">Permission type</Label>
             <Select value={permissionType} onValueChange={setPermissionType}>
               <SelectTrigger id="perm-type" className="w-full">
@@ -962,46 +962,47 @@ const EmployeeView = () => {
             </Select>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1">
             <Label htmlFor="perm-date">Date</Label>
             <Input id="perm-date" type="date" required min={getToday()} value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1">
             <Label htmlFor="perm-start">Start time</Label>
             <ClockTimePicker id="perm-start" required value={startTime} onChange={setStartTime} className="dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1">
             <Label htmlFor="perm-end">End time</Label>
             <ClockTimePicker id="perm-end" required value={endTime} onChange={setEndTime} className="dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
             {livePreviewHours !== null && (
-              <p className="text-xs text-muted-foreground" aria-live="polite">
+              <p className="hidden text-xs text-muted-foreground sm:block" aria-live="polite">
                 Duration: {formatHours(livePreviewHours)}h · Max {formatHours(quota.maxHoursPerDay)}h/day · {formatHours(quota.hoursRemainingThisMonth)}h remaining this month
               </p>
             )}
           </div>
 
-          <div className="space-y-2 sm:col-span-2">
+          <div className="col-span-2 space-y-1">
             <Label htmlFor="perm-reason">Reason</Label>
             <Textarea
               id="perm-reason"
               required
-              rows={3}
+              rows={2}
               maxLength={500}
               minLength={10}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Please provide a detailed reason for your permission request..."
               aria-describedby="perm-reason-count"
+              className="resize-none"
             />
             <p id="perm-reason-count" className="text-right text-xs text-muted-foreground">
               {reason.length}/500 characters
             </p>
           </div>
 
-          <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row">
-            <Button type="submit" disabled={submitting} className="btn-hover-scale">
+          <div className="col-span-2 flex flex-row gap-2">
+            <Button type="submit" disabled={submitting} className="btn-hover-scale flex-1 sm:flex-none">
               {submitting ? (
                 <>
                   <Spinner className="mr-2 text-primary-foreground" />
@@ -1011,7 +1012,7 @@ const EmployeeView = () => {
                 "Submit request"
               )}
             </Button>
-            <Button type="button" variant="outline" onClick={resetForm} disabled={submitting} className="btn-hover-scale">
+            <Button type="button" variant="outline" onClick={resetForm} disabled={submitting} className="btn-hover-scale flex-1 sm:flex-none">
               Reset
             </Button>
           </div>

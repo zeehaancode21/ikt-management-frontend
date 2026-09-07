@@ -514,7 +514,7 @@ const LeaveQuotaSummary = ({
     <div
       role="status"
       aria-live="polite"
-      className={`rounded-lg border px-4 py-3 ${
+      className={`rounded-lg border px-4 py-2 ${
         isOverLimit
           ? "border-red-300 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30"
           : "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30"
@@ -537,7 +537,7 @@ const LeaveQuotaSummary = ({
           >
             {formatDays(takenDays)} / {leaveLimit} days used in {currentYear}
           </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">
             {leaveLimit}-day annual allowance · resets each calendar year
           </p>
         </div>
@@ -1253,7 +1253,7 @@ const EmployeeView = () => {
 
   // ── Render ────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className={employeeMode === "apply" ? "space-y-3" : "space-y-6"}>
       {/* MODE TOGGLE - Apply / History */}
       <div className="inline-flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
         <button
@@ -1311,16 +1311,16 @@ const EmployeeView = () => {
 
       {/* APPLY FORM - Show only in Apply mode */}
       {employeeMode === "apply" && (
-      <section className="animate-fade-in-up card-hover overflow-visible rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
-        <div className="mb-4 flex items-center gap-2">
+      <section className="animate-fade-in-up card-hover overflow-visible rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
+        <div className="mb-2 flex items-center gap-2">
           <div className="rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 p-1.5">
             <CalendarCheck2 className="h-4 w-4 text-white" aria-hidden="true" />
           </div>
-          <h2 className="text-base font-semibold">Apply for leave</h2>
+          <h2 className="text-sm font-semibold sm:text-base">Apply for leave</h2>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid gap-4 overflow-visible sm:grid-cols-2" noValidate>
-          <div className="space-y-2 overflow-visible">
+        <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-2 overflow-visible sm:gap-3" noValidate>
+          <div className="space-y-1 overflow-visible">
             <Label htmlFor="leave-type">Leave type</Label>
             <Select value={leaveType} onValueChange={setLeaveType}>
               <SelectTrigger id="leave-type" className="w-full">
@@ -1340,7 +1340,7 @@ const EmployeeView = () => {
             </Select>
           </div>
 
-          <div className="space-y-2 overflow-visible">
+          <div className="space-y-1 overflow-visible">
             <Label htmlFor="date-type">Date type</Label>
             <Select value={dateMode} onValueChange={(val) => setDateMode(val as "single" | "range" | "half")}>
               <SelectTrigger id="date-type">
@@ -1354,7 +1354,7 @@ const EmployeeView = () => {
             </Select>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1">
             <Label htmlFor="from">{dateMode === "range" ? "From date" : "Date"}</Label>
             <Input
               id="from"
@@ -1372,7 +1372,7 @@ const EmployeeView = () => {
           </div>
 
           {dateMode === "range" && (
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Label htmlFor="to">To date</Label>
               <Input
                 id="to"
@@ -1393,7 +1393,7 @@ const EmployeeView = () => {
           )}
 
           {dateMode === "half" && (
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Label htmlFor="half-session">Half day session</Label>
               <Select value={halfSession} onValueChange={(val) => setHalfSession(val as "FIRST_HALF" | "SECOND_HALF")}>
                 <SelectTrigger id="half-session">
@@ -1408,26 +1408,27 @@ const EmployeeView = () => {
             </div>
           )}
 
-          <div className="space-y-2 sm:col-span-2">
+          <div className="col-span-2 space-y-1">
             <Label htmlFor="reason">Reason</Label>
             <Textarea
               id="reason"
               required
-              rows={3}
+              rows={2}
               maxLength={500}
               minLength={10}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Please provide a detailed reason for your leave request..."
               aria-describedby="reason-count"
+              className="resize-none"
             />
             <p id="reason-count" className="text-right text-xs text-muted-foreground">
               {reason.length}/500 characters
             </p>
           </div>
 
-          <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row">
-            <Button type="submit" disabled={submitting} className="btn-hover-scale">
+          <div className="col-span-2 flex flex-row gap-2">
+            <Button type="submit" disabled={submitting} className="btn-hover-scale flex-1 sm:flex-none">
               {submitting ? (
                 <>
                   <Spinner className="mr-2 text-primary-foreground" />
@@ -1437,7 +1438,7 @@ const EmployeeView = () => {
                 "Submit request"
               )}
             </Button>
-            <Button type="button" variant="outline" onClick={resetForm} disabled={submitting} className="btn-hover-scale">
+            <Button type="button" variant="outline" onClick={resetForm} disabled={submitting} className="btn-hover-scale flex-1 sm:flex-none">
               Reset
             </Button>
           </div>
