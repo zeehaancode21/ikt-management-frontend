@@ -563,13 +563,14 @@ const PermissionCard = ({
 
    `.date-input-mobile-safe` is scoped to the employee-facing
    `type="date"` fields only (Apply form + "Request change"
-   modal) and only kicks in below the `sm` breakpoint. It just
-   pins width/box-sizing so the native date input respects its
-   container's width on phones, without touching padding, font
-   size, or border-radius — so it keeps the same smooth, rounded
-   look as every other field (Select, Textarea, etc.) instead of
-   looking clipped. Everything else (desktop/tablet sizing, the
-   Owner view's month pickers, etc.) is untouched.
+   modal) and only kicks in below the `sm` breakpoint. It pins
+   both width AND height so the native date input can't render
+   its own oversized control frame — a known iOS Safari quirk
+   where `type="date"` ignores CSS width alone and blows up in
+   height when unconstrained, which is what pushed the field way
+   taller than every other input on the form. Everything else
+   (desktop/tablet sizing, the Owner view's month pickers, etc.)
+   is untouched.
 ========================================================= */
 
 const portalStyles = `
@@ -591,6 +592,19 @@ const portalStyles = `
       max-width: 100% !important;
       min-width: 0 !important;
       box-sizing: border-box !important;
+      height: 2.75rem !important;
+      min-height: 2.75rem !important;
+      max-height: 2.75rem !important;
+      line-height: 2.75rem !important;
+      overflow: hidden !important;
+      -webkit-appearance: none !important;
+      -moz-appearance: none !important;
+      appearance: none !important;
+    }
+    .date-input-mobile-safe::-webkit-date-and-time-value {
+      height: 2.75rem !important;
+      line-height: 2.75rem !important;
+      text-align: left;
     }
     .date-input-mobile-safe::-webkit-calendar-picker-indicator {
       margin-left: 0.25rem;
