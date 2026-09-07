@@ -375,6 +375,40 @@ const animationStyles = `
       transition: none !important;
     }
   }
+  /* .leave-date-input — applied to every native type="date" field in this
+     portal (Apply form's From/To dates, and the "Request change" modal's
+     New from/to dates). Below the `sm` breakpoint (phones), some mobile
+     browsers (notably iOS Safari) ignore CSS width alone on date inputs
+     and render their own oversized control frame, which is what was
+     pushing the field far taller than every other input. Pinning both
+     width AND height here fixes that, without touching padding, font
+     size, or border-radius — so it keeps the same smooth, rounded look
+     as every other field (Select, Textarea, etc.) instead of looking cut
+     off. Desktop/tablet sizing is untouched. */
+  @media (max-width: 639px) {
+    .leave-date-input {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box !important;
+      height: 2.75rem !important;
+      min-height: 2.75rem !important;
+      max-height: 2.75rem !important;
+      line-height: 2.75rem !important;
+      overflow: hidden !important;
+      -webkit-appearance: none !important;
+      -moz-appearance: none !important;
+      appearance: none !important;
+    }
+    .leave-date-input::-webkit-date-and-time-value {
+      height: 2.75rem !important;
+      line-height: 2.75rem !important;
+      text-align: left;
+    }
+    .leave-date-input::-webkit-calendar-picker-indicator {
+      margin-left: 0.25rem;
+    }
+  }
 `;
 
 if (typeof document !== "undefined") {
@@ -1309,9 +1343,12 @@ const EmployeeView = () => {
       {/* LEAVE QUOTA SUMMARY - Show only in Apply mode */}
       {employeeMode === "apply" && <LeaveQuotaSummary leaves={leaves} leaveLimit={leaveLimit} />}
 
-      {/* APPLY FORM - Show only in Apply mode */}
+      {/* APPLY FORM - Show only in Apply mode. Intentionally NOT wrapped in
+          any max-height/overflow-y-auto container — this section should
+          size naturally to its content and never scroll on its own; only
+          the History section (below) gets an internal scroll area. */}
       {employeeMode === "apply" && (
-      <section className="animate-fade-in-up card-hover w-full max-w-full overflow-hidden rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
+      <section className="animate-fade-in-up card-hover w-full max-w-full overflow-visible rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
         <div className="mb-2 flex items-center gap-2">
           <div className="rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 p-1.5">
             <CalendarCheck2 className="h-4 w-4 text-white" aria-hidden="true" />
@@ -1354,7 +1391,7 @@ const EmployeeView = () => {
             </Select>
           </div>
 
-          <div className="min-w-0 w-full max-w-full space-y-1 overflow-hidden">
+          <div className="min-w-0 w-full max-w-full space-y-1">
             <Label htmlFor="from">{dateMode === "range" ? "From date" : "Date"}</Label>
             <Input
               id="from"
@@ -1372,7 +1409,7 @@ const EmployeeView = () => {
           </div>
 
           {dateMode === "range" && (
-            <div className="min-w-0 w-full max-w-full space-y-1 overflow-hidden">
+            <div className="min-w-0 w-full max-w-full space-y-1">
               <Label htmlFor="to">To date</Label>
               <Input
                 id="to"
@@ -1520,58 +1557,62 @@ const EmployeeView = () => {
           )}
         </div>
 
-        {/* Body */}
+        {/* Body — only this results area scrolls; the tabs/filters above
+            stay put and only the list of leave cards scrolls internally
+            once it grows past a viewport-relative max height. */}
         <div id={historyPanelId} role="tabpanel" className="p-4 sm:p-6">
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <FullSpinner />
-            </div>
-          ) : error ? (
-            <ErrorState message={error} onRetry={load} />
-          ) : historyViewMode === "all" ? (
-            groupedLeaves.length === 0 ? (
-              <EmptyState message="No leave requests found." />
-            ) : (
-              <div className="space-y-5">
-                {groupedLeaves.map((group) => (
-                  <div key={group.key} className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                      <group.icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                      <span>{group.label}</span>
-                      <span className="ml-0.5 min-w-[1.1rem] rounded-full bg-muted px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-muted-foreground">
-                        {group.items.length}
-                      </span>
-                    </div>
-                    <AppliedLeavesTable
-                      leaves={group.items}
-                      onRequestChange={openReapproval}
-                      onCancelReapproval={cancelReapproval}
-                      cancelingId={cancelingId}
-                    />
-                  </div>
-                ))}
+          <div className="custom-scrollbar max-h-[65vh] overflow-y-auto pr-1">
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <FullSpinner />
               </div>
-            )
-          ) : filteredLeaves.length === 0 ? (
-            <EmptyState
-              message={
-                historyTab === "pending"
-                  ? `No pending leave requests in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
-                  : historyTab === "all"
-                  ? `No leave requests in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
-                  : historyTab === "approved"
-                  ? `No approved leaves in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
-                  : `No rejected leaves in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
-              }
-            />
-          ) : (
-            <AppliedLeavesTable
-              leaves={filteredLeaves}
-              onRequestChange={openReapproval}
-              onCancelReapproval={cancelReapproval}
-              cancelingId={cancelingId}
-            />
-          )}
+            ) : error ? (
+              <ErrorState message={error} onRetry={load} />
+            ) : historyViewMode === "all" ? (
+              groupedLeaves.length === 0 ? (
+                <EmptyState message="No leave requests found." />
+              ) : (
+                <div className="space-y-5">
+                  {groupedLeaves.map((group) => (
+                    <div key={group.key} className="space-y-2">
+                      <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                        <group.icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                        <span>{group.label}</span>
+                        <span className="ml-0.5 min-w-[1.1rem] rounded-full bg-muted px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-muted-foreground">
+                          {group.items.length}
+                        </span>
+                      </div>
+                      <AppliedLeavesTable
+                        leaves={group.items}
+                        onRequestChange={openReapproval}
+                        onCancelReapproval={cancelReapproval}
+                        cancelingId={cancelingId}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : filteredLeaves.length === 0 ? (
+              <EmptyState
+                message={
+                  historyTab === "pending"
+                    ? `No pending leave requests in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                    : historyTab === "all"
+                    ? `No leave requests in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                    : historyTab === "approved"
+                    ? `No approved leaves in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                    : `No rejected leaves in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                }
+              />
+            ) : (
+              <AppliedLeavesTable
+                leaves={filteredLeaves}
+                onRequestChange={openReapproval}
+                onCancelReapproval={cancelReapproval}
+                cancelingId={cancelingId}
+              />
+            )}
+          </div>
         </div>
       </section>
       )}
@@ -1635,13 +1676,13 @@ const EmployeeView = () => {
                 </Select>
               </div>
 
-              <div className="space-y-2">
+              <div className="min-w-0 max-w-full space-y-2">
                 <Label htmlFor="re-from">{reDateMode === "range" ? "New from date" : "New date"}</Label>
                 <Input
                   id="re-from"
                   type="date"
                   required
-                  className="leave-date-input"
+                  className="leave-date-input box-border w-full min-w-0 max-w-full"
                   value={reFromDate}
                   onChange={(e) => {
                     setReFromDate(e.target.value);
@@ -1653,9 +1694,17 @@ const EmployeeView = () => {
               </div>
 
               {reDateMode === "range" && (
-                <div className="space-y-2">
+                <div className="min-w-0 max-w-full space-y-2">
                   <Label htmlFor="re-to">New to date</Label>
-                  <Input id="re-to" type="date" required className="leave-date-input" min={reFromDate} value={reToDate} onChange={(e) => setReToDate(e.target.value)} />
+                  <Input
+                    id="re-to"
+                    type="date"
+                    required
+                    className="leave-date-input box-border w-full min-w-0 max-w-full"
+                    min={reFromDate}
+                    value={reToDate}
+                    onChange={(e) => setReToDate(e.target.value)}
+                  />
                   {reFromDate && reToDate && (
                     <p className="text-xs text-muted-foreground">
                       Duration: {calcDays(reFromDate, reToDate)} day{calcDays(reFromDate, reToDate) !== 1 ? "s" : ""}
