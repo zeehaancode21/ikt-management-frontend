@@ -346,16 +346,16 @@ const EmployeeSummaryTable = ({
 }) => {
   return (
     <div className="custom-scrollbar overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[640px] text-sm">
+      <table className="w-full text-sm">
         <caption className="sr-only">Permission hours used and remaining for every employee this month</caption>
         <thead>
           <tr className="border-b border-border bg-muted/40 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            <th scope="col" className="px-4 py-2.5">Employee</th>
-            <th scope="col" className="px-4 py-2.5">Hours used</th>
-            <th scope="col" className="px-4 py-2.5">Hours remaining</th>
-            <th scope="col" className="px-4 py-2.5">Requests used</th>
-            <th scope="col" className="px-4 py-2.5">Half/Full-Day permission</th>
-            <th scope="col" className="px-4 py-2.5">
+            <th scope="col" className="px-2 py-2.5 sm:px-4">Employee</th>
+            <th scope="col" className="px-2 py-2.5 sm:px-4">Hours used</th>
+            <th scope="col" className="hidden px-2 py-2.5 sm:table-cell sm:px-4">Hours remaining</th>
+            <th scope="col" className="hidden px-2 py-2.5 lg:table-cell lg:px-4">Requests used</th>
+            <th scope="col" className="hidden px-2 py-2.5 lg:table-cell lg:px-4">Half/Full-Day permission</th>
+            <th scope="col" className="px-2 py-2.5 text-right sm:px-4">
               <span className="sr-only">Actions</span>
             </th>
           </tr>
@@ -366,7 +366,7 @@ const EmployeeSummaryTable = ({
             const pct = Math.min((quota.hoursUsedThisMonth / (quota.maxHoursPerMonth || 1)) * 100, 100);
             return (
               <tr key={employeeName} className="border-b border-border/60 last:border-0 hover:bg-muted/30">
-                <td className="px-4 py-3">
+                <td className="px-2 py-3 sm:px-4">
                   <div className="flex min-w-0 items-center gap-2">
                     <div
                       className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400"
@@ -377,17 +377,17 @@ const EmployeeSummaryTable = ({
                     <span className="truncate font-medium text-foreground">{employeeName}</span>
                   </div>
                 </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-foreground">
+                <td className="px-2 py-3 sm:px-4">
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-xs font-semibold text-foreground sm:text-sm">
                       {formatHours(quota.hoursUsedThisMonth)} / {formatHours(quota.maxHoursPerMonth)}h
                     </span>
-                    <div className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-muted sm:block">
+                    <div className="h-1.5 w-12 overflow-hidden rounded-full bg-muted sm:w-16">
                       <div className={`h-full rounded-full ${isTight ? "bg-amber-500" : "bg-green-500"}`} style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3">
+                <td className="hidden px-2 py-3 sm:table-cell sm:px-4">
                   <span
                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
                       isTight
@@ -398,10 +398,10 @@ const EmployeeSummaryTable = ({
                     {formatHours(quota.hoursRemainingThisMonth)}h left
                   </span>
                 </td>
-                <td className="px-4 py-3 text-muted-foreground">
+                <td className="hidden px-2 py-3 text-xs text-muted-foreground lg:table-cell lg:px-4">
                   {quota.requestsUsedThisMonth} / {quota.maxRequestsPerMonth}
                 </td>
-                <td className="px-4 py-3">
+                <td className="hidden px-2 py-3 lg:table-cell lg:px-4">
                   {quota.surplusLeaveDays > 0 ? (
                     <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
                       {quota.surplusLeaveDays >= 1 ? "1 day" : "½ day"} ({formatHours(quota.surplusHoursThisMonth)}h)
@@ -410,10 +410,10 @@ const EmployeeSummaryTable = ({
                     <span className="text-xs text-muted-foreground">—</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-2 py-3 text-right sm:px-4">
                   <Button size="sm" variant="outline" className="btn-hover-scale h-7 text-xs" onClick={() => onView(employeeName)}>
                     <Eye className="mr-1 h-3 w-3" aria-hidden="true" />
-                    View
+                    <span className="hidden sm:inline">View</span>
                   </Button>
                 </td>
               </tr>
