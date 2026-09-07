@@ -9,7 +9,7 @@ import {
   CalendarCheck2,
   Timer,
   Users,
-  UserRoundGroup,
+  UsersRound,
   ClipboardPenLine,
   Eye,
   CalendarX2,
@@ -1586,7 +1586,7 @@ const OwnerView = () => {
 
         <div role="tablist" aria-label="Permission management sections" className="inline-flex w-full items-center gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:w-auto">
           <TabButton active={ownerTab === "pending"} onClick={() => setOwnerTab("pending")} label="Pending" count={permissions.length} controls={ownerPanelId} />
-          <TabButton active={ownerTab === "summary"} onClick={() => setOwnerTab("summary")} icon={UserRoundGroup} label="All employees" controls={ownerPanelId} />
+          <TabButton active={ownerTab === "summary"} onClick={() => setOwnerTab("summary")} icon={UsersRound} label="All employees" controls={ownerPanelId} />
           <TabButton active={ownerTab === "employee"} onClick={() => setOwnerTab("employee")} icon={ClipboardPenLine} label="Employee history" controls={ownerPanelId} />
         </div>
       </div>
