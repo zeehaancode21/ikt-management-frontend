@@ -435,10 +435,11 @@ const styles = `
   .client-card::after { content: ''; position: absolute; right: -16px; bottom: -16px; width: 80px; height: 80px; border-radius: 50%; background: var(--teal-dim); transition: transform .35s; }
   .client-card:hover, .client-card:focus-visible { border-color: var(--teal); box-shadow: var(--shadow), 0 0 0 3px rgba(15,113,117,0.12); transform: translateY(-2px); }
   .client-card:hover::after, .client-card:focus-visible::after { transform: scale(2.8); }
-  .client-card-name { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; color: var(--text); position: relative; z-index: 1; transition: color .25s; padding-right: 64px; }
+  .client-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; position: relative; z-index: 1; }
+  .client-card-name { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; color: var(--text); transition: color .25s; min-width: 0; overflow-wrap: break-word; word-break: break-word; }
   .client-card:hover .client-card-name, .client-card:focus-visible .client-card-name { color: var(--teal); }
   .client-card-count { font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; font-family: 'JetBrains Mono', monospace; position: relative; z-index: 1; }
-  .client-card-actions { position: absolute; top: 14px; right: 14px; z-index: 2; display: flex; gap: 6px; }
+  .client-card-actions { flex-shrink: 0; z-index: 2; display: flex; gap: 6px; }
 
   .project-list { display: flex; flex-direction: column; gap: 10px; }
   .project-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; cursor: pointer; background: var(--surface); box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: space-between; gap: 16px; transition: border-color .2s, box-shadow .2s, transform .15s; position: relative; overflow: hidden; }
@@ -807,8 +808,8 @@ const styles = `
     .year-card { padding: 28px 12px; }
     .year-card-num { font-size: 2.4rem; }
     .client-grid { grid-template-columns: 1fr; gap: 10px; }
-    .client-card-name { padding-right: 0; }
-    .client-card-actions { position: static; margin-top: 14px; }
+    .client-card-name { font-size: 1.1rem; }
+    .icon-btn { width: 30px; height: 30px; }
     .project-card { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 16px; }
     .project-info { width: 100%; min-width: 0; }
     .project-name { white-space: normal; overflow-wrap: break-word; word-break: break-word; }
@@ -1762,29 +1763,31 @@ export default function Dashboard() {
                           onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedClient(client); } }}
                           whileTap={{ scale: 0.98 }}
                         >
-                          <div className="client-card-name">{client}</div>
-                          <div className="client-card-count">{clientProjects.length} project{clientProjects.length === 1 ? "" : "s"}</div>
-                          <div className="client-card-actions">
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              title="View all projects for this client"
-                              aria-label={`View all projects for ${client}`}
-                              onClick={(e) => handleViewClientAll(e, client, clientProjects)}
-                            >
-                              <Eye size={15} />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              title="Download all projects for this client (Excel)"
-                              aria-label={`Download all projects for ${client} as Excel`}
-                              disabled={downloadingClient}
-                              onClick={(e) => handleDownloadClientAll(e, client, clientProjects)}
-                            >
-                              {downloadingClient ? <span className="btn-spinner btn-spinner-dark" aria-hidden="true" /> : <Download size={15} />}
-                            </button>
+                          <div className="client-card-top">
+                            <div className="client-card-name">{client}</div>
+                            <div className="client-card-actions">
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                title="View all projects for this client"
+                                aria-label={`View all projects for ${client}`}
+                                onClick={(e) => handleViewClientAll(e, client, clientProjects)}
+                              >
+                                <Eye size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                title="Download all projects for this client (Excel)"
+                                aria-label={`Download all projects for ${client} as Excel`}
+                                disabled={downloadingClient}
+                                onClick={(e) => handleDownloadClientAll(e, client, clientProjects)}
+                              >
+                                {downloadingClient ? <span className="btn-spinner btn-spinner-dark" aria-hidden="true" /> : <Download size={15} />}
+                              </button>
+                            </div>
                           </div>
+                          <div className="client-card-count">{clientProjects.length} project{clientProjects.length === 1 ? "" : "s"}</div>
                         </motion.div>
                       );
                     })}
