@@ -374,7 +374,17 @@ const animationStyles = `
     .tab-transition {
       transition: none !important;
     }
-  
+  }
+
+  /* Mobile-safe sizing for the native type="date" inputs (Apply form +
+     "Request change" modal). Pins both width AND height so the native
+     control can't render its own oversized frame — a known iOS/Android
+     WebView quirk where type="date" ignores CSS width alone and blows up
+     in height/width when unconstrained. This must be its own top-level
+     media query (NOT nested inside prefers-reduced-motion above), or it
+     silently only applies for users with reduced-motion enabled, which is
+     the bug that made the date field pop outside its container. Mirrors
+     .date-input-mobile-safe in the Permission Portal. */
   @media (max-width: 639px) {
     .leave-date-input {
       width: 100% !important;
@@ -403,7 +413,12 @@ const animationStyles = `
 
 if (typeof document !== "undefined") {
   const styleId = "leave-portal-animations";
-  if (!document.getElementById(styleId)) {
+  const existing = document.getElementById(styleId);
+  if (existing) {
+    // Replace stale styles from a previous mount (e.g. hot reload) so the
+    // fixed CSS always wins instead of an old cached <style> tag.
+    existing.textContent = animationStyles;
+  } else {
     const s = document.createElement("style");
     s.id = styleId;
     s.textContent = animationStyles;
