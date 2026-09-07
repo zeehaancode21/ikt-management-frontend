@@ -560,6 +560,16 @@ const PermissionCard = ({
    most classes shadcn/Tailwind already ship, but a couple of
    small custom utility classes make hover/press feedback and
    the scrollbar consistent with the rest of the app.
+
+   `.date-input-mobile-safe` is scoped to the employee-facing
+   `type="date"` fields only (Apply form + "Request change"
+   modal) and only kicks in below the `sm` breakpoint. It forces
+   the native date input to respect its container's width on
+   phones — where some mobile browsers otherwise render the
+   "mm/dd/yyyy" text + calendar icon at an intrinsic width wider
+   than the card, pushing it outside the container/screen.
+   Everything else (desktop/tablet sizing, the Owner view's month
+   pickers, etc.) is untouched.
 ========================================================= */
 
 const portalStyles = `
@@ -574,6 +584,26 @@ const portalStyles = `
   .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.4); }
   @media (prefers-reduced-motion: reduce) {
     .btn-hover-scale, .leave-card { transition: none !important; }
+  }
+  @media (max-width: 639px) {
+    .date-input-mobile-safe {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box !important;
+      font-size: 0.8125rem !important;
+      padding-left: 0.5rem !important;
+      padding-right: 0.375rem !important;
+    }
+    .date-input-mobile-safe::-webkit-date-and-time-value {
+      text-align: left;
+    }
+    .date-input-mobile-safe::-webkit-calendar-picker-indicator {
+      margin-left: 0.25rem;
+      padding: 0;
+      width: 1rem;
+      height: 1rem;
+    }
   }
 `;
 
@@ -935,7 +965,10 @@ const EmployeeView = () => {
       {/* QUOTA SUMMARY - Show only in Apply mode */}
       {employeeMode === "apply" && <QuotaSummary quota={quota} label="Your permission quota" />}
 
-      {/* APPLY FORM - Show only in Apply mode */}
+      {/* APPLY FORM - Show only in Apply mode. Intentionally NOT wrapped in
+          any max-height/overflow-y-auto container — this section should
+          size naturally to its content and never scroll on its own; only
+          the History section (below) gets an internal scroll area. */}
       {employeeMode === "apply" && (
       <section className="card-hover overflow-visible rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
         <div className="mb-2 flex items-center gap-2">
@@ -962,9 +995,17 @@ const EmployeeView = () => {
             </Select>
           </div>
 
-          <div className="min-w-0 max-w-full space-y-1">
+          <div className="min-w-0 max-w-full space-y-1 overflow-hidden">
             <Label htmlFor="perm-date">Date</Label>
-            <Input id="perm-date" type="date" required min={getToday()} value={date} onChange={(e) => setDate(e.target.value)} className="box-border w-full min-w-0 max-w-full" />
+            <Input
+              id="perm-date"
+              type="date"
+              required
+              min={getToday()}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="date-input-mobile-safe box-border w-full min-w-0 max-w-full"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-2 sm:gap-3">
@@ -1094,55 +1135,60 @@ const EmployeeView = () => {
           )}
         </div>
 
+        {/* Only this results area scrolls — the tabs/filters above stay put
+            and only the list of permission cards scrolls internally once it
+            grows past a viewport-relative max height. */}
         <div id={historyPanelId} role="tabpanel" className="p-4 sm:p-6">
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <FullSpinner />
-            </div>
-          ) : error ? (
-            <ErrorState message={error} onRetry={load} />
-          ) : historyViewMode === "all" ? (
-            groupedPermissions.length === 0 ? (
-              <EmptyState message="No permission requests found." />
+          <div className="custom-scrollbar max-h-[65vh] overflow-y-auto pr-1">
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <FullSpinner />
+              </div>
+            ) : error ? (
+              <ErrorState message={error} onRetry={load} />
+            ) : historyViewMode === "all" ? (
+              groupedPermissions.length === 0 ? (
+                <EmptyState message="No permission requests found." />
+              ) : (
+                <div className="space-y-5">
+                  {groupedPermissions.map((group) => (
+                    <div key={group.key} className="space-y-2">
+                      <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                        <group.icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                        <span>{group.label}</span>
+                        <span className="ml-0.5 min-w-[1.1rem] rounded-full bg-muted px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-muted-foreground">
+                          {group.items.length}
+                        </span>
+                      </div>
+                      <div className="space-y-3">
+                        {group.items.map((p) => (
+                          <PermissionCard key={p.id} p={p} onRequestChange={openReapproval} onCancelReapproval={cancelReapproval} cancelingId={cancelingId} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : sortedPermissions.length === 0 ? (
+              <EmptyState
+                message={
+                  historyTab === "pending"
+                    ? `No pending permission requests in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                    : historyTab === "all"
+                    ? `No permission requests in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                    : historyTab === "approved"
+                    ? `No approved permissions in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                    : `No rejected permissions in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
+                }
+              />
             ) : (
-              <div className="space-y-5">
-                {groupedPermissions.map((group) => (
-                  <div key={group.key} className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                      <group.icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                      <span>{group.label}</span>
-                      <span className="ml-0.5 min-w-[1.1rem] rounded-full bg-muted px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-muted-foreground">
-                        {group.items.length}
-                      </span>
-                    </div>
-                    <div className="space-y-3">
-                      {group.items.map((p) => (
-                        <PermissionCard key={p.id} p={p} onRequestChange={openReapproval} onCancelReapproval={cancelReapproval} cancelingId={cancelingId} />
-                      ))}
-                    </div>
-                  </div>
+              <div className="space-y-3">
+                {sortedPermissions.map((p) => (
+                  <PermissionCard key={p.id} p={p} onRequestChange={openReapproval} onCancelReapproval={cancelReapproval} cancelingId={cancelingId} />
                 ))}
               </div>
-            )
-          ) : sortedPermissions.length === 0 ? (
-            <EmptyState
-              message={
-                historyTab === "pending"
-                  ? `No pending permission requests in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
-                  : historyTab === "all"
-                  ? `No permission requests in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
-                  : historyTab === "approved"
-                  ? `No approved permissions in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
-                  : `No rejected permissions in ${format(new Date(`${historyMonth}-01`), "MMMM yyyy")}.`
-              }
-            />
-          ) : (
-            <div className="space-y-3">
-              {sortedPermissions.map((p) => (
-                <PermissionCard key={p.id} p={p} onRequestChange={openReapproval} onCancelReapproval={cancelReapproval} cancelingId={cancelingId} />
-              ))}
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </section>
       )}
@@ -1201,9 +1247,17 @@ const EmployeeView = () => {
                 </Select>
               </div>
 
-              <div className="space-y-2">
+              <div className="min-w-0 max-w-full space-y-2 overflow-hidden">
                 <Label htmlFor="re-perm-date">New date</Label>
-                <Input id="re-perm-date" type="date" required min={getToday()} value={reDate} onChange={(e) => setReDate(e.target.value)} />
+                <Input
+                  id="re-perm-date"
+                  type="date"
+                  required
+                  min={getToday()}
+                  value={reDate}
+                  onChange={(e) => setReDate(e.target.value)}
+                  className="date-input-mobile-safe box-border w-full min-w-0 max-w-full"
+                />
               </div>
 
               <div className="space-y-2">
