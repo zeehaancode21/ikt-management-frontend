@@ -496,7 +496,7 @@ const TabButton = ({
     aria-controls={controls}
     tabIndex={active ? 0 : -1}
     onClick={onClick}
-    className={`tab-transition flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${FOCUS_RING} ${
+    className={`tab-transition flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ${FOCUS_RING} ${
       fullWidthOnMobile ? "flex-1 sm:flex-none" : ""
     } min-w-[76px] ${
       active
@@ -2053,8 +2053,29 @@ const OwnerView = () => {
           </p>
         </div>
 
-        {/* Tab toggle */}
-        <div role="tablist" aria-label="Leave management sections" className="inline-flex w-full items-center rounded-lg border border-border bg-muted/40 p-1 sm:w-auto">
+        {/*
+          Tab toggle — Pending / All employees / Employee history.
+
+          RESPONSIVE FIX: on narrow (mobile) viewports this row previously
+          stayed `inline-flex` (horizontal) and forced three buttons —
+          including the long labels "All employees" and "Employee history"
+          — into one cramped row. With `min-w-[76px]` on each TabButton the
+          row ran out of space and the browser wrapped label text mid-word
+          ("Pendi" / "ng"), producing the broken layout in the bug report.
+
+          Fix: stack the tabs vertically (each full width) below the `sm`
+          (640px) breakpoint so every label always has a full row to itself
+          and never needs to wrap. From `sm:` upward the classes are
+          restored to exactly what they were before
+          (`sm:inline-flex sm:w-auto sm:flex-row sm:items-center sm:gap-0`),
+          so desktop/tablet spacing, alignment and appearance are completely
+          unchanged.
+        */}
+        <div
+          role="tablist"
+          aria-label="Leave management sections"
+          className="flex w-full flex-col gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:inline-flex sm:w-auto sm:flex-row sm:items-center sm:gap-0"
+        >
           <TabButton active={ownerTab === "pending"} onClick={() => setOwnerTab("pending")} icon={CalendarClock} label="Pending" count={leaves.length} controls={ownerPanelId} />
           <TabButton active={ownerTab === "summary"} onClick={() => setOwnerTab("summary")} icon={Users} label="All employees" controls={ownerPanelId} />
           <TabButton active={ownerTab === "employee"} onClick={() => setOwnerTab("employee")} icon={Users} label="Employee history" controls={ownerPanelId} />
