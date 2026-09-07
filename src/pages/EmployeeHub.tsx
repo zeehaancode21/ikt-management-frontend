@@ -140,6 +140,14 @@ export default function EmployeeHub() {
           flex-shrink: 0;
         }
 
+        .eh-tab-icon {
+          flex-shrink: 0;
+        }
+
+        .eh-tab-label {
+          white-space: nowrap;
+        }
+
         .eh-tab-badge {
           display: inline-flex;
           align-items: center;
@@ -153,11 +161,87 @@ export default function EmployeeHub() {
           font-size: 10px;
           font-weight: 700;
           line-height: 1;
+          flex-shrink: 0;
         }
 
-        @media (max-width: 768px) {
-          .eh-tabs { width: 100%; }
-          .eh-tab-btn { flex: 1 1 auto; justify-content: center; padding: 9px 10px; }
+        /* ═══════════════════════════════════════════════════════════════
+           MOBILE-ONLY LAYOUT (<=640px)
+           Desktop/tablet keep the original inline-flex, wrapping tab strip
+           exactly as before. Below 640px the previous "flex: 1 1 auto"
+           row squeezed four buttons — some with long labels like
+           "Permission Portal" and "Weekend Entries" plus an icon, a color
+           dot, and sometimes a badge — into narrow, uneven-height cells
+           that wrapped awkwardly. This replaces that with a clean 2x2
+           grid: fixed-height single-line buttons, labels truncate with an
+           ellipsis instead of wrapping, and the header title/subtitle
+           shrink slightly so nothing overflows the viewport.
+           ═══════════════════════════════════════════════════════════════ */
+        @media (max-width: 640px) {
+          .eh-page-header {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+            margin-bottom: 16px;
+          }
+
+          .eh-page-title {
+            font-size: 20px;
+          }
+
+          .eh-page-sub {
+            font-size: 12.5px;
+            margin-top: 4px;
+          }
+
+          .eh-tabs {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            width: 100%;
+            gap: 6px;
+            padding: 6px;
+            border-radius: 12px;
+          }
+
+          .eh-tab-btn {
+            flex: unset;
+            width: 100%;
+            min-width: 0;
+            justify-content: flex-start;
+            padding: 10px 10px;
+            gap: 6px;
+            font-size: 12px;
+            border-radius: 9px;
+            white-space: normal;
+          }
+
+          .eh-tab-dot {
+            width: 6px;
+            height: 6px;
+          }
+
+          .eh-tab-label {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            text-align: left;
+          }
+
+          .eh-tab-badge {
+            min-width: 15px;
+            height: 15px;
+            font-size: 9px;
+            padding: 0 3px;
+          }
+        }
+
+        @media (max-width: 360px) {
+          .eh-tab-btn {
+            font-size: 11px;
+            padding: 9px 8px;
+            gap: 5px;
+          }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -190,8 +274,8 @@ export default function EmployeeHub() {
                   whileTap={{ scale: 0.98 }}
                 >
                   <span className="eh-tab-dot" aria-hidden="true" style={{ background: t.dot }} />
-                  <t.icon className="h-3.5 w-3.5" />
-                  {t.label}
+                  <t.icon className="h-3.5 w-3.5 eh-tab-icon" />
+                  <span className="eh-tab-label">{t.label}</span>
                   {badge > 0 && (
                     <span className="eh-tab-badge" aria-label={`${badge} unread`}>
                       {badge > 9 ? "9+" : badge}
