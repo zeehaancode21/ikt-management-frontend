@@ -5,6 +5,7 @@ import HolidayHover from "@/pages/HolidayHover";
 import { useAuth } from "@/context/AuthContext";
 import NotificationBell from "./NotificationBell";
 import { ThemeToggle } from "./ThemeToggle";
+import { HardReloadButton } from "./HardReloadButton";
 import { FloatingCalculator } from "./FloatingCalculator";
 import { useState, useEffect } from "react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -138,6 +139,7 @@ export const AppLayout = () => {
 
             {/* ── DARK / LIGHT TOGGLE ── */}
             <FloatingCalculator />
+            <HardReloadButton />
             <ThemeToggle />
           </div>
         </header>
