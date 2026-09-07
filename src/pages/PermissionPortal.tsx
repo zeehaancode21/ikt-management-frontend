@@ -563,13 +563,13 @@ const PermissionCard = ({
 
    `.date-input-mobile-safe` is scoped to the employee-facing
    `type="date"` fields only (Apply form + "Request change"
-   modal) and only kicks in below the `sm` breakpoint. It forces
-   the native date input to respect its container's width on
-   phones — where some mobile browsers otherwise render the
-   "mm/dd/yyyy" text + calendar icon at an intrinsic width wider
-   than the card, pushing it outside the container/screen.
-   Everything else (desktop/tablet sizing, the Owner view's month
-   pickers, etc.) is untouched.
+   modal) and only kicks in below the `sm` breakpoint. It just
+   pins width/box-sizing so the native date input respects its
+   container's width on phones, without touching padding, font
+   size, or border-radius — so it keeps the same smooth, rounded
+   look as every other field (Select, Textarea, etc.) instead of
+   looking clipped. Everything else (desktop/tablet sizing, the
+   Owner view's month pickers, etc.) is untouched.
 ========================================================= */
 
 const portalStyles = `
@@ -591,18 +591,9 @@ const portalStyles = `
       max-width: 100% !important;
       min-width: 0 !important;
       box-sizing: border-box !important;
-      font-size: 0.8125rem !important;
-      padding-left: 0.5rem !important;
-      padding-right: 0.375rem !important;
-    }
-    .date-input-mobile-safe::-webkit-date-and-time-value {
-      text-align: left;
     }
     .date-input-mobile-safe::-webkit-calendar-picker-indicator {
       margin-left: 0.25rem;
-      padding: 0;
-      width: 1rem;
-      height: 1rem;
     }
   }
 `;
@@ -995,7 +986,7 @@ const EmployeeView = () => {
             </Select>
           </div>
 
-          <div className="min-w-0 max-w-full space-y-1 overflow-hidden">
+          <div className="min-w-0 max-w-full space-y-1">
             <Label htmlFor="perm-date">Date</Label>
             <Input
               id="perm-date"
@@ -1247,7 +1238,7 @@ const EmployeeView = () => {
                 </Select>
               </div>
 
-              <div className="min-w-0 max-w-full space-y-2 overflow-hidden">
+              <div className="min-w-0 max-w-full space-y-2">
                 <Label htmlFor="re-perm-date">New date</Label>
                 <Input
                   id="re-perm-date"
