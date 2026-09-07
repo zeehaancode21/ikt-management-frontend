@@ -2053,12 +2053,7 @@ const OwnerView = () => {
           </p>
         </div>
 
-        {/* Tab toggle */}
-        <div role="tablist" aria-label="Leave management sections" className="inline-flex w-full items-center rounded-lg border border-border bg-muted/40 p-1 sm:w-auto">
-          <TabButton active={ownerTab === "pending"} onClick={() => setOwnerTab("pending")} icon={CalendarClock} label="Queue" count={leaves.length} controls={ownerPanelId} />
-          <TabButton active={ownerTab === "summary"} onClick={() => setOwnerTab("summary")} icon={Users} label="Staff" controls={ownerPanelId} />
-          <TabButton active={ownerTab === "employee"} onClick={() => setOwnerTab("employee")} icon={Users} label="Tracking" controls={ownerPanelId} />
-        </div>
+               {/* Tab toggle - using the shared TabButton component from above */}
       </div>
 
       <div id={ownerPanelId} role="tabpanel" className="p-4 sm:p-6">
