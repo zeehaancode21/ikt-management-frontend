@@ -485,6 +485,7 @@ const TabButton = ({
   onClick: () => void;
   icon?: React.ComponentType<{ className?: string }>;
   label: string;
+  mobileLabel?: string;
   count?: number;
   controls?: string;
   fullWidthOnMobile?: boolean;
@@ -496,7 +497,7 @@ const TabButton = ({
     aria-controls={controls}
     tabIndex={active ? 0 : -1}
     onClick={onClick}
-    className={`tab-transition flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ${FOCUS_RING} ${
+    className={`tab-transition flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${FOCUS_RING} ${
       fullWidthOnMobile ? "flex-1 sm:flex-none" : ""
     } min-w-[76px] ${
       active
@@ -1531,9 +1532,9 @@ const EmployeeView = () => {
                 month. */}
             <div className="space-y-1.5">
               <Label className="text-xs">View</Label>
-              <div role="tablist" aria-label="Show all records or filter by month/status" className="flex w-full gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:inline-flex sm:w-auto">
-                <TabButton active={historyViewMode === "all"} onClick={() => setHistoryViewMode("all")} label="All" controls={historyPanelId} fullWidthOnMobile />
-                <TabButton active={historyViewMode === "filter"} onClick={() => setHistoryViewMode("filter")} label="Filter" controls={historyPanelId} fullWidthOnMobile />
+              <div role="tablist" aria-label="Show all records or filter by month/status" className="inline-flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
+                <TabButton active={historyViewMode === "all"} onClick={() => setHistoryViewMode("all")} label="All" controls={historyPanelId} />
+                <TabButton active={historyViewMode === "filter"} onClick={() => setHistoryViewMode("filter")} label="Filter" controls={historyPanelId} />
               </div>
             </div>
 
@@ -2038,7 +2039,7 @@ const OwnerView = () => {
 
   return (
     <section className="animate-fade-in-up card-hover overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-      {/* Header */}
+            {/* Header */}
       <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 sm:px-6">
         <div>
           <h2 className="text-base font-semibold leading-tight">Leave management</h2>
@@ -2053,34 +2054,72 @@ const OwnerView = () => {
           </p>
         </div>
 
-        {/*
-          Tab toggle — Pending / All employees / Employee history.
-
-          RESPONSIVE FIX: on narrow (mobile) viewports this row previously
-          stayed `inline-flex` (horizontal) and forced three buttons —
-          including the long labels "All employees" and "Employee history"
-          — into one cramped row. With `min-w-[76px]` on each TabButton the
-          row ran out of space and the browser wrapped label text mid-word
-          ("Pendi" / "ng"), producing the broken layout in the bug report.
-
-          Fix: stack the tabs vertically (each full width) below the `sm`
-          (640px) breakpoint so every label always has a full row to itself
-          and never needs to wrap. From `sm:` upward the classes are
-          restored to exactly what they were before
-          (`sm:inline-flex sm:w-auto sm:flex-row sm:items-center sm:gap-0`),
-          so desktop/tablet spacing, alignment and appearance are completely
-          unchanged.
-        */}
+        {/* Tab toggle */}
         <div
           role="tablist"
           aria-label="Leave management sections"
-          className="flex w-full flex-col gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:inline-flex sm:w-auto sm:flex-row sm:items-center sm:gap-0"
+          className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:inline-flex sm:w-auto sm:items-center"
         >
-          <TabButton active={ownerTab === "pending"} onClick={() => setOwnerTab("pending")} icon={CalendarClock} label="Pending" count={leaves.length} controls={ownerPanelId} />
-          <TabButton active={ownerTab === "summary"} onClick={() => setOwnerTab("summary")} icon={Users} label="All employees" controls={ownerPanelId} />
-          <TabButton active={ownerTab === "employee"} onClick={() => setOwnerTab("employee")} icon={Users} label="Employee history" controls={ownerPanelId} />
+          <TabButton
+            active={ownerTab === "pending"}
+            onClick={() => setOwnerTab("pending")}
+            icon={CalendarClock}
+            label="Pending"
+            mobileLabel="Pending"
+            count={leaves.length}
+            controls={ownerPanelId}
+          />
+          <TabButton
+            active={ownerTab === "summary"}
+            onClick={() => setOwnerTab("summary")}
+            icon={Users}
+            label="All employees"
+            mobileLabel="All"
+            controls={ownerPanelId}
+          />
+          <TabButton
+            active={ownerTab === "employee"}
+            onClick={() => setOwnerTab("employee")}
+            icon={Users}
+            label="Employee history"
+            mobileLabel="History"
+            controls={ownerPanelId}
+          />
         </div>
       </div>
+
+        {/* Tab toggle */}
+        <div
+  role="tablist"
+  aria-label="Leave management sections"
+  className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:inline-flex sm:w-auto sm:items-center"
+>
+  <TabButton
+    active={ownerTab === "pending"}
+    onClick={() => setOwnerTab("pending")}
+    icon={CalendarClock}
+    label="Pending"
+    mobileLabel="Pending"
+    count={leaves.length}
+    controls={ownerPanelId}
+  />
+  <TabButton
+    active={ownerTab === "summary"}
+    onClick={() => setOwnerTab("summary")}
+    icon={Users}
+    label="All employees"
+    mobileLabel="All"
+    controls={ownerPanelId}
+  />
+  <TabButton
+    active={ownerTab === "employee"}
+    onClick={() => setOwnerTab("employee")}
+    icon={Users}
+    label="Employee history"
+    mobileLabel="History"
+    controls={ownerPanelId}
+  />
+</div>
 
       <div id={ownerPanelId} role="tabpanel" className="p-4 sm:p-6">
         {/* ══ PENDING TAB ══ */}
@@ -2149,9 +2188,9 @@ const OwnerView = () => {
                   month — mirrors the Permission Portal exactly. */}
               <div className="space-y-2">
                 <Label>View</Label>
-                <div role="tablist" aria-label="Show all records or filter by month/status" className="flex w-full gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:inline-flex sm:w-auto">
-                  <TabButton active={empViewMode === "all"} onClick={() => setEmpViewMode("all")} label="All" controls={ownerPanelId} fullWidthOnMobile />
-                  <TabButton active={empViewMode === "filter"} onClick={() => setEmpViewMode("filter")} label="Filter" controls={ownerPanelId} fullWidthOnMobile />
+                <div role="tablist" aria-label="Show all records or filter by month/status" className="inline-flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
+                  <TabButton active={empViewMode === "all"} onClick={() => setEmpViewMode("all")} label="All" controls={ownerPanelId} />
+                  <TabButton active={empViewMode === "filter"} onClick={() => setEmpViewMode("filter")} label="Filter" controls={ownerPanelId} />
                 </div>
               </div>
 
