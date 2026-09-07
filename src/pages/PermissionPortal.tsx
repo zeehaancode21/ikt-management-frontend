@@ -945,7 +945,7 @@ const EmployeeView = () => {
           <h2 className="text-sm font-semibold sm:text-base">Request permission</h2>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-2 overflow-visible sm:gap-3" noValidate>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-2 overflow-visible sm:gap-3" noValidate>
           <div className="min-w-0 space-y-1 overflow-visible">
             <Label htmlFor="perm-type">Permission type</Label>
             <Select value={permissionType} onValueChange={setPermissionType}>
@@ -962,27 +962,29 @@ const EmployeeView = () => {
             </Select>
           </div>
 
-          <div className="min-w-0 space-y-1">
+          <div className="min-w-0 max-w-full space-y-1">
             <Label htmlFor="perm-date">Date</Label>
-            <Input id="perm-date" type="date" required min={getToday()} value={date} onChange={(e) => setDate(e.target.value)} className="w-full min-w-0" />
+            <Input id="perm-date" type="date" required min={getToday()} value={date} onChange={(e) => setDate(e.target.value)} className="box-border w-full min-w-0 max-w-full" />
           </div>
 
-          <div className="min-w-0 space-y-1">
-            <Label htmlFor="perm-start">Start time</Label>
-            <ClockTimePicker id="perm-start" required value={startTime} onChange={setStartTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-          </div>
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
+            <div className="min-w-0 space-y-1">
+              <Label htmlFor="perm-start">Start time</Label>
+              <ClockTimePicker id="perm-start" required value={startTime} onChange={setStartTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
 
-          <div className="min-w-0 space-y-1">
-            <Label htmlFor="perm-end">End time</Label>
-            <ClockTimePicker id="perm-end" required value={endTime} onChange={setEndTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-            {livePreviewHours !== null && (
-              <p className="hidden text-xs text-muted-foreground sm:block" aria-live="polite">
-                Duration: {formatHours(livePreviewHours)}h · Max {formatHours(quota.maxHoursPerDay)}h/day · {formatHours(quota.hoursRemainingThisMonth)}h remaining this month
-              </p>
-            )}
+            <div className="min-w-0 space-y-1">
+              <Label htmlFor="perm-end">End time</Label>
+              <ClockTimePicker id="perm-end" required value={endTime} onChange={setEndTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
           </div>
+          {livePreviewHours !== null && (
+            <p className="-mt-1 hidden text-xs text-muted-foreground sm:block" aria-live="polite">
+              Duration: {formatHours(livePreviewHours)}h · Max {formatHours(quota.maxHoursPerDay)}h/day · {formatHours(quota.hoursRemainingThisMonth)}h remaining this month
+            </p>
+          )}
 
-          <div className="col-span-2 space-y-1">
+          <div className="space-y-1">
             <Label htmlFor="perm-reason">Reason</Label>
             <Textarea
               id="perm-reason"
@@ -1001,7 +1003,7 @@ const EmployeeView = () => {
             </p>
           </div>
 
-          <div className="col-span-2 flex flex-row gap-2">
+          <div className="flex flex-row gap-2">
             <Button type="submit" disabled={submitting} className="btn-hover-scale flex-1 sm:flex-none">
               {submitting ? (
                 <>

@@ -1319,8 +1319,8 @@ const EmployeeView = () => {
           <h2 className="text-sm font-semibold sm:text-base">Apply for leave</h2>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-2 overflow-visible sm:gap-3" noValidate>
-          <div className="col-span-2 min-w-0 space-y-1 overflow-visible">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-2 overflow-visible sm:gap-3" noValidate>
+          <div className="min-w-0 space-y-1 overflow-visible">
             <Label htmlFor="leave-type">Leave type</Label>
             <Select value={leaveType} onValueChange={setLeaveType}>
               <SelectTrigger id="leave-type" className="w-full">
@@ -1354,13 +1354,13 @@ const EmployeeView = () => {
             </Select>
           </div>
 
-          <div className="min-w-0 space-y-1">
+          <div className="min-w-0 max-w-full space-y-1">
             <Label htmlFor="from">{dateMode === "range" ? "From date" : "Date"}</Label>
             <Input
               id="from"
               type="date"
               required
-              className="leave-date-input w-full min-w-0"
+              className="leave-date-input box-border w-full min-w-0 max-w-full"
               value={fromDate}
               onChange={(e) => {
                 setFromDate(e.target.value);
@@ -1372,13 +1372,13 @@ const EmployeeView = () => {
           </div>
 
           {dateMode === "range" && (
-            <div className="min-w-0 space-y-1">
+            <div className="min-w-0 max-w-full space-y-1">
               <Label htmlFor="to">To date</Label>
               <Input
                 id="to"
                 type="date"
                 required
-                className="leave-date-input w-full min-w-0"
+                className="leave-date-input box-border w-full min-w-0 max-w-full"
                 min={fromDate || undefined}
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
@@ -1408,7 +1408,7 @@ const EmployeeView = () => {
             </div>
           )}
 
-          <div className="col-span-2 space-y-1">
+          <div className="space-y-1">
             <Label htmlFor="reason">Reason</Label>
             <Textarea
               id="reason"
@@ -1427,7 +1427,7 @@ const EmployeeView = () => {
             </p>
           </div>
 
-          <div className="col-span-2 flex flex-row gap-2">
+          <div className="flex flex-row gap-2">
             <Button type="submit" disabled={submitting} className="btn-hover-scale flex-1 sm:flex-none">
               {submitting ? (
                 <>
