@@ -1077,3 +1077,21 @@
     display: none; /* not enough room for registration marks to read cleanly */
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   NEW: PAGE-HEADER-DESCRIPTION-HIDDEN LAYOUT TIGHTENING (mobile only)
+   Companion to the .tsx change that blanks PageHeader's `description`
+   prop below 640px (via usePageHeaderDescription, mirroring LeavePortal).
+   With the description text gone, PageHeader's own wrapper can leave a
+   sliver of now-empty vertical space on some browsers/renderers — this
+   trims it back so the filter bar sits directly under the title on
+   phones. Scoped to max-width: 639px only; desktop/tablet (>=640px)
+   PageHeader spacing is completely untouched.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 639px) {
+  .whd-page > header:first-child,
+  .whd-page > div:first-child > header {
+    padding-bottom: 0;
+    margin-bottom: 0.5rem;
+  }
+}

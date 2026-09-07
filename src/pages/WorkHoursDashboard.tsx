@@ -403,6 +403,32 @@ const FavoriteChip = ({
   );
 };
 
+/* =========================================================
+   RESPONSIVE PAGE-HEADER DESCRIPTION
+   Mobile-only change: mirrors the same file-scoped hook used in
+   LeavePortal.tsx. Tracks the `sm` (640px) Tailwind breakpoint so the
+   header description can be hidden on small screens without widening
+   PageHeader's `description` prop (typed as `string` and shared by other
+   pages). Desktop/tablet (>=640px) still render the full description,
+   unchanged from before.
+========================================================= */
+const usePageHeaderDescription = (fullText: string): string => {
+  const [isSmallScreen, setIsSmallScreen] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 639px)").matches : false
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia("(max-width: 639px)");
+    const onChange = () => setIsSmallScreen(mql.matches);
+    onChange();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
+  return isSmallScreen ? "" : fullText;
+};
+
 /* ─── Main page ─────────────────────────────────────────────── */
 
 const WorkHoursDashboard = () => {
@@ -596,14 +622,26 @@ const WorkHoursDashboard = () => {
     return () => document.removeEventListener("keydown", handler);
   }, [manageOpen, closeManage]);
 
+  // MOBILE CHANGE: full description text is preserved here, then passed
+  // through usePageHeaderDescription so it's hidden below the `sm` (640px)
+  // breakpoint and shown as before on tablet/desktop.
+  const fullDescription =
+    "Filter by client and project to see total hours spent on Modeling, Checking, and E Plan + Shop Drawing + Linking + Part Drawing.";
+  const description = usePageHeaderDescription(fullDescription);
+
   return (
     <div className="whd-page">
       <PageHeader
         title="Project Hours Dashboard"
-        description="Filter by client and project to see total hours spent on Modeling, Checking, and E Plan + Shop Drawing + Linking + Part Drawing."
+        description={description}
       />
 
-      <div className="space-y-4">
+      {/* MOBILE CHANGE: space-y-3 on mobile (was a flat space-y-4), reverting
+          to the original space-y-4 at sm: and up — tightens the vertical gap
+          between the filter bar / title block / stat sections on phones so
+          more of the dashboard fits above the fold, without touching
+          tablet/desktop spacing. */}
+      <div className="space-y-3 sm:space-y-4">
         {/* FILTER BAR */}
         <section className="whd-filter-bar rounded-xl border border-border bg-card p-3 sm:p-4 shadow-sm">
           <div className="relative flex flex-col gap-3 md:flex-row md:items-end">
@@ -728,7 +766,10 @@ const WorkHoursDashboard = () => {
           project={selectedProject === ALL_VALUE ? "ALL PROJECTS" : selectedProject}
         />
 
-        <div className="pt-2" />
+        {/* MOBILE CHANGE: pt-1 on mobile (was a flat pt-2), back to pt-2 at
+            sm: and up — one of several small trims that keep the stat
+            cards higher on a phone screen. */}
+        <div className="pt-1 sm:pt-2" />
 
         {error ? (
           <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -790,7 +831,9 @@ const WorkHoursDashboard = () => {
 
             {/* INDIVIDUAL COMPONENT / CLASS BREAKDOWN */}
             <section>
-              <div className="whd-section-label mb-3">
+              {/* MOBILE CHANGE: mb-2 on mobile (was a flat mb-3), back to
+                  mb-3 at sm: and up. */}
+              <div className="whd-section-label mb-2 sm:mb-3">
                 <h2 className="whitespace-nowrap text-xs sm:text-sm text-muted-foreground">
                   Editing Breakdown (Individual)
                 </h2>
