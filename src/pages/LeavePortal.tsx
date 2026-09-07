@@ -1311,7 +1311,7 @@ const EmployeeView = () => {
 
       {/* APPLY FORM - Show only in Apply mode */}
       {employeeMode === "apply" && (
-      <section className="animate-fade-in-up card-hover overflow-visible rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
+      <section className="animate-fade-in-up card-hover w-full max-w-full overflow-hidden rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
         <div className="mb-2 flex items-center gap-2">
           <div className="rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 p-1.5">
             <CalendarCheck2 className="h-4 w-4 text-white" aria-hidden="true" />
@@ -1319,8 +1319,8 @@ const EmployeeView = () => {
           <h2 className="text-sm font-semibold sm:text-base">Apply for leave</h2>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2 overflow-visible sm:gap-3" noValidate>
-          <div className="min-w-0 space-y-1 overflow-visible">
+        <form onSubmit={handleSubmit} className="flex w-full max-w-full flex-col gap-2 sm:gap-3" noValidate>
+          <div className="min-w-0 w-full max-w-full space-y-1 overflow-visible">
             <Label htmlFor="leave-type">Leave type</Label>
             <Select value={leaveType} onValueChange={setLeaveType}>
               <SelectTrigger id="leave-type" className="w-full">
@@ -1354,13 +1354,13 @@ const EmployeeView = () => {
             </Select>
           </div>
 
-          <div className="min-w-0 max-w-full space-y-1">
+          <div className="min-w-0 w-full max-w-full space-y-1 overflow-hidden">
             <Label htmlFor="from">{dateMode === "range" ? "From date" : "Date"}</Label>
             <Input
               id="from"
               type="date"
               required
-              className="leave-date-input box-border w-full min-w-0 max-w-full"
+              className="leave-date-input box-border block w-full min-w-0 max-w-full"
               value={fromDate}
               onChange={(e) => {
                 setFromDate(e.target.value);
@@ -1372,13 +1372,13 @@ const EmployeeView = () => {
           </div>
 
           {dateMode === "range" && (
-            <div className="min-w-0 max-w-full space-y-1">
+            <div className="min-w-0 w-full max-w-full space-y-1 overflow-hidden">
               <Label htmlFor="to">To date</Label>
               <Input
                 id="to"
                 type="date"
                 required
-                className="leave-date-input box-border w-full min-w-0 max-w-full"
+                className="leave-date-input box-border block w-full min-w-0 max-w-full"
                 min={fromDate || undefined}
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
