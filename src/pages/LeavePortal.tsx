@@ -403,8 +403,8 @@ const LeaveOption = ({
   title: string;
   description: string;
 }) => (
-  <div className="flex w-full items-center justify-between gap-2">
-    <span>{title}</span>
+  <div className="flex w-full min-w-0 items-center justify-between gap-2">
+    <span className="min-w-0 truncate">{title}</span>
     <TooltipProvider delayDuration={100}>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -1320,7 +1320,7 @@ const EmployeeView = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-2 overflow-visible sm:gap-3" noValidate>
-          <div className="space-y-1 overflow-visible">
+          <div className="col-span-2 min-w-0 space-y-1 overflow-visible">
             <Label htmlFor="leave-type">Leave type</Label>
             <Select value={leaveType} onValueChange={setLeaveType}>
               <SelectTrigger id="leave-type" className="w-full">
@@ -1340,7 +1340,7 @@ const EmployeeView = () => {
             </Select>
           </div>
 
-          <div className="space-y-1 overflow-visible">
+          <div className="min-w-0 space-y-1 overflow-visible">
             <Label htmlFor="date-type">Date type</Label>
             <Select value={dateMode} onValueChange={(val) => setDateMode(val as "single" | "range" | "half")}>
               <SelectTrigger id="date-type">
@@ -1354,13 +1354,13 @@ const EmployeeView = () => {
             </Select>
           </div>
 
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <Label htmlFor="from">{dateMode === "range" ? "From date" : "Date"}</Label>
             <Input
               id="from"
               type="date"
               required
-              className="leave-date-input"
+              className="leave-date-input w-full min-w-0"
               value={fromDate}
               onChange={(e) => {
                 setFromDate(e.target.value);
@@ -1372,13 +1372,13 @@ const EmployeeView = () => {
           </div>
 
           {dateMode === "range" && (
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               <Label htmlFor="to">To date</Label>
               <Input
                 id="to"
                 type="date"
                 required
-                className="leave-date-input"
+                className="leave-date-input w-full min-w-0"
                 min={fromDate || undefined}
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
@@ -1393,7 +1393,7 @@ const EmployeeView = () => {
           )}
 
           {dateMode === "half" && (
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               <Label htmlFor="half-session">Half day session</Label>
               <Select value={halfSession} onValueChange={(val) => setHalfSession(val as "FIRST_HALF" | "SECOND_HALF")}>
                 <SelectTrigger id="half-session">

@@ -946,7 +946,7 @@ const EmployeeView = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-2 overflow-visible sm:gap-3" noValidate>
-          <div className="space-y-1 overflow-visible">
+          <div className="min-w-0 space-y-1 overflow-visible">
             <Label htmlFor="perm-type">Permission type</Label>
             <Select value={permissionType} onValueChange={setPermissionType}>
               <SelectTrigger id="perm-type" className="w-full">
@@ -962,19 +962,19 @@ const EmployeeView = () => {
             </Select>
           </div>
 
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <Label htmlFor="perm-date">Date</Label>
-            <Input id="perm-date" type="date" required min={getToday()} value={date} onChange={(e) => setDate(e.target.value)} />
+            <Input id="perm-date" type="date" required min={getToday()} value={date} onChange={(e) => setDate(e.target.value)} className="w-full min-w-0" />
           </div>
 
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <Label htmlFor="perm-start">Start time</Label>
-            <ClockTimePicker id="perm-start" required value={startTime} onChange={setStartTime} className="dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            <ClockTimePicker id="perm-start" required value={startTime} onChange={setStartTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
           </div>
 
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <Label htmlFor="perm-end">End time</Label>
-            <ClockTimePicker id="perm-end" required value={endTime} onChange={setEndTime} className="dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            <ClockTimePicker id="perm-end" required value={endTime} onChange={setEndTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
             {livePreviewHours !== null && (
               <p className="hidden text-xs text-muted-foreground sm:block" aria-live="polite">
                 Duration: {formatHours(livePreviewHours)}h · Max {formatHours(quota.maxHoursPerDay)}h/day · {formatHours(quota.hoursRemainingThisMonth)}h remaining this month
