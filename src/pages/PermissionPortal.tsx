@@ -1762,28 +1762,46 @@ const OwnerView = () => {
    MAIN PAGE
 ========================================================= */
 
+// Local hook scoped to this file only — mirrors the `sm` (640px) Tailwind
+// breakpoint so the header description can be hidden on small screens
+// without widening PageHeader's `description` prop (which is typed as
+// `string` and shared by other pages), keeping this change isolated to
+// PermissionPortal only.
+const usePageHeaderDescription = (fullText: string): string => {
+  const [isSmallScreen, setIsSmallScreen] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 639px)").matches : false
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia("(max-width: 639px)");
+    const onChange = () => setIsSmallScreen(mql.matches);
+    onChange();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
+  return isSmallScreen ? "" : fullText;
+};
+
 const PermissionPortal = () => {
   const { role } = useAuth();
   const { markModuleRead } = useNotifications();
-  
   useEffect(() => {
     markModuleRead("permission");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  
-  // Get the description based on role
-  const description = role === "OWNER" 
-    ? "Review and act on employee permission requests." 
-    : "Request permission for short, hours-based time away and track your requests.";
-  
+
+  const fullDescription =
+    role === "OWNER"
+      ? "Review and act on employee permission requests."
+      : "Request permission for short, hours-based time away and track your requests.";
+
+  const description = usePageHeaderDescription(fullDescription);
+
   return (
     <>
-      <PageHeader
-        title="Permission Portal"
-        description={description}
-        // Add a className prop to hide description on small screens
-        descriptionClassName="hidden sm:inline"
-      />
+      <PageHeader title="Permission Portal" description={description} />
       {role === "OWNER" ? <OwnerView /> : <EmployeeView />}
     </>
   );
