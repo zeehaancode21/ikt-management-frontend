@@ -614,7 +614,10 @@ const portalStyles = `
 
 if (typeof document !== "undefined") {
   const styleId = "permission-portal-styles";
-  if (!document.getElementById(styleId)) {
+  const existing = document.getElementById(styleId);
+  if (existing) {
+    existing.textContent = portalStyles;
+  } else {
     const s = document.createElement("style");
     s.id = styleId;
     s.textContent = portalStyles;
@@ -973,9 +976,13 @@ const EmployeeView = () => {
       {/* APPLY FORM - Show only in Apply mode. Intentionally NOT wrapped in
           any max-height/overflow-y-auto container — this section should
           size naturally to its content and never scroll on its own; only
-          the History section (below) gets an internal scroll area. */}
+          the History section (below) gets an internal scroll area.
+          `w-full max-w-full` on the section, form, and date-field wrapper
+          (mirroring the Leave Portal exactly) keeps the whole card
+          constrained to the viewport width so the border stays fully
+          visible without triggering a scrollbar. */}
       {employeeMode === "apply" && (
-      <section className="card-hover overflow-visible rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
+      <section className="animate-fade-in-up card-hover w-full max-w-full overflow-visible rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
         <div className="mb-2 flex items-center gap-2">
           <div className="rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 p-1.5">
             <Timer className="h-4 w-4 text-white" aria-hidden="true" />
@@ -983,7 +990,7 @@ const EmployeeView = () => {
           <h2 className="text-sm font-semibold sm:text-base">Request permission</h2>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2 overflow-visible sm:gap-3" noValidate>
+        <form onSubmit={handleSubmit} className="flex w-full max-w-full flex-col gap-2 overflow-visible sm:gap-3" noValidate>
           <div className="min-w-0 space-y-1 overflow-visible">
             <Label htmlFor="perm-type">Permission type</Label>
             <Select value={permissionType} onValueChange={setPermissionType}>
@@ -1000,7 +1007,7 @@ const EmployeeView = () => {
             </Select>
           </div>
 
-          <div className="min-w-0 max-w-full space-y-1">
+          <div className="min-w-0 w-full max-w-full space-y-1">
             <Label htmlFor="perm-date">Date</Label>
             <Input
               id="perm-date"
@@ -1009,11 +1016,11 @@ const EmployeeView = () => {
               min={getToday()}
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="date-input-mobile-safe box-border w-full min-w-0 max-w-full"
+              className="date-input-mobile-safe box-border block w-full min-w-0 max-w-full"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2 sm:gap-3">
+          <div className="grid w-full max-w-full grid-cols-2 gap-2 sm:gap-3">
             <div className="min-w-0 space-y-1">
               <Label htmlFor="perm-start">Start time</Label>
               <ClockTimePicker id="perm-start" required value={startTime} onChange={setStartTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
