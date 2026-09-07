@@ -374,17 +374,7 @@ const animationStyles = `
     .tab-transition {
       transition: none !important;
     }
-  }
-  /* .leave-date-input — applied to every native type="date" field in this
-     portal (Apply form's From/To dates, and the "Request change" modal's
-     New from/to dates). Below the `sm` breakpoint (phones), some mobile
-     browsers (notably iOS Safari) ignore CSS width alone on date inputs
-     and render their own oversized control frame, which is what was
-     pushing the field far taller than every other input. Pinning both
-     width AND height here fixes that, without touching padding, font
-     size, or border-radius — so it keeps the same smooth, rounded look
-     as every other field (Select, Textarea, etc.) instead of looking cut
-     off. Desktop/tablet sizing is untouched. */
+  
   @media (max-width: 639px) {
     .leave-date-input {
       width: 100% !important;
