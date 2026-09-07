@@ -2056,8 +2056,8 @@ const OwnerView = () => {
         {/* Tab toggle */}
         <div role="tablist" aria-label="Leave management sections" className="inline-flex w-full items-center rounded-lg border border-border bg-muted/40 p-1 sm:w-auto">
           <TabButton active={ownerTab === "pending"} onClick={() => setOwnerTab("pending")} icon={CalendarClock} label="Pending" count={leaves.length} controls={ownerPanelId} />
-          <TabButton active={ownerTab === "summary"} onClick={() => setOwnerTab("summary")} icon={Users} label="All employees" controls={ownerPanelId} />
-          <TabButton active={ownerTab === "employee"} onClick={() => setOwnerTab("employee")} icon={Users} label="Employee history" controls={ownerPanelId} />
+          <TabButton active={ownerTab === "summary"} onClick={() => setOwnerTab("summary")} icon={Users} label="Employees" controls={ownerPanelId} />
+          <TabButton active={ownerTab === "employee"} onClick={() => setOwnerTab("employee")} icon={Users} label="Tracking" controls={ownerPanelId} />
         </div>
       </div>
 
