@@ -1765,15 +1765,24 @@ const OwnerView = () => {
 const PermissionPortal = () => {
   const { role } = useAuth();
   const { markModuleRead } = useNotifications();
+  
   useEffect(() => {
     markModuleRead("permission");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  
+  // Get the description based on role
+  const description = role === "OWNER" 
+    ? "Review and act on employee permission requests." 
+    : "Request permission for short, hours-based time away and track your requests.";
+  
   return (
     <>
       <PageHeader
         title="Permission Portal"
-        description={role === "OWNER" ? "Review and act on employee permission requests." : "Request permission for short, hours-based time away and track your requests."}
+        description={description}
+        // Add a className prop to hide description on small screens
+        descriptionClassName="hidden sm:inline"
       />
       {role === "OWNER" ? <OwnerView /> : <EmployeeView />}
     </>
