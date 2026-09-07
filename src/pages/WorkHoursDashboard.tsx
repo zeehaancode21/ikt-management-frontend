@@ -29,6 +29,7 @@ import {
   Search,
   Calendar,
   X,
+  ChevronDown,
 } from "lucide-react";
 import "./WorkHoursDashboard.css";
 
@@ -462,6 +463,15 @@ const WorkHoursDashboard = () => {
   const favModalTitleId = useId();
   const favModalDescId = useId();
   const favSearchInputId = useId();
+  const breakdownPanelId = useId();
+
+  // MOBILE CHANGE: the "Editing Breakdown (Individual)" section is
+  // collapsible on small screens only, so it starts closed and the rest of
+  // the dashboard fits on one screen without scrolling. Expanding it opens
+  // an internally-scrollable panel (see .whd-breakdown-body--open in the
+  // CSS) instead of pushing the whole page taller. On tablet/desktop this
+  // state is ignored — the section always renders open, same as before.
+  const [breakdownExpanded, setBreakdownExpanded] = useState(false);
 
   /* Fetch client list, grouped by year, once — reuses the same
      grouped-by-year endpoint pattern as the Work Report Projects
@@ -832,25 +842,54 @@ const WorkHoursDashboard = () => {
             {/* INDIVIDUAL COMPONENT / CLASS BREAKDOWN */}
             <section>
               {/* MOBILE CHANGE: mb-2 on mobile (was a flat mb-3), back to
-                  mb-3 at sm: and up. */}
+                  mb-3 at sm: and up. The chevron toggle button below is
+                  mobile-only (hidden at sm: and up via CSS) and controls
+                  whd-breakdown-body's open/closed state on small screens. */}
               <div className="whd-section-label mb-2 sm:mb-3">
                 <h2 className="whitespace-nowrap text-xs sm:text-sm text-muted-foreground">
                   Editing Breakdown (Individual)
                 </h2>
                 <span className="whd-scale-rule" aria-hidden="true" />
+                <button
+                  type="button"
+                  className="whd-breakdown-toggle"
+                  aria-expanded={breakdownExpanded}
+                  aria-controls={breakdownPanelId}
+                  onClick={() => setBreakdownExpanded((v) => !v)}
+                  title={breakdownExpanded ? "Collapse breakdown" : "Expand breakdown"}
+                >
+                  <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="sr-only">
+                    {breakdownExpanded ? "Collapse" : "Expand"} editing breakdown
+                  </span>
+                </button>
               </div>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-                {DRAWING_COMPONENTS.map(({ key, label, icon, accent }, i) => (
-                  <StatCard
-                    key={key}
-                    label={label}
-                    value={summary?.hoursByType?.[key] ?? 0}
-                    icon={icon}
-                    accent={accent}
-                    percent={pct(summary?.hoursByType?.[key] ?? 0, summary?.drawingGroupHours ?? 0)}
-                    index={i + 4}
-                  />
-                ))}
+
+              {/* MOBILE CHANGE: on phones this panel starts closed
+                  (max-height: 0) so the page fits without scrolling; tapping
+                  the chevron opens it into its own scrollable area
+                  (whd-breakdown-body--open) instead of growing the page.
+                  At sm: and up the CSS ignores this class entirely and the
+                  grid always renders fully, exactly as before. */}
+              <div
+                id={breakdownPanelId}
+                className={`whd-breakdown-body custom-scrollbar ${
+                  breakdownExpanded ? "whd-breakdown-body--open" : ""
+                }`}
+              >
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                  {DRAWING_COMPONENTS.map(({ key, label, icon, accent }, i) => (
+                    <StatCard
+                      key={key}
+                      label={label}
+                      value={summary?.hoursByType?.[key] ?? 0}
+                      icon={icon}
+                      accent={accent}
+                      percent={pct(summary?.hoursByType?.[key] ?? 0, summary?.drawingGroupHours ?? 0)}
+                      index={i + 4}
+                    />
+                  ))}
+                </div>
               </div>
             </section>
           </>

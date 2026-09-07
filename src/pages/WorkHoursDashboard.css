@@ -1095,3 +1095,86 @@
     margin-bottom: 0.5rem;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   NEW: COLLAPSIBLE "EDITING BREAKDOWN" SECTION (mobile only)
+   Desktop/tablet (>=640px): the toggle button stays hidden and
+   .whd-breakdown-body has no height/overflow restriction, so the section
+   always renders fully open — identical to the previous behavior.
+   Mobile (<640px): the panel starts closed (max-height: 0) so the rest of
+   the dashboard is visible without scrolling; tapping the chevron opens it
+   into its own scrollable area instead of growing the page.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.whd-breakdown-toggle {
+  display: none;
+}
+
+.whd-breakdown-body {
+  overflow: visible;
+}
+
+@media (max-width: 639px) {
+  .whd-breakdown-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+  }
+
+  .whd-breakdown-toggle:hover {
+    border-color: hsl(var(--primary) / 0.5);
+    color: hsl(var(--primary));
+    background: hsl(var(--primary) / 0.06);
+  }
+
+  .whd-breakdown-toggle svg {
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .whd-breakdown-toggle[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+
+  .whd-breakdown-body {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(-4px);
+    pointer-events: none;
+    transition: max-height 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease, transform 0.22s ease;
+  }
+
+  .whd-breakdown-body--open {
+    max-height: 60vh;
+    overflow-y: auto;
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+    padding-right: 2px;
+    padding-bottom: 2px;
+  }
+
+  .whd-breakdown-body::-webkit-scrollbar {
+    width: 6px;
+  }
+  .whd-breakdown-body::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 999px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .whd-breakdown-body,
+  .whd-breakdown-toggle svg {
+    transition: none !important;
+  }
+}
