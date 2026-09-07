@@ -9,7 +9,7 @@ import {
   AlertCircle,
   RefreshCw,
   Users,
-  UserRoundGroup,
+  UsersRound,
   Eye,
   Send,
   History,
@@ -2057,7 +2057,7 @@ const OwnerView = () => {
         {/* Tab toggle */}
         <div role="tablist" aria-label="Leave management sections" className="inline-flex w-full items-center rounded-lg border border-border bg-muted/40 p-1 sm:w-auto">
           <TabButton active={ownerTab === "pending"} onClick={() => setOwnerTab("pending")} icon={CalendarClock} label="Queue" count={leaves.length} controls={ownerPanelId} />
-          <TabButton active={ownerTab === "summary"} onClick={() => setOwnerTab("summary")} icon={UserRoundGroup} label="Staff" controls={ownerPanelId} />
+          <TabButton active={ownerTab === "summary"} onClick={() => setOwnerTab("summary")} icon={UsersRound} label="Staff" controls={ownerPanelId} />
           <TabButton active={ownerTab === "employee"} onClick={() => setOwnerTab("employee")} icon={ClipboardPenLine} label="Tracking" controls={ownerPanelId} />
         </div>
       </div>
