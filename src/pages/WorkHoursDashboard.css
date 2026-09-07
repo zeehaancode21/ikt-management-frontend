@@ -912,3 +912,168 @@
     transition: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ADDITIONAL MOBILE REFINEMENTS
+   Everything below is new — scoped entirely inside max-width media
+   queries, layered on top of the rules above (later rules win at equal
+   specificity), so nothing here changes desktop or tablet appearance.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Small tablets / large phones (≤640px) ────────────────────────────
+   A few of the page's own breathing-room values (not covered by the
+   Tailwind utility classes already added in the .tsx) get tightened
+   here so the "instrument panel" feel doesn't turn into clutter. */
+@media (max-width: 640px) {
+  .whd-page::before {
+    background-size: 24px 24px;
+  }
+
+  .whd-card::before {
+    background-size: 12px 12px;
+  }
+
+  .whd-corner {
+    width: 10px;
+    height: 10px;
+  }
+
+  .whd-title-cell {
+    padding: 7px 10px;
+  }
+
+  .whd-title-cell-key {
+    font-size: 9px;
+  }
+
+  .whd-title-cell-value {
+    font-size: 11.5px;
+  }
+
+  .whd-section-label {
+    gap: 8px;
+  }
+
+  .whd-fav-strip {
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .whd-fav-manage-btn {
+    padding: 5px 9px;
+  }
+}
+
+/* ── Phones (≤480px) ───────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  /* Title block collapses further: 2 cols stays, but pad/gap shrink and
+     long client/project names truncate instead of forcing overflow. */
+  .whd-title-block {
+    gap: 0;
+  }
+  .whd-title-cell {
+    padding: 6px 8px;
+  }
+  .whd-title-cell-value {
+    font-size: 11px;
+  }
+
+  /* Favorite chips: shrink further, keep the row from ever needing
+     horizontal scroll by wrapping and truncating names. */
+  .whd-fav-chip {
+    padding: 4px 9px 4px 7px;
+    font-size: 11px;
+  }
+  .whd-fav-chip-label {
+    max-width: 78px;
+  }
+  .whd-fav-chip--all {
+    font-size: 10px;
+    padding: 4px 9px;
+  }
+  .whd-fav-manage-btn {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+  .whd-fav-chip-remove {
+    width: 15px;
+    height: 15px;
+    top: -5px;
+    right: -5px;
+  }
+  .whd-fav-empty-hint {
+    font-size: 10.5px;
+  }
+
+  /* Stat card visuals: the .tsx already shrinks padding/text via
+     Tailwind classes — these cover the custom-CSS pieces it can't reach. */
+  .whd-card::before {
+    background-size: 10px 10px;
+  }
+  .whd-corner {
+    width: 9px;
+    height: 9px;
+  }
+  .whd-corner.tl, .whd-corner.tr, .whd-corner.bl, .whd-corner.br {
+    top: 5px;
+    bottom: 5px;
+    left: 5px;
+    right: 5px;
+  }
+  .whd-bar-track {
+    height: 4px;
+  }
+
+  /* Tooltip: keep comfortably inside a narrow viewport. */
+  .whd-tooltip {
+    max-width: 80vw;
+    min-width: 0;
+  }
+
+  /* Manage-favorites modal: full-bleed bottom sheet, tighter internal
+     spacing so the search box + rows fit comfortably above the keyboard. */
+  .whd-fav-modal {
+    padding: 16px 16px 14px;
+  }
+  .whd-fav-modal-title {
+    font-size: 0.95rem;
+    margin-right: 30px;
+  }
+  .whd-fav-modal-subtitle {
+    font-size: 11.5px;
+    margin-bottom: 10px;
+  }
+  .whd-fav-search {
+    padding: 7px 10px;
+  }
+  .whd-fav-search input {
+    font-size: 12.5px;
+  }
+  .whd-fav-row {
+    padding: 9px 8px;
+    font-size: 12.5px;
+  }
+  .whd-fav-year-label {
+    font-size: 9.5px;
+    padding: 5px 8px;
+  }
+}
+
+/* ── Very small phones (≤360px) ────────────────────────────────────── */
+@media (max-width: 360px) {
+  .whd-title-block {
+    grid-template-columns: 1fr 1fr;
+  }
+  .whd-title-cell-key {
+    font-size: 8.5px;
+  }
+  .whd-title-cell-value {
+    font-size: 10.5px;
+  }
+  .whd-fav-chip-label {
+    max-width: 58px;
+  }
+  .whd-corner {
+    display: none; /* not enough room for registration marks to read cleanly */
+  }
+}

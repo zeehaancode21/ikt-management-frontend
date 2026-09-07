@@ -249,7 +249,7 @@ const StatCard = ({
       )}
 
       <div
-        className={`whd-card rounded-xl border border-border bg-card p-5 shadow-sm ${
+        className={`whd-card rounded-xl border border-border bg-card p-3 sm:p-5 shadow-sm ${
           emphasis ? "ring-1 ring-primary/30 whd-card-emphasis" : ""
         }`}
         style={{ ["--whd-accent" as string]: accent.hex }}
@@ -269,22 +269,28 @@ const StatCard = ({
 
         <div className="whd-card-body" aria-hidden="true">
           <div className="flex items-center justify-between">
-            <span className="whd-label text-sm text-muted-foreground">{label}</span>
-            <span className={`whd-icon-chip flex h-9 w-9 items-center justify-center rounded-full ${accent.bg} ${accent.fg}`}>
-              <Icon className="h-[18px] w-[18px]" />
+            <span className="whd-label text-[11px] sm:text-sm text-muted-foreground truncate pr-2">
+              {label}
+            </span>
+            <span
+              className={`whd-icon-chip flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full ${accent.bg} ${accent.fg}`}
+            >
+              <Icon className="h-[14px] w-[14px] sm:h-[18px] sm:w-[18px]" />
             </span>
           </div>
 
-          <div className="mt-3 flex items-baseline gap-1.5">
-            <span className="whd-mono whd-figure text-2xl font-semibold tracking-tight">{fmtHours(animated)}</span>
-            <span className="whd-mono text-[11px] text-muted-foreground">hrs</span>
+          <div className="mt-2 sm:mt-3 flex items-baseline gap-1.5">
+            <span className="whd-mono whd-figure text-lg sm:text-2xl font-semibold tracking-tight">
+              {fmtHours(animated)}
+            </span>
+            <span className="whd-mono text-[10px] sm:text-[11px] text-muted-foreground">hrs</span>
           </div>
 
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-2 sm:mt-3 flex items-center gap-2">
             <div className="whd-bar-track flex-1">
               <div className="whd-bar-fill" style={{ width: `${barWidth}%` }} />
             </div>
-            <span className="whd-mono whd-share-label text-[11px] text-muted-foreground w-8 text-right">
+            <span className="whd-mono whd-share-label text-[10px] sm:text-[11px] text-muted-foreground w-7 sm:w-8 text-right">
               {percent.toFixed(0)}%
             </span>
           </div>
@@ -298,12 +304,12 @@ const StatCard = ({
 
 const SkeletonCard = ({ index }: { index: number }) => (
   <div className="whd-card-outer" style={{ ["--whd-delay" as string]: `${index * 60}ms` }}>
-    <div className="whd-skeleton whd-card rounded-xl border border-border bg-card p-5 shadow-sm">
+    <div className="whd-skeleton whd-card rounded-xl border border-border bg-card p-3 sm:p-5 shadow-sm">
       <div className="flex items-center justify-between">
-        <div className="whd-skel-bar h-3.5 w-20" />
-        <div className="whd-skel-bar h-9 w-9 rounded-full" />
+        <div className="whd-skel-bar h-3.5 w-16 sm:w-20" />
+        <div className="whd-skel-bar h-7 w-7 sm:h-9 sm:w-9 rounded-full" />
       </div>
-      <div className="whd-skel-bar mt-4 h-6 w-24" />
+      <div className="whd-skel-bar mt-4 h-5 sm:h-6 w-20 sm:w-24" />
       <div className="whd-skel-bar mt-4 h-1.5 w-full" />
     </div>
   </div>
@@ -599,10 +605,10 @@ const WorkHoursDashboard = () => {
 
       <div className="space-y-4">
         {/* FILTER BAR */}
-        <section className="whd-filter-bar rounded-xl border border-border bg-card p-4 shadow-sm">
+        <section className="whd-filter-bar rounded-xl border border-border bg-card p-3 sm:p-4 shadow-sm">
           <div className="relative flex flex-col gap-3 md:flex-row md:items-end">
             <div className="grid flex-1 gap-3 md:grid-cols-2">
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 min-w-0">
                 <Label id={favClientsLabelId} className="flex items-center gap-1.5 text-xs">
                   <Star className="h-3.5 w-3.5" aria-hidden="true" /> Client (Favorites)
                 </Label>
@@ -647,12 +653,12 @@ const WorkHoursDashboard = () => {
                     title="Manage favorite clients"
                   >
                     <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                    Manage
+                    <span className="hidden xs:inline">Manage</span>
                   </button>
                 </div>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 min-w-0">
                 <Label htmlFor={projectSelectId} className="flex items-center gap-1.5 text-xs">
                   <Filter className="h-3.5 w-3.5" aria-hidden="true" /> Project
                 </Label>
@@ -693,14 +699,15 @@ const WorkHoursDashboard = () => {
               </div>
             </div>
 
-            <div className="whd-dim-divider" aria-hidden="true">
+            <div className="whd-dim-divider hidden md:flex" aria-hidden="true">
               <span className="whd-dim-dot" />
             </div>
 
             <div className="flex gap-2">
               <Button variant="outline" onClick={clearFilters} className="flex-1 md:flex-none">
                 <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
-                Clear Filters
+                <span className="hidden sm:inline">Clear Filters</span>
+                <span className="sm:hidden">Clear</span>
               </Button>
               <Button
                 variant="outline"
@@ -730,12 +737,12 @@ const WorkHoursDashboard = () => {
         ) : loadingSummary ? (
           <div role="status" aria-live="polite" className="space-y-4">
             <span className="sr-only">Loading hours summary…</span>
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-hidden="true">
+            <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4" aria-hidden="true">
               {Array.from({ length: 4 }).map((_, i) => (
                 <SkeletonCard key={i} index={i} />
               ))}
             </section>
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-hidden="true">
+            <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4" aria-hidden="true">
               {Array.from({ length: 4 }).map((_, i) => (
                 <SkeletonCard key={i} index={i + 4} />
               ))}
@@ -744,7 +751,7 @@ const WorkHoursDashboard = () => {
         ) : (
           <>
             {/* TOP-LEVEL: three buckets + grand total */}
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
               <StatCard
                 label="Modeling"
                 value={summary?.modelingHours ?? 0}
@@ -784,12 +791,12 @@ const WorkHoursDashboard = () => {
             {/* INDIVIDUAL COMPONENT / CLASS BREAKDOWN */}
             <section>
               <div className="whd-section-label mb-3">
-                <h2 className="whitespace-nowrap text-sm text-muted-foreground">
+                <h2 className="whitespace-nowrap text-xs sm:text-sm text-muted-foreground">
                   Editing Breakdown (Individual)
                 </h2>
                 <span className="whd-scale-rule" aria-hidden="true" />
               </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                 {DRAWING_COMPONENTS.map(({ key, label, icon, accent }, i) => (
                   <StatCard
                     key={key}
