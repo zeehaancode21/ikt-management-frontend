@@ -1510,7 +1510,7 @@ const EmployeeView = () => {
 
           {/* Filter tabs */}
           {historyViewMode === "filter" && (
-            <div role="tablist" aria-label="Filter leave history" className="inline-flex w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
+            <div role="tablist" aria-label="Filter leave history" className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:inline-flex sm:w-full sm:flex-wrap">
               <TabButton active={historyTab === "pending"} onClick={() => setHistoryTab("pending")} icon={CalendarClock} label="Pending" count={pendingCount} controls={historyPanelId} />
               <TabButton active={historyTab === "all"} onClick={() => setHistoryTab("all")} icon={CalendarRange} label="All" count={allCount} controls={historyPanelId} />
               <TabButton active={historyTab === "approved"} onClick={() => setHistoryTab("approved")} icon={CalendarCheck2} label="Approved" count={approvedCount} controls={historyPanelId} />
@@ -2204,7 +2204,7 @@ const OwnerView = () => {
                     Pending/All actually filters the list below in place —
                     matching the Permission Portal's owner Employee History
                     tab exactly. */}
-                <div role="tablist" aria-label="Filter this employee's leave records" className="inline-flex w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
+                <div role="tablist" aria-label="Filter this employee's leave records" className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:inline-flex sm:w-full sm:flex-wrap">
                   <TabButton active={empHistoryTab === "pending"} onClick={() => setEmpHistoryTab("pending")} icon={CalendarClock} label="Pending" count={empPendingCount} controls={ownerPanelId} />
                   <TabButton active={empHistoryTab === "all"} onClick={() => setEmpHistoryTab("all")} icon={CalendarRange} label="All" count={sortedEmpLeaves.length} controls={ownerPanelId} />
                   <TabButton active={empHistoryTab === "approved"} onClick={() => setEmpHistoryTab("approved")} icon={CalendarCheck2} label="Approved" count={empApprovedTabCount} controls={ownerPanelId} />

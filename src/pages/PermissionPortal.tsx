@@ -1082,7 +1082,7 @@ const EmployeeView = () => {
           </div>
 
           {historyViewMode === "filter" && (
-            <div role="tablist" aria-label="Filter permission history" className="inline-flex w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
+            <div role="tablist" aria-label="Filter permission history" className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:inline-flex sm:w-full sm:flex-wrap">
               <TabButton active={historyTab === "pending"} onClick={() => setHistoryTab("pending")} icon={CalendarClock} label="Pending" count={pendingCount} controls={historyPanelId} />
               <TabButton active={historyTab === "all"} onClick={() => setHistoryTab("all")} icon={CalendarRange} label="All" count={allCount} controls={historyPanelId} />
               <TabButton active={historyTab === "approved"} onClick={() => setHistoryTab("approved")} icon={CalendarCheck2} label="Approved" count={approvedCount} controls={historyPanelId} />
@@ -1657,7 +1657,7 @@ const OwnerView = () => {
                     (empHistoryTab) drives filtering in both "All" and
                     "Filter" view modes, so there's a single implementation
                     to keep consistent instead of two. */}
-                <div role="tablist" aria-label="Filter this employee's permission records" className="inline-flex w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
+                <div role="tablist" aria-label="Filter this employee's permission records" className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:inline-flex sm:w-full sm:flex-wrap">
                   <TabButton active={empHistoryTab === "pending"} onClick={() => setEmpHistoryTab("pending")} icon={CalendarClock} label="Pending" count={empPendingCount} controls={ownerPanelId} />
                   <TabButton active={empHistoryTab === "all"} onClick={() => setEmpHistoryTab("all")} icon={CalendarRange} label="All" count={empMonthFiltered.length} controls={ownerPanelId} />
                   <TabButton active={empHistoryTab === "approved"} onClick={() => setEmpHistoryTab("approved")} icon={CalendarCheck2} label="Approved" count={empApprovedTabCount} controls={ownerPanelId} />

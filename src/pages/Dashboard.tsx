@@ -809,8 +809,12 @@ const styles = `
     .client-grid { grid-template-columns: 1fr; gap: 10px; }
     .client-card-name { padding-right: 0; margin-bottom: 24px; }
     .client-card-actions { top: auto; bottom: 14px; left: 22px; right: auto; }
-    .project-card { flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px 16px; }
-    .project-meta { width: 100%; justify-content: space-between; }
+    .project-card { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 16px; }
+    .project-info { width: 100%; min-width: 0; }
+    .project-name { white-space: normal; overflow-wrap: break-word; word-break: break-word; }
+    .project-meta { width: 100%; justify-content: flex-start; flex-wrap: wrap; row-gap: 8px; }
+    .project-meta .project-job { order: -1; flex-basis: 100%; }
+    .project-arrow { margin-left: auto; }
     .section-actions { justify-content: stretch; }
     .section-actions .btn { flex: 1 1 auto; justify-content: center; }
     .form-row { grid-template-columns: 1fr !important; gap: 12px; }
@@ -1859,7 +1863,7 @@ export default function Dashboard() {
                         onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedProject(p); setActiveTab("main"); setEditingProjectMode(false); } }}
                         whileTap={{ scale: 0.99 }}
                       >
-                        <div>
+                        <div className="project-info">
                           <div className="project-name" style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             {p.projectName}
                             <CopyButton text={p.projectName} label="project name" />
