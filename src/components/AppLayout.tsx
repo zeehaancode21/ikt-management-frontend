@@ -5,7 +5,6 @@ import HolidayHover from "@/pages/HolidayHover";
 import { useAuth } from "@/context/AuthContext";
 import NotificationBell from "./NotificationBell";
 import { ThemeToggle } from "./ThemeToggle";
-import { HardReloadButton } from "./HardReloadButton";
 import { FloatingCalculator } from "./FloatingCalculator";
 import { useState, useEffect } from "react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -139,7 +138,6 @@ export const AppLayout = () => {
 
             {/* ── DARK / LIGHT TOGGLE ── */}
             <FloatingCalculator />
-            <HardReloadButton />
             <ThemeToggle />
           </div>
         </header>
@@ -258,18 +256,12 @@ export const AppLayout = () => {
           font-weight: 600;
           color: hsl(var(--foreground));
           margin: 0;
-          min-width: 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          flex: 1 1 auto;
         }
 
         .header-actions {
           display: flex;
           align-items: center;
           gap: 16px;
-          flex-shrink: 0;
         }
 
         /* Page Main */
@@ -343,7 +335,7 @@ export const AppLayout = () => {
 
           .header-title {
             font-size: 13px;
-            margin-left: 56px;
+            margin-left: 40px;
           }
 
           .header-actions {
@@ -387,7 +379,7 @@ export const AppLayout = () => {
         @media (max-width: 480px) {
           .header-title {
             font-size: 12px;
-            margin-left: 56px;
+            margin-left: 35px;
           }
 
           .page-content {

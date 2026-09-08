@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { format } from "date-fns";
 import api, { getErrorMessage } from "@/lib/api";
 import { groupByYear } from "@/lib/yearGrouping";
@@ -666,17 +666,6 @@ const animationStyles = `
   .date-step-input {
     position: relative;
     padding-right: 44px !important;
-    -webkit-min-logical-width: 100% !important;
-    box-sizing: border-box !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-  }
-
-  .owner-date-input {
-    -webkit-min-logical-width: 100% !important;
-    box-sizing: border-box !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
   }
 
   .date-step-input::-webkit-calendar-picker-indicator {
@@ -694,14 +683,6 @@ const animationStyles = `
   .date-step-input::-webkit-calendar-picker-indicator:hover {
     opacity: 1;
     background-color: rgba(99, 102, 241, 0.08);
-  }
-
-  @media (max-width: 480px) {
-    .date-step-input {
-      font-size: 15px;
-      padding-left: 12px;
-      padding-right: 40px !important;
-    }
   }
 
   /* DARK MODE - Make calendar icon white for ALL date inputs */
@@ -1109,11 +1090,6 @@ const EmployeeView = () => {
 
   const [draftDate, setDraftDate] = useState(today);
 
-  // Ref to the submit/edit form section so we can scroll it into view as
-  // soon as a date is confirmed — this matters most on mobile where the
-  // step change would otherwise happen off-screen with no visible feedback.
-  const formSectionRef = useRef<HTMLElement | null>(null);
-
   const totalHours = entries.reduce((s, e) => s + (parseFloat(e.time) || 0), 0);
   const progressPercent = Math.min(100, (totalHours / 8) * 100);
   const hasAnyData = entries.some(
@@ -1313,12 +1289,6 @@ const EmployeeView = () => {
 
     setDate(newDate);
     setHasInteracted(true);
-
-    // Wait a frame so Step 2 (conditionally mounted on hasDate) exists in
-    // the DOM before we try to scroll to it.
-    requestAnimationFrame(() => {
-      formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
   };
 
   const handleDateChange = (newDate: string) => {
@@ -1478,7 +1448,7 @@ const EmployeeView = () => {
               id="date-step"
               type="date"
               autoFocus
-              className="date-step-input h-12 text-base font-medium border-slate-200 dark:border-slate-700 focus-visible:border-indigo-400 dark:focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-100 dark:focus-visible:ring-indigo-900/40 w-full sm:max-w-xs min-w-0"
+              className="date-step-input h-12 text-base font-medium border-slate-200 dark:border-slate-700 focus-visible:border-indigo-400 dark:focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-100 dark:focus-visible:ring-indigo-900/40 w-full max-w-xs"
               value={draftDate}
               onChange={(e) => setDraftDate(e.target.value)}
               max={today}
@@ -1487,7 +1457,7 @@ const EmployeeView = () => {
             {draftDate && (
               <div
                 role="status"
-                className={`mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs animate-fade-in-up w-full sm:max-w-xs ${existingReportForDraft
+                className={`mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs animate-fade-in-up max-w-xs ${existingReportForDraft
                     ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
                     : "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
                   }`}
@@ -1526,8 +1496,7 @@ const EmployeeView = () => {
         {/* ══ STEP 2 — Submit / Edit Form ══ */}
         {hasDate && (
           <section
-            ref={formSectionRef}
-            className={`rounded-2xl border bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-4 sm:p-5 shadow-sm card-hover transition-colors duration-300 animate-step-in scroll-mt-20 ${isEditMode
+            className={`rounded-2xl border bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-4 sm:p-5 shadow-sm card-hover transition-colors duration-300 animate-step-in ${isEditMode
                 ? "border-amber-300 dark:border-amber-700/80 ring-1 ring-amber-200/60 dark:ring-amber-800/40"
                 : "border-slate-200/80 dark:border-slate-700/60"
               }`}
