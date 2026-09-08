@@ -666,15 +666,6 @@ const animationStyles = `
   .date-step-input {
     position: relative;
     padding-right: 44px !important;
-    /* The shared shadcn <Input> component ships with `display: flex` in its
-       base className. Desktop/Android browsers don't mind, but iOS Safari
-       lays out the native date input's internal day/month/year segments as
-       flex items with an implicit `min-width: auto`, so they refuse to
-       shrink below their content size and blow out of the box no matter
-       what width/max-width we set. Forcing `display: block` here (iOS's own
-       documented fix for this exact bug) restores normal sizing, then the
-       min-width/width rules below make sure it actually fills its
-       container instead of falling back to a UA default. */
     display: block !important;
     -webkit-min-logical-width: 0 !important;
     min-width: 0 !important;
