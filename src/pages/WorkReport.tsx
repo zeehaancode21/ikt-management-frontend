@@ -682,6 +682,32 @@ const animationStyles = `
     box-sizing: border-box !important;
   }
 
+  /* On narrow phones the native day/month/year segments plus the 16px
+     base font size still need more horizontal room than the box has to
+     give, so shrink the font, height, and icon on small screens instead
+     of letting the field feel cramped or clipped. */
+  @media (max-width: 400px) {
+    .date-step-input {
+      height: 2.75rem !important;
+      font-size: 0.9rem !important;
+      padding-right: 34px !important;
+      padding-left: 10px !important;
+    }
+    .date-step-input::-webkit-calendar-picker-indicator {
+      right: 8px;
+      width: 16px;
+      height: 16px;
+      padding: 3px;
+    }
+  }
+
+  @media (max-width: 340px) {
+    .date-step-input {
+      font-size: 0.82rem !important;
+      padding-right: 30px !important;
+    }
+  }
+
   .date-step-input::-webkit-calendar-picker-indicator {
     position: absolute;
     right: 14px;
@@ -1462,7 +1488,7 @@ const EmployeeView = () => {
               id="date-step"
               type="date"
               autoFocus
-              className="date-step-input h-12 text-base font-medium border-slate-200 dark:border-slate-700 focus-visible:border-indigo-400 dark:focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-100 dark:focus-visible:ring-indigo-900/40 w-full max-w-xs"
+              className="date-step-input h-12 text-base font-medium border-slate-200 dark:border-slate-700 focus-visible:border-indigo-400 dark:focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-100 dark:focus-visible:ring-indigo-900/40 w-full max-w-[min(20rem,calc(100vw-4rem))]"
               value={draftDate}
               onChange={(e) => setDraftDate(e.target.value)}
               max={today}
@@ -1471,7 +1497,7 @@ const EmployeeView = () => {
             {draftDate && (
               <div
                 role="status"
-                className={`mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs animate-fade-in-up max-w-xs ${existingReportForDraft
+                className={`mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs animate-fade-in-up max-w-[min(20rem,calc(100vw-4rem))] ${existingReportForDraft
                     ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
                     : "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
                   }`}
