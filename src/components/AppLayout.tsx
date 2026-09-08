@@ -258,12 +258,18 @@ export const AppLayout = () => {
           font-weight: 600;
           color: hsl(var(--foreground));
           margin: 0;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          flex: 1 1 auto;
         }
 
         .header-actions {
           display: flex;
           align-items: center;
           gap: 16px;
+          flex-shrink: 0;
         }
 
         /* Page Main */
@@ -337,7 +343,7 @@ export const AppLayout = () => {
 
           .header-title {
             font-size: 13px;
-            margin-left: 40px;
+            margin-left: 56px;
           }
 
           .header-actions {
@@ -381,7 +387,7 @@ export const AppLayout = () => {
         @media (max-width: 480px) {
           .header-title {
             font-size: 12px;
-            margin-left: 35px;
+            margin-left: 56px;
           }
 
           .page-content {

@@ -666,6 +666,17 @@ const animationStyles = `
   .date-step-input {
     position: relative;
     padding-right: 44px !important;
+    -webkit-min-logical-width: 100% !important;
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .owner-date-input {
+    -webkit-min-logical-width: 100% !important;
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
   }
 
   .date-step-input::-webkit-calendar-picker-indicator {
