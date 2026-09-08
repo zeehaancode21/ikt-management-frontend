@@ -666,46 +666,53 @@ const animationStyles = `
   .date-step-input {
     position: relative;
     padding-right: 44px !important;
-    /* The shared shadcn Input component ships with display:flex in its
-       base className. Desktop/Android browsers don't mind, but iOS Safari
-       lays out the native date input's internal day/month/year segments as
-       flex items with an implicit min-width:auto, so they refuse to
-       shrink below their content size and blow out of the box no matter
-       what width/max-width we set. Forcing display:block here (iOS's own
-       documented fix for this exact bug) restores normal sizing, then the
-       min-width/width rules below make sure it actually fills its
-       container instead of falling back to a UA default. */
     display: block !important;
     -webkit-min-logical-width: 0 !important;
     min-width: 0 !important;
     width: 100% !important;
     box-sizing: border-box !important;
+    
+    /* iOS Safari specific fixes for datetime segments */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    
+    /* Prevent iOS from changing input size */
+    -webkit-user-zoom: 1 !important;
+    
+    /* Fix for iOS datetime-edit overflow */
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    
+    /* Ensure proper line-height */
+    line-height: 1.5 !important;
+    
+    /* Reset letter-spacing that might affect segments */
+    letter-spacing: normal !important;
   }
 
-  /* On narrow phones the native day/month/year segments plus the 16px
-     base font size still need more horizontal room than the box has to
-     give, so shrink the font, height, and icon on small screens instead
-     of letting the field feel cramped or clipped. */
-  @media (max-width: 400px) {
-    .date-step-input {
-      height: 2.75rem !important;
-      font-size: 0.9rem !important;
-      padding-right: 34px !important;
-      padding-left: 10px !important;
-    }
-    .date-step-input::-webkit-calendar-picker-indicator {
-      right: 8px;
-      width: 16px;
-      height: 16px;
-      padding: 3px;
-    }
+  /* iOS-specific datetime segment styling */
+  .date-step-input::-webkit-datetime-edit {
+    padding: 2px 4px !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", monospace !important;
   }
 
-  @media (max-width: 340px) {
-    .date-step-input {
-      font-size: 0.82rem !important;
-      padding-right: 30px !important;
-    }
+  .date-step-input::-webkit-datetime-edit-fields-wrapper {
+    padding: 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+  }
+
+  .date-step-input::-webkit-datetime-edit-year-field,
+  .date-step-input::-webkit-datetime-edit-month-field,
+  .date-step-input::-webkit-datetime-edit-day-field {
+    min-width: auto !important;
+    width: auto !important;
+    padding: 0 2px !important;
+  }
+
+  .date-step-input::-webkit-datetime-edit-text {
+    padding: 0 1px !important;
   }
 
   .date-step-input::-webkit-calendar-picker-indicator {
@@ -750,6 +757,54 @@ const animationStyles = `
   .dark .date-step-input::-webkit-datetime-edit-fields-wrapper,
   .dark .owner-date-input::-webkit-datetime-edit-fields-wrapper {
     color: #e2e8f0 !important;
+  }
+
+  /* On narrow phones the native day/month/year segments plus the 16px
+     base font size still need more horizontal room than the box has to
+     give, so shrink the font, height, and icon on small screens instead
+     of letting the field feel cramped or clipped. */
+  @media (max-width: 400px) {
+    .date-step-input {
+      height: 2.875rem !important;
+      font-size: 0.95rem !important;
+      padding-right: 36px !important;
+      padding-left: 12px !important;
+    }
+    
+    .date-step-input::-webkit-datetime-edit {
+      padding: 1px 3px !important;
+    }
+    
+    .date-step-input::-webkit-calendar-picker-indicator {
+      right: 10px;
+      width: 18px;
+      height: 18px;
+      padding: 2px;
+    }
+  }
+
+  @media (max-width: 340px) {
+    .date-step-input {
+      font-size: 0.875rem !important;
+      height: 2.75rem !important;
+      padding-right: 32px !important;
+      padding-left: 10px !important;
+    }
+    
+    .date-step-input::-webkit-calendar-picker-indicator {
+      right: 6px;
+      width: 16px;
+      height: 16px;
+      padding: 2px;
+    }
+  }
+
+  /* iOS-only specific fixes using @supports */
+  @supports (-webkit-touch-callout: none) {
+    .date-step-input {
+      max-width: 100vw !important;
+      width: calc(100% - 2px) !important;
+    }
   }
 
   /* Gradient "clip" text */
