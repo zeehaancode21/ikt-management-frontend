@@ -890,11 +890,19 @@ const DocumentManager: React.FC = () => {
                         <div className="flex items-center gap-3">
                           <File className="w-5 h-5 flex-shrink-0 text-blue-400 dark:text-blue-500" aria-hidden="true" />
                           <div className="min-w-0">
-                            <p className={`text-sm font-medium truncate max-w-[200px] ${TEXT_HEADING}`}>
+                            <p
+                              className={`text-sm font-medium truncate max-w-[200px] ${TEXT_HEADING}`}
+                              title={doc.originalFileName || doc.fileName}
+                            >
                               {doc.originalFileName || doc.fileName}
                             </p>
                             {doc.description && (
-                              <p className={`text-xs truncate max-w-[200px] ${TEXT_FAINT}`}>{doc.description}</p>
+                              <p
+                                className={`text-xs truncate max-w-[200px] ${TEXT_FAINT}`}
+                                title={doc.description}
+                              >
+                                {doc.description}
+                              </p>
                             )}
                             {/* Compact metadata shown only on very small screens where columns are hidden */}
                             <p className={`text-xs mt-0.5 sm:hidden ${TEXT_FAINT}`}>

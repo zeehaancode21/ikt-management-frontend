@@ -252,7 +252,10 @@ export default function MyDocuments() {
                     )}
                     <div className="min-w-0">
                       <p className="font-medium text-sm">{DOC_TYPE_LABELS[docType]}</p>
-                      <p className="text-xs text-muted-foreground truncate">
+                      <p
+                        className="text-xs text-muted-foreground truncate"
+                        title={isUploaded ? item?.fileName : undefined}
+                      >
                         {isUploaded ? `Uploaded: ${item?.fileName}` : "Missing — please upload"}
                       </p>
                     </div>
