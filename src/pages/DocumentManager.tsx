@@ -887,30 +887,30 @@ const DocumentManager: React.FC = () => {
                       }`}
                     >
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <File className="w-5 h-5 flex-shrink-0 text-blue-400 dark:text-blue-500" aria-hidden="true" />
-                          <div className="min-w-0">
-                            <p
-                              className={`text-sm font-medium truncate max-w-[200px] ${TEXT_HEADING}`}
-                              title={doc.originalFileName || doc.fileName}
-                            >
-                              {doc.originalFileName || doc.fileName}
-                            </p>
-                            {doc.description && (
-                              <p
-                                className={`text-xs truncate max-w-[200px] ${TEXT_FAINT}`}
-                                title={doc.description}
-                              >
-                                {doc.description}
-                              </p>
-                            )}
-                            {/* Compact metadata shown only on very small screens where columns are hidden */}
-                            <p className={`text-xs mt-0.5 sm:hidden ${TEXT_FAINT}`}>
-                              {formatSize(doc.fileSize)} · {formatDate(doc.uploadedAt)}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
+  <div className="flex items-center gap-3">
+    <File className="w-5 h-5 flex-shrink-0 text-blue-400 dark:text-blue-500" aria-hidden="true" />
+    <div className="min-w-0">
+      <p
+        className={`text-sm font-medium break-words whitespace-normal ${TEXT_HEADING}`}
+        title={doc.originalFileName || doc.fileName}
+      >
+        {doc.originalFileName || doc.fileName}
+      </p>
+      {doc.description && (
+        <p
+          className={`text-xs break-words whitespace-normal ${TEXT_FAINT}`}
+          title={doc.description}
+        >
+          {doc.description}
+        </p>
+      )}
+      {/* Compact metadata shown only on very small screens where columns are hidden */}
+      <p className={`text-xs mt-0.5 sm:hidden ${TEXT_FAINT}`}>
+        {formatSize(doc.fileSize)} · {formatDate(doc.uploadedAt)}
+      </p>
+    </div>
+  </div>
+</td>
                       <td className="px-4 py-3 hidden sm:table-cell">
                         <span className="text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 px-2 py-0.5 rounded font-mono">
                           {doc.fileType?.split('/')[1]?.toUpperCase() || doc.fileType || '—'}
