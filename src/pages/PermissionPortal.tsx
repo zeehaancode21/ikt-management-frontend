@@ -104,10 +104,10 @@ interface EmployeeQuotaSummary {
 
 const DEFAULT_QUOTA: Quota = {
   maxHoursPerDay: 2,
-  maxHoursPerMonth: 4,
+  maxHoursPerMonth: 2,
   maxRequestsPerMonth: 12,
   hoursUsedThisMonth: 0,
-  hoursRemainingThisMonth: 4,
+  hoursRemainingThisMonth: 2,
   requestsUsedThisMonth: 0,
   requestsRemainingThisMonth: 12,
   approvedHoursThisMonth: 0,
