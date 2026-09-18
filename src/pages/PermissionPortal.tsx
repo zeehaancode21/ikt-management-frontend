@@ -102,6 +102,28 @@ interface EmployeeQuotaSummary {
 
 /* ─── Constants ─────────────────────────────────────────── */
 
+// ── FRONTEND QUOTA OVERRIDE ───────────────────────────────────────────
+// Forces the monthly free-permission allowance to 2 hours on the client,
+// regardless of what the backend returns. This keeps the UI consistent
+// with the 2h business rule even before the backend config is updated.
+// Remove this block (and the normalizeQuota calls below) once the backend
+// itself returns maxHoursPerMonth: 2.
+const HARDCODED_MAX_HOURS_PER_MONTH = 2;
+
+const normalizeQuota = (q: Quota | null | undefined): Quota => {
+  if (!q) return DEFAULT_QUOTA;
+  const max = HARDCODED_MAX_HOURS_PER_MONTH;
+  const used = Math.max(0, Math.min(q.hoursUsedThisMonth ?? 0, max));
+  const approved = Math.max(0, Math.min(q.approvedHoursThisMonth ?? 0, max));
+  return {
+    ...q,
+    maxHoursPerMonth: max,
+    hoursUsedThisMonth: used,
+    hoursRemainingThisMonth: Math.max(max - used, 0),
+    approvedHoursThisMonth: approved,
+  };
+};
+
 const DEFAULT_QUOTA: Quota = {
   maxHoursPerDay: 2,
   maxHoursPerMonth: 2,
@@ -706,7 +728,7 @@ const EmployeeView = () => {
         params: { employeeName: name },
         headers: { "Cache-Control": "no-cache" },
       });
-      setQuota(data);
+      setQuota(normalizeQuota(data));
     } catch {
       // Non-fatal — keep showing whatever quota we already have.
     }
@@ -1431,7 +1453,7 @@ const OwnerView = () => {
       const { data } = await api.get<EmployeeQuotaSummary[]>("/permissions/summary", {
         headers: { "Cache-Control": "no-cache" },
       });
-      setSummaries(data);
+      setSummaries(data.map((s) => ({ ...s, quota: normalizeQuota(s.quota) })));
     } catch (err) {
       setSummaryError(getErrorMessage(err));
     } finally {
@@ -1459,7 +1481,7 @@ const OwnerView = () => {
         api.get<Quota>("/permissions/quota", { params: { employeeName: empName } }).catch(() => null),
       ]);
       setEmpPermissions(data);
-      setEmpQuota(quotaRes ? quotaRes.data : DEFAULT_QUOTA);
+      setEmpQuota(quotaRes ? normalizeQuota(quotaRes.data) : DEFAULT_QUOTA);
     } catch (err) {
       setEmpError(getErrorMessage(err));
     } finally {
