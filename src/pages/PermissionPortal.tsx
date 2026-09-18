@@ -81,7 +81,7 @@ interface Quota {
   requestsUsedThisMonth: number;
   requestsRemainingThisMonth: number;
   // Cumulative APPROVED permission hours this month — the exact figure the
-  // 4h "Half-Day Permission" / 9h "Full-Day Permission" thresholds are
+  // 2h "Half-Day Permission" / 9h "Full-Day Permission" thresholds are
   // measured against. Only approved requests count.
   approvedHoursThisMonth: number;
   // Approved hours logged past maxHoursPerMonth this month (0 if under the
