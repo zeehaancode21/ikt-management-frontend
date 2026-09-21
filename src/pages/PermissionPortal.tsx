@@ -69,6 +69,7 @@ interface Permission {
   pendingPermissionType?: string | null;
   pendingReason?: string | null;
   rejectionReason?: string | null;
+  changeRejectionReason?: string | null;
 }
 
 interface Quota {
