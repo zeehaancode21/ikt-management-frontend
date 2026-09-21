@@ -26,6 +26,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Spinner, FullSpinner } from "@/components/Spinner";
 import { StatusBadge } from "@/components/StatusBadge";
 import { UsageAnalyticsChart } from "@/components/UsageAnalyticsChart";
+import { RejectReasonModal } from "@/components/RejectReasonModal";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +68,7 @@ interface Permission {
   pendingHours?: number | null;
   pendingPermissionType?: string | null;
   pendingReason?: string | null;
+  rejectionReason?: string | null;
 }
 
 interface Quota {
@@ -515,9 +517,19 @@ const PermissionCard = ({
             {fmtTime(p.startTime)} – {fmtTime(p.endTime)}
           </span>
         </div>
-        {p.reason && !isReapproval && (
+                {p.reason && !isReapproval && (
           <p className="pl-5 text-xs leading-relaxed text-muted-foreground line-clamp-2" title={p.reason}>
             {p.reason}
+          </p>
+        )}
+        {p.status?.toUpperCase() === "REJECTED" && p.rejectionReason && (
+          <p className="pl-5 text-xs leading-relaxed text-red-600 dark:text-red-400">
+            <span className="font-semibold">Rejection reason:</span> {p.rejectionReason}
+          </p>
+        )}
+        {p.status?.toUpperCase() === "APPROVED" && p.changeRejectionReason && (
+          <p className="pl-5 text-xs leading-relaxed text-red-600 dark:text-red-400">
+            <span className="font-semibold">Change request rejected:</span> {p.changeRejectionReason}
           </p>
         )}
       </div>
@@ -1357,8 +1369,8 @@ const OwnerView = () => {
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actingId, setActingId] = useState<string | number | null>(null);
-
+    const [actingId, setActingId] = useState<string | number | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<Permission | null>(null);
   const [employeeNames, setEmployeeNames] = useState<string[]>([]);
   const [namesLoading, setNamesLoading] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string>("");
@@ -1542,22 +1554,31 @@ const OwnerView = () => {
     loadEmpMonthCounts(selectedEmployee, empMonth);
   }, [selectedEmployee, empMonth, loadEmpMonthCounts]);
 
-  const act = async (id: string | number, action: "APPROVED" | "REJECTED") => {
+    const act = async (id: string | number, action: "APPROVED" | "REJECTED", reason?: string): Promise<boolean> => {
     setActingId(id);
     try {
-      await api.put(`/permissions/${id}/${action}`);
+      const trimmed = reason?.trim();
+      await api.put(`/permissions/${id}/${action}`, action === "REJECTED" && trimmed ? { reason: trimmed } : undefined);
       toast({
         title: action === "APPROVED" ? "Permission approved" : "Permission rejected",
         description: action === "APPROVED" ? "The permission request has been approved successfully." : "The permission request has been rejected.",
         className: action === "APPROVED" ? "border-green-500 bg-green-500 text-white" : "border-red-500 bg-red-500 text-white",
       });
-      await load();
+            await load();
       if (selectedEmployee) await loadEmpPermissions(selectedEmployee);
+      return true;
     } catch (err) {
       toast({ title: "Action failed", description: getErrorMessage(err) || "An unexpected error occurred.", variant: "destructive" });
+      return false;
     } finally {
       setActingId(null);
     }
+  };
+
+  const confirmReject = async (reason: string) => {
+    if (!rejectTarget) return;
+    const ok = await act(rejectTarget.id, "REJECTED", reason);
+    if (ok) setRejectTarget(null);
   };
 
   // In "all" view mode every filter is dropped, so the month restriction
@@ -1628,7 +1649,7 @@ const OwnerView = () => {
             ) : (
               <div className="space-y-3">
                 {permissions.map((p) => (
-                  <PermissionCard key={p.id} p={p} showEmployee onApprove={(perm) => act(perm.id, "APPROVED")} onReject={(perm) => act(perm.id, "REJECTED")} actingId={actingId} />
+                  <PermissionCard key={p.id} p={p} showEmployee onApprove={(perm) => act(perm.id, "APPROVED")} onReject={(perm) => setRejectTarget(perm)} actingId={actingId} />
                 ))}
               </div>
             )}
@@ -1769,7 +1790,7 @@ const OwnerView = () => {
                 ) : (
                   <div className="space-y-3">
                     {filteredEmpPermissions.map((p) => (
-                      <PermissionCard key={p.id} p={p} onApprove={(perm) => act(perm.id, "APPROVED")} onReject={(perm) => act(perm.id, "REJECTED")} actingId={actingId} />
+                      <PermissionCard key={p.id} p={p} onApprove={(perm) => act(perm.id, "APPROVED")} onReject={(perm) => setRejectTarget(perm)} actingId={actingId} />
                     ))}
                   </div>
                 )}
@@ -1778,6 +1799,16 @@ const OwnerView = () => {
           </div>
         )}
       </div>
+          {rejectTarget && (
+        <RejectReasonModal
+          title={rejectTarget.status?.toUpperCase() === "REAPPROVAL_PENDING" ? "Reject change request" : "Reject permission request"}
+          description={`${rejectTarget.employeeName || "Employee"} · ${fmtDate(rejectTarget.date)}`}
+          confirmLabel={rejectTarget.status?.toUpperCase() === "REAPPROVAL_PENDING" ? "Reject change" : "Reject"}
+          busy={actingId === rejectTarget.id}
+          onCancel={() => setRejectTarget(null)}
+          onConfirm={confirmReject}
+        />
+      )}
     </section>
   );
 };
