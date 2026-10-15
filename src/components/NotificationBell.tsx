@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from "react";
+import { SHORTCUT_EVENT } from "@/lib/shortcuts";
 import { Bell, Megaphone, MessageCircle, Check, Loader2 } from "lucide-react";
 import api from "@/lib/api";
+import { AnimatedIconBase } from "@/components/icons/AnimatedIconbase";
 
 interface Notification {
   id: number;
@@ -10,11 +12,32 @@ interface Notification {
   createdAt: string;
 }
 
+// Watches document.documentElement's "dark" class and re-renders when it
+// changes, so the animated alert icon can be told to render as solid white
+// in dark mode — same theme-compatibility logic used throughout the RFI
+// module (see RfiStatusActions.tsx / RfiTimeline.tsx / RfiForm.tsx).
+const useIsDarkMode = () => {
+  const [isDark, setIsDark] = useState(
+    () => typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+  );
+
+  useEffect(() => {
+    const el = document.documentElement;
+    const observer = new MutationObserver(() => setIsDark(el.classList.contains("dark")));
+    observer.observe(el, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+
+  return isDark;
+};
+
 export default function NotificationBell() {
+  const isDark = useIsDarkMode();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
   const [markingAllRead, setMarkingAllRead] = useState(false); // NEW: blocks dropdown during bulk mark-all
   const [markingId, setMarkingId] = useState<number | null>(null); // NEW: tracks which single item is in flight
+  const [isBellHovered, setIsBellHovered] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   // Only fetch UNREAD notifications
@@ -27,44 +50,9 @@ export default function NotificationBell() {
     }
   };
 
+  // No polling: announcements are fetched once when the page loads / reloads.
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-
-    const isTabVisible = () => document.visibilityState === "visible";
-
-    const startPolling = () => {
-      if (interval) return;
-      interval = setInterval(fetchNotifications, 30000);
-    };
-
-    const stopPolling = () => {
-      if (interval) {
-        clearInterval(interval);
-        interval = null;
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (isTabVisible()) {
-        // Catch up immediately, then resume polling.
-        fetchNotifications();
-        startPolling();
-      } else {
-        stopPolling();
-      }
-    };
-
-    // Initial fetch on mount, and start polling only if we're visible now.
     fetchNotifications();
-    if (isTabVisible()) {
-      startPolling();
-    }
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      stopPolling();
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
   }, []);
 
   useEffect(() => {
@@ -82,6 +70,15 @@ export default function NotificationBell() {
     if (markingAllRead) return;
     setOpen((v) => !v);
   };
+
+  // Keyboard shortcut (Ctrl+A / Ctrl+Alt+A): AppLayout's useHeaderShortcuts sends this event.
+  const handleOpenRef = useRef(handleOpen);
+  handleOpenRef.current = handleOpen;
+  useEffect(() => {
+    const onShortcut = () => handleOpenRef.current();
+    window.addEventListener(SHORTCUT_EVENT.announcements, onShortcut);
+    return () => window.removeEventListener(SHORTCUT_EVENT.announcements, onShortcut);
+  }, []);
 
   /** Mark a single notification as read and remove it from the list */
   const handleMarkRead = async (id: number, e: React.MouseEvent) => {
@@ -134,10 +131,23 @@ export default function NotificationBell() {
     <div className="relative" ref={ref}>
       <button
         onClick={handleOpen}
-        className="relative p-2 rounded-full hover:bg-muted transition-colors"
+        className="header-icon-btn relative"
         aria-label="Notifications"
+        aria-keyshortcuts="Control+A Control+Alt+A"
+        title="Announcements (Ctrl+A)"
+        onMouseEnter={() => setIsBellHovered(true)}
+        onMouseLeave={() => setIsBellHovered(false)}
       >
-        <Bell className="h-5 w-5" />
+        <AnimatedIconBase
+          pngSrc="/icons/alert.png"
+          animatedSrc="/icons/alert.gif"
+          alt="Notifications"
+          size="xl"
+          triggerParentHover
+          isParentHovered={isBellHovered}
+          forceWhite={isDark}
+          whiteBackground="auto"
+        />
         {unreadCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white animate-pulse">
             {unreadCount > 9 ? "9+" : unreadCount}

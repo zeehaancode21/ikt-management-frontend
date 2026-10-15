@@ -8,13 +8,11 @@ import {
   type ErrorInfo,
 } from 'react';
 import { Calculator, X, GripHorizontal, Delete, Download, Laptop } from 'lucide-react';
+import { AnimatedIconBase } from '@/components/icons/AnimatedIconbase';
 
 /* ── Error boundary ─────────────────────────────── */
 
-class CalculatorErrorBoundary extends Component<
-  { children: ReactNode },
-  { hasError: boolean }
-> {
+class CalculatorErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   constructor(props: { children: ReactNode }) {
     super(props);
     this.state = { hasError: false };
@@ -264,6 +262,8 @@ export function FloatingCalculator() {
     };
   });
   const [showDownloadPopup, setShowDownloadPopup] = useState(false);
+  const [isFabHovered, setIsFabHovered] = useState(false);
+  const isDark = useTheme();
 
   const panelRef  = useRef<HTMLDivElement>(null);
   const dragState = useRef({ dragging: false, dx: 0, dy: 0 });
@@ -723,6 +723,27 @@ export function FloatingCalculator() {
   const fiExprStr = fiAccum !== null && fiOp
     ? `${fmtFI(fiAccum)} ${OP_SYM[fiOp] ?? fiOp}` : '';
 
+  /* ── Ctrl + C shortcut: toggles the calculator open / closed ──
+     Normal copy is left untouched when text is selected or when the
+     focus is inside an input / textarea / editable area.            */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      if (e.key.toLowerCase() !== 'c') return;
+
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable) return;
+      const sel = window.getSelection?.();
+      if (sel && sel.toString().length > 0) return; // let normal copy happen
+
+      e.preventDefault();
+      setIsOpen(o => !o);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   /* ════════════════════════════════════════════════
      RENDER
   ════════════════════════════════════════════════ */
@@ -730,9 +751,23 @@ export function FloatingCalculator() {
     <CalculatorErrorBoundary>
       <>
         {/* FAB toggle button */}
-        <button className="fc-fab" onClick={() => setIsOpen(o => !o)}
-          title="Open Calculator" aria-label="Toggle calculator">
-          <Calculator size={20} strokeWidth={2.2} />
+        <button
+          className={`fc-fab header-icon-btn ${isDark ? 'fc-fab-dark' : ''}`}
+          onClick={() => setIsOpen(o => !o)}
+          onMouseEnter={() => setIsFabHovered(true)}
+          onMouseLeave={() => setIsFabHovered(false)}
+          title="Open Calculator (Ctrl + C)" aria-label="Toggle calculator"
+        >
+          <AnimatedIconBase
+            pngSrc="/icons/calculator.png"
+            animatedSrc="/icons/calculator.gif"
+            alt="Calculator"
+            size="xl"
+            triggerParentHover
+            isParentHovered={isFabHovered}
+            forceWhite={isDark}
+            whiteBackground="auto"
+          />
         </button>
 
         {isOpen && (
@@ -933,15 +968,19 @@ export function FloatingCalculator() {
 ════════════════════════════════════════════════ */
 
 const FAB_CSS = `
-.fc-fab {
+.fc-fab.header-icon-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 44px; height: 44px; border-radius: 14px;
+  width: 40px; height: 40px; border-radius: 10px;
+  cursor: pointer;
+  transition: all .25s cubic-bezier(.34,1.56,.64,1); flex-shrink: 0;
+  position: relative;
+}
+.fc-fab.header-icon-btn.fc-fab-dark {
   border: 1px solid rgba(255,255,255,0.06);
   background: linear-gradient(145deg, #2c2c2e, #1c1c1e);
-  color: #fff; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-  transition: all .25s cubic-bezier(.34,1.56,.64,1); flex-shrink: 0;
+  color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
-.fc-fab:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(10,132,255,.2); border-color: rgba(10,132,255,.3); }
+.fc-fab.header-icon-btn.fc-fab-dark:hover { background: linear-gradient(145deg, #2c2c2e, #1c1c1e); transform: scale(1.08); box-shadow: 0 6px 28px rgba(10,132,255,.2); border-color: rgba(10,132,255,.3); }
 `;
 
 const PANEL_CSS = `

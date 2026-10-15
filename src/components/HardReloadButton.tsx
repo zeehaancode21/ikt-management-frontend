@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { RotateCw } from "lucide-react";
 
-async function hardReload() {
+export async function hardReload() {
   try {
     if ("caches" in window) {
       const keys = await caches.keys();

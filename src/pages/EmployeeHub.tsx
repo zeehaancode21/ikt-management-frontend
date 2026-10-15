@@ -6,9 +6,9 @@
 // "Employees / Vault" tab pattern (see AdminConsole.tsx) so the two feel
 // like one consistent piece of UI.
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { useSearchParams, Navigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, CalendarDays, Timer, CalendarCheck } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
 import { useNotifications } from "@/context/NotificationsContext";
@@ -18,13 +18,31 @@ import LeavePortal from "@/pages/LeavePortal";
 import PermissionPortal from "@/pages/PermissionPortal";
 import WeekendAttendanceDashboard from "@/pages/WeekendAttendanceDashboard";
 
+// ─── Animated Icon Imports ────────────────────────────────────────────────
+import { AnimatedReportIcon } from "@/components/icons/AnimatedEmployeeHubIcons";
+import { AnimatedLeavePortalIcon } from "@/components/icons/AnimatedEmployeeHubIcons";
+import { AnimatedLeaveIcon } from "@/components/icons/AnimatedEmployeeHubIcons";
+import { AnimatedWeekendIcon } from "@/components/icons/AnimatedEmployeeHubIcons";
+
 type HubTab = "report" | "leave" | "permission" | "weekend";
 
-const TABS: { id: HubTab; label: string; icon: typeof FileText; dot: string }[] = [
-  { id: "report", label: "Work Report", icon: FileText, dot: "#3b82f6" },
-  { id: "leave", label: "Leave Portal", icon: CalendarDays, dot: "#10b981" },
-  { id: "permission", label: "Permission Portal", icon: Timer, dot: "#f59e0b" },
-  { id: "weekend", label: "Weekend Entries", icon: CalendarCheck, dot: "#8b5cf6" },
+// Each tab carries its own accent pair (light/dark, for the RFI-style
+// sliding gradient) plus soft/strong glow tones for the pop-and-glow
+// activation effect and the beeping indicator dot — same recipe used in
+// RFI.tsx's "Settings / Create RFI / RFI's" tab strip.
+const TABS: {
+  id: HubTab;
+  label: string;
+  icon: typeof AnimatedReportIcon;
+  dot: string;
+  dotDark: string;
+  glowSoft: string;
+  glowStrong: string;
+}[] = [
+  { id: "report", label: "Work Report", icon: AnimatedReportIcon, dot: "#3b82f6", dotDark: "#1d4ed8", glowSoft: "rgba(59,130,246,0.35)", glowStrong: "rgba(59,130,246,0.6)" },
+  { id: "leave", label: "Leave Portal", icon: AnimatedLeavePortalIcon, dot: "#10b981", dotDark: "#047857", glowSoft: "rgba(16,185,129,0.35)", glowStrong: "rgba(16,185,129,0.6)" },
+  { id: "permission", label: "Permission Portal", icon: AnimatedLeaveIcon, dot: "#f59e0b", dotDark: "#d97706", glowSoft: "rgba(245,158,11,0.35)", glowStrong: "rgba(245,158,11,0.6)" },
+  { id: "weekend", label: "Weekend Entries", icon: AnimatedWeekendIcon, dot: "#8b5cf6", dotDark: "#7c3aed", glowSoft: "rgba(139,92,246,0.35)", glowStrong: "rgba(139,92,246,0.6)" },
 ];
 
 const isHubTab = (v: string | null): v is HubTab =>
@@ -37,6 +55,7 @@ export default function EmployeeHub() {
 
   const initial = params.get("tab");
   const [tab, setTab] = useState<HubTab>(isHubTab(initial) ? initial : "report");
+  const [hoveredTab, setHoveredTab] = useState<HubTab | null>(null);
 
   if (role !== "OWNER") return <Navigate to="/leave" replace />;
 
@@ -107,41 +126,80 @@ export default function EmployeeHub() {
           cursor: pointer;
           background: transparent;
           color: hsl(var(--muted-foreground));
-          transition: color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: color 220ms ease, transform 180ms ease;
           white-space: nowrap;
           position: relative;
-          overflow: visible;
+          overflow: hidden;
         }
+        .eh-tab-btn:hover { transform: translateY(-1px); }
+        .eh-tab-btn:active { transform: translateY(0) scale(0.96); }
 
+        /* Color-transition slide-in, same recipe as RFI.tsx's tab strip:
+           a gradient layer scales in from the center on activation instead
+           of the old flat background swap. */
         .eh-tab-btn::before {
           content: '';
           position: absolute;
           inset: 0;
-          background: hsl(var(--background));
-          border-radius: 10px;
+          border-radius: inherit;
+          background: linear-gradient(135deg, var(--tab-accent), var(--tab-accent-dark));
           transform: scaleX(0);
-          transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-          z-index: -1;
+          transform-origin: center;
+          transition: transform 320ms cubic-bezier(0.4, 0, 0.2, 1);
+          z-index: 0;
         }
 
         .eh-tab-btn.active::before {
           transform: scaleX(1);
         }
 
-        .eh-tab-btn.active {
-          color: hsl(var(--foreground));
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        .eh-tab-btn > * {
+          position: relative;
+          z-index: 1;
         }
 
+        @keyframes eh-tab-pop {
+          0%   { transform: scale(0.92); }
+          55%  { transform: scale(1.04); }
+          100% { transform: scale(1); }
+        }
+        @keyframes eh-tab-glow {
+          0%, 100% { box-shadow: 0 4px 14px -4px var(--tab-glow-soft); }
+          50%      { box-shadow: 0 4px 18px -2px var(--tab-glow-strong), 0 0 0 3px var(--tab-glow-soft); }
+        }
+        .eh-tab-btn.active {
+          color: #fff;
+          animation: eh-tab-pop 260ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                     eh-tab-glow 2.6s ease-in-out 260ms infinite;
+        }
+        .eh-tab-btn.active .eh-tab-icon {
+          animation: eh-tab-icon-wiggle 380ms ease;
+        }
+        @keyframes eh-tab-icon-wiggle {
+          0%   { transform: rotate(0deg) scale(0.8); }
+          50%  { transform: rotate(-10deg) scale(1.2); }
+          100% { transform: rotate(0deg) scale(1); }
+        }
+
+        /* Beeping indicator dot — small color-coded circle in front of the
+           icon that breathes continuously, same visual language as the
+           Admin Console's Employees/Vault tab dots. */
         .eh-tab-dot {
           width: 8px;
           height: 8px;
           border-radius: 50%;
           flex-shrink: 0;
+          animation: eh-tab-dot-beep 1.8s ease-in-out infinite;
+        }
+        @keyframes eh-tab-dot-beep {
+          0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 var(--tab-glow-soft); }
+          50%      { transform: scale(1.2); opacity: 0.8; box-shadow: 0 0 5px 2px var(--tab-glow-strong); }
         }
 
         .eh-tab-icon {
           flex-shrink: 0;
+          width: 18px;
+          height: 18px;
         }
 
         .eh-tab-label {
@@ -262,6 +320,9 @@ export default function EmployeeHub() {
           <div className="eh-tabs" role="tablist" aria-label="Employee Hub sections">
             {TABS.map((t) => {
               const badge = badgeFor(t.id);
+              const TabIcon = t.icon;
+              const isHovered = hoveredTab === t.id;
+              
               return (
                 <motion.button
                   key={t.id}
@@ -270,11 +331,24 @@ export default function EmployeeHub() {
                   role="tab"
                   aria-selected={tab === t.id}
                   onClick={() => goTo(t.id)}
+                  onMouseEnter={() => setHoveredTab(t.id)}
+                  onMouseLeave={() => setHoveredTab(null)}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
+                  style={{
+                    "--tab-accent": t.dot,
+                    "--tab-accent-dark": t.dotDark,
+                    "--tab-glow-soft": t.glowSoft,
+                    "--tab-glow-strong": t.glowStrong,
+                  } as CSSProperties}
                 >
                   <span className="eh-tab-dot" aria-hidden="true" style={{ background: t.dot }} />
-                  <t.icon className="h-3.5 w-3.5 eh-tab-icon" />
+                  <TabIcon 
+                    size="md" 
+                    className="eh-tab-icon" 
+                    isParentHovered={isHovered}
+                    forceWhite={tab === t.id}
+                  />
                   <span className="eh-tab-label">{t.label}</span>
                   {badge > 0 && (
                     <span className="eh-tab-badge" aria-label={`${badge} unread`}>

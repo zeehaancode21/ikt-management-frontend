@@ -1,36 +1,48 @@
-import { NavLink, useNavigate } from "react-router-dom";
-import { GiCctvCamera } from "react-icons/gi";
+// AppSidebar.tsx - base = first file, only icons swapped to animated (hover) icons
+// Replace your entire src/components/AppSidebar.tsx with this file
+
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
-  User,
   Briefcase,
   CalendarDays,
   FileText,
-  LogOut,
   MessageSquare,
   ShieldCheck,
-  FolderOpen,
-  KeyRound,
   FileCheck2,
   Globe,
+  Earth,
   ArrowUpRight,
   Sparkles,
-  BarChart3,
   Stars,
   Zap,
-  Timer,
   Link,
   Share2,
-  CalendarCheck,
-  Users
+  Users,
+  FileQuestion,
+  type LucideIcon,
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
+import { useRfiAccess } from "@/hooks/useRfiAccess";
+import { useProjectsAccess } from "@/hooks/useModuleAccess";
 import { useNotifications, type NotificationModule } from "@/context/NotificationsContext";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ComponentType } from "react";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
 import { UserAvatar } from "@/components/UserAvatar";
+
+// ── Animated icons (hover animation) ─────────────────────────────────────
+import { AnimatedDashboardIcon } from "@/components/icons/AnimatedDashboardIcon";
+import { AnimatedRFIIcon } from "@/components/icons/AnimatedRFIIcon";
+import { AnimatedTeamHubIcon } from "@/components/icons/AnimatedTeamHubIcon";
+import { AnimatedAdminIcon } from "@/components/icons/AnimatedAdminIcon";
+import { AnimatedMediaHubIcon } from "@/components/icons/AnimatedMediaHubIcon";
+import { AnimatedCctvIcon } from "@/components/icons/AnimatedCctvIcon";
+import { AnimatedLeftIcon, AnimatedRightIcon } from "@/components/icons/AnimatedArrowIcons";
+import { AnimatedWorkAttendanceIcon } from "@/components/icons/AnimatedWorkAttendanceIcon";
+import { AnimatedLeavePermissionIcon } from "@/components/icons/AnimatedLeavePermissionIcon";
+import { AnimatedChangePasswordIcon } from "@/components/icons/AnimatedChangePasswordIcon";
+import { AnimatedLogoutIcon } from "@/components/icons/AnimatedLogoutIcon";
 
 // ── Display name formatter ────────────────────────────────────────────────
 const displayNameCache = new Map<string, string>();
@@ -44,24 +56,17 @@ function formatDisplayName(username: string): string {
   
   let result = username;
   
-  // If username already has spaces, just title-case it
   if (username.includes(' ')) {
     result = username
       .split(' ')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(' ');
   } else {
-    // If it's camelCase or has underscores, convert to title case with spaces
-    // e.g., "johnDoe" -> "John Doe", "john_doe" -> "John Doe"
     const withSpaces = username
-      // Insert space before capital letters (camelCase)
       .replace(/([A-Z])/g, ' $1')
-      // Replace underscores with spaces
       .replace(/_/g, ' ')
-      // Trim extra spaces
       .trim();
     
-    // Title case each word
     result = withSpaces
       .split(' ')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
@@ -73,21 +78,64 @@ function formatDisplayName(username: string): string {
 }
 
 // ── Sidebar notification badges ─────────────────────────────────────────
-// Maps a nav item's route to the notification module (see
-// NotificationsContext / backend NotificationController#MODULE_TYPES) whose
-// unread count should be shown as a badge next to it. Routes not listed here
-// simply render without a badge.
 const ROUTE_NOTIFICATION_MODULE: Partial<Record<string, NotificationModule>> = {
   "/messages": "messages",
   "/leave": "leave",
   "/permission": "permission",
+  "/rfi": "rfi",
+};
+
+// ── Sidebar entry shape ──────────────────────────────────────────────────
+interface NavItem {
+  to: string;
+  label: string;
+  icon: LucideIcon | ComponentType<any>;
+  isAnimated?: boolean;
+  match?: string[];
+  badgeRoutes?: string[];
+}
+
+// ── Component Props ──────────────────────────────────────────────────────
+interface AppSidebarProps {
+  isMinimized?: boolean;
+  onToggleMinimize?: () => void;
+}
+
+// ── Grouped entries (each one opens a page with tabs) ────────────────────
+const LEAVE_PERMISSION_ENTRY: NavItem = {
+  to: "/leave",
+  label: "Leave & Permission",
+  icon: AnimatedLeavePermissionIcon,
+  isAnimated: true,
+  match: ["/leave", "/permission"],
+  badgeRoutes: ["/leave", "/permission"],
+};
+
+const WORK_ATTENDANCE_ENTRY: NavItem = {
+  to: "/reports",
+  label: "Work Record",
+  icon: AnimatedWorkAttendanceIcon,
+  isAnimated: true,
+  match: ["/reports", "/weekend-attendance"],
+};
+
+// Owner only: Admin Console + Media Hub combined into one entry with a tab
+// toggle at the top of the page (see ADMIN_MEDIA_TABS in App.tsx).
+const ADMIN_MEDIA_ENTRY: NavItem = {
+  to: "/admin",
+  label: "Admin & Media",
+  icon: AnimatedAdminIcon,
+  isAnimated: true,
+  match: ["/admin", "/social-hub"],
 };
 
 // ── Company website ───────────────────────────────────────────────────────
 const COMPANY_WEBSITE_URL = "https://www.iktangience.com";
 const COMPANY_WEBSITE_LABEL = "IK Tangience";
 
-// ── Animated styles for the logo / website block ──────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎨 SIDEBAR STYLES CONSTANT - COMPLETE
+// ═══════════════════════════════════════════════════════════════════════════
 const sidebarStyles = `
   @keyframes sb-fade-in {
     from { opacity: 0; transform: translateY(-6px) scale(0.96); }
@@ -109,6 +157,10 @@ const sidebarStyles = `
   }
 
   @keyframes sb-globe-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes sb-earth-spin {
     to { transform: rotate(360deg); }
   }
 
@@ -144,6 +196,7 @@ const sidebarStyles = `
     filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.35));
     transition: transform 0.35s ease;
   }
+
   .sb-logo-img:hover {
     transform: translateY(-2px) scale(1.03);
   }
@@ -177,6 +230,7 @@ const sidebarStyles = `
     opacity: 0.55;
     transition: opacity 0.3s ease;
   }
+
   .sb-site-link:hover::before {
     opacity: 1;
     animation-duration: 2s;
@@ -193,6 +247,7 @@ const sidebarStyles = `
     background-clip: padding-box;
     transition: background 0.3s ease;
   }
+
   .sb-site-content:hover {
     background: hsl(var(--sidebar-accent));
   }
@@ -204,7 +259,20 @@ const sidebarStyles = `
     color: hsl(var(--sidebar-primary));
     animation: sb-globe-spin 7s linear infinite;
   }
+
   .sb-site-link:hover .sb-site-globe {
+    animation-duration: 1.4s;
+  }
+
+  .sb-site-earth {
+    flex-shrink: 0;
+    height: 14px;
+    width: 14px;
+    color: hsl(var(--sidebar-primary));
+    animation: sb-earth-spin 7s linear infinite;
+  }
+
+  .sb-site-link:hover .sb-site-earth {
     animation-duration: 1.4s;
   }
 
@@ -231,6 +299,7 @@ const sidebarStyles = `
     background-clip: text;
     transition: color 0.3s ease;
   }
+
   .sb-site-link:hover .sb-site-text {
     animation: sb-shimmer 1.6s ease-in-out infinite;
     color: transparent;
@@ -245,12 +314,12 @@ const sidebarStyles = `
     transform: translate(-4px, 4px);
     transition: opacity 0.25s ease, transform 0.25s ease;
   }
+
   .sb-site-link:hover .sb-site-arrow {
     opacity: 1;
     transform: translate(0, 0);
   }
 
-  /* ── Logo click "magic" effect ─────────────────────────────────────── */
   .sb-logo-btn {
     position: relative;
     display: inline-flex;
@@ -260,10 +329,12 @@ const sidebarStyles = `
     cursor: pointer;
     border-radius: 999px;
   }
+
   .sb-logo-btn:focus-visible {
     outline: 2px solid hsl(var(--sidebar-primary));
     outline-offset: 4px;
   }
+
   .sb-logo-btn:active .sb-logo-img {
     transform: scale(0.94);
   }
@@ -274,6 +345,7 @@ const sidebarStyles = `
     65%  { transform: scale(0.94) rotate(4deg); }
     100% { transform: scale(1) rotate(0deg); }
   }
+
   .sb-logo-pop {
     animation: sb-logo-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
@@ -282,6 +354,7 @@ const sidebarStyles = `
     0%   { transform: translate(-50%, -50%) scale(0.25); opacity: 0.85; border-width: 3px; }
     100% { transform: translate(-50%, -50%) scale(2.4);  opacity: 0;    border-width: 0.5px; }
   }
+
   .sb-shockwave-ring {
     position: absolute;
     top: 50%;
@@ -293,6 +366,7 @@ const sidebarStyles = `
     pointer-events: none;
     animation: sb-shockwave 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
+
   .sb-shockwave-ring.sb-ring-delay {
     animation-delay: 0.1s;
     width: 96px;
@@ -305,6 +379,7 @@ const sidebarStyles = `
     0%   { transform: translate(-50%, -50%) translate(0, 0) scale(1); opacity: 1; }
     100% { transform: translate(-50%, -50%) translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
   }
+
   .sb-particle {
     position: absolute;
     top: 50%;
@@ -319,6 +394,7 @@ const sidebarStyles = `
     0%   { transform: translate(-50%, -50%) translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
     100% { transform: translate(-50%, -50%) translate(var(--tx), var(--ty)) rotate(180deg) scale(0.3); opacity: 0; }
   }
+
   .sb-sparkle-icon {
     position: absolute;
     top: 50%;
@@ -327,11 +403,6 @@ const sidebarStyles = `
     animation: sb-sparkle-spin 0.85s ease-out forwards;
   }
 
-  /* ============================================================
-     ✨ MAGICAL MESSAGE - ENHANCED WITH BEAUTIFUL EFFECTS
-     ============================================================ */
-  
-  /* Floating stars background */
   @keyframes sb-float-stars {
     0% { transform: translateY(0) rotate(0deg); opacity: 0; }
     20% { opacity: 1; }
@@ -339,13 +410,11 @@ const sidebarStyles = `
     100% { transform: translateY(-60px) rotate(360deg); opacity: 0; }
   }
 
-  /* Main message container - floating effect */
   @keyframes sb-message-float {
     0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
     50% { transform: translateX(-50%) translateY(-4px) scale(1.02); }
   }
 
-  /* Entrance animation - magical swirl */
   @keyframes sb-message-entrance {
     0% { 
       opacity: 0; 
@@ -370,7 +439,6 @@ const sidebarStyles = `
     }
   }
 
-  /* Exit animation */
   @keyframes sb-message-exit {
     0% {
       opacity: 1;
@@ -383,14 +451,12 @@ const sidebarStyles = `
     }
   }
 
-  /* Rainbow shimmer effect */
   @keyframes sb-rainbow-shimmer {
     0% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
     100% { background-position: 0% 50%; }
   }
 
-  /* Sparkle burst */
   @keyframes sb-sparkle-burst {
     0% { transform: scale(0) rotate(0deg); opacity: 1; }
     100% { transform: scale(1.5) rotate(180deg); opacity: 0; }
@@ -416,7 +482,6 @@ const sidebarStyles = `
     animation: sb-message-exit 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   }
 
-  /* Outer glow container */
   .sb-magic-message-outer {
     position: relative;
     padding: 3px;
@@ -438,7 +503,6 @@ const sidebarStyles = `
       inset 0 0 20px rgba(255, 255, 255, 0.1);
   }
 
-  /* Inner message with glass effect */
   .sb-magic-message-inner {
     position: relative;
     background: rgba(15, 23, 42, 0.92);
@@ -450,7 +514,6 @@ const sidebarStyles = `
     border: 1px solid rgba(255, 255, 255, 0.15);
   }
 
-  /* Animated background gradient */
   .sb-magic-message-inner::before {
     content: '';
     position: absolute;
@@ -468,7 +531,6 @@ const sidebarStyles = `
     pointer-events: none;
   }
 
-  /* Floating particles inside the message */
   .sb-magic-message-inner::after {
     content: '✦ ✧ ✦ ✧ ✦';
     position: absolute;
@@ -482,7 +544,6 @@ const sidebarStyles = `
     white-space: nowrap;
   }
 
-  /* Message text with gradient */
   .sb-magic-message-text {
     position: relative;
     display: block;
@@ -508,14 +569,12 @@ const sidebarStyles = `
     z-index: 1;
   }
 
-  /* Emoji glow */
   .sb-magic-message-emoji {
     display: inline-block;
     filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.4));
     animation: sb-message-float 2s ease-in-out infinite;
   }
 
-  /* Sparkle decorations */
   .sb-magic-sparkle {
     position: absolute;
     width: 6px;
@@ -532,24 +591,287 @@ const sidebarStyles = `
   .sb-magic-sparkle:nth-child(3) { bottom: -8px; left: 20%; animation-delay: 0.5s; }
   .sb-magic-sparkle:nth-child(4) { bottom: -10px; right: 25%; animation-delay: 0.7s; }
 
-  /* ── Nav scroll region ───────────────────────────────────────────────── */
   .sb-nav {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--sidebar-primary) / 0.6) transparent;
   }
+
   .sb-nav::-webkit-scrollbar {
     width: 6px;
   }
+
   .sb-nav::-webkit-scrollbar-track {
     background: transparent;
   }
+
   .sb-nav::-webkit-scrollbar-thumb {
     background: hsl(var(--sidebar-primary) / 0.6);
     border-radius: 999px;
   }
+
+  /* ── Minimize control (smooth transition + animation on interaction) ──── */
+  .sb-camera-btn {
+    transition: background-color 0.25s ease, transform 0.25s ease;
+  }
+
+  .sb-camera-btn:active {
+    transform: scale(0.94);
+  }
+
+  .sb-minimize-btn {
+    transition: background-color 0.25s ease, transform 0.2s ease;
+  }
+
+  .sb-minimize-btn:active {
+    transform: scale(0.97);
+  }
+
+  .sb-minimize-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: hsl(var(--sidebar-primary));
+    cursor: pointer;
+    transition: background-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+  }
+
+  .sb-minimize-icon-btn:hover {
+    background: hsl(var(--sidebar-accent));
+    box-shadow: 0 0 0 3px hsl(var(--sidebar-primary) / 0.12);
+  }
+
+  .sb-minimize-icon-btn:active {
+    transform: scale(0.9);
+  }
+
+  .sb-minimize-icon-inner {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .sb-minimize-icon-btn:hover .sb-minimize-icon-inner,
+  .sb-minimize-btn:hover .sb-minimize-icon-inner {
+    transform: scale(1.15);
+  }
+
+  .sb-minimize-icon-btn:active .sb-minimize-icon-inner,
+  .sb-minimize-btn:active .sb-minimize-icon-inner {
+    transform: scale(0.85);
+  }
 `;
 
-// Magic messages with steel detailing theme
+// ═══════════════════════════════════════════════════════════════════════════
+// ✨ MINIMIZED SIDEBAR STYLES
+// ═══════════════════════════════════════════════════════════════════════════
+const minimizedStyles = `
+  .sb-logo-block.minimized {
+    padding: 12px 8px;
+    gap: 6px;
+    justify-content: center;
+  }
+
+  .sb-logo-img.minimized-img {
+    height: 2.5rem;
+    width: auto;
+  }
+
+  .minimized-chip {
+    padding: 8px 12px !important;
+  }
+
+  .minimized-nav {
+    padding: 8px 6px;
+  }
+
+  .minimized-nav-item {
+    padding: 6px !important;
+    justify-content: center;
+    position: relative;
+    gap: 0 !important;
+  }
+
+  .minimized-icon {
+    height: 22px !important;
+    width: 22px !important;
+  }
+
+  .minimized-footer {
+    padding: 4px 0;
+  }
+
+  .minimized-nav-item:hover {
+    background-color: hsl(var(--sidebar-accent)) !important;
+  }
+
+  .minimized-nav-item .sb-nav-label {
+    display: none;
+  }
+
+  .minimized-nav-item .ml-auto {
+    display: none;
+  }
+
+  .minimized-nav-item {
+    border-radius: 8px;
+  }
+
+  /* NOTE: no transform: scale() on hover – scaling a bitmap icon re-samples it and makes it blurry */
+
+  .sb-site-link {
+    transition: opacity 0.2s ease;
+  }
+
+  .minimized-nav-item .h-4.w-4 {
+    margin: 0;
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .minimized-nav-item {
+      padding: 6px !important;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .minimized-nav-item .sb-nav-label,
+    .sb-logo-block.minimized {
+      display: block;
+    }
+
+    .minimized-nav-item {
+      justify-content: flex-start !important;
+      gap: 12px !important;
+      padding: 8px 12px !important;
+    }
+  }
+
+  /* NOTE: no filter: drop-shadow on hover – it re-rasterises the icon (blurry) */
+
+  /* ── Animated icon wrapper ── */
+  .sb-icon-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    overflow: hidden; /* nothing (e.g. baked-in text) can leak outside the icon box */
+    color: inherit;
+    background: transparent;
+  }
+
+  .sb-icon-wrap.sb-icon-hovered {
+    color: #fff;
+  }
+
+  /* IMPORTANT: do NOT force opacity/visibility on children here.
+     AnimatedIconBase swaps the still PNG and the GIF itself; forcing
+     opacity: 1 showed BOTH at once (ghost / blur / double text). */
+  .sb-icon-wrap.sb-icon-hovered svg {
+    color: #fff;
+  }
+
+  /* ── Open / close animations ─────────────────────────────────────────── */
+  .sb-aside {
+    transition: background-color 0.3s ease;
+  }
+
+  /* text/labels fade + slide in when the sidebar opens */
+  @keyframes sb-label-in {
+    from { opacity: 0; transform: translateX(-10px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .sb-label-in {
+    animation: sb-label-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.08s backwards;
+  }
+
+  /* nav icons fade in when the sidebar opens/closes (no scaling = no bitmap resampling / blur) */
+  @keyframes sb-icon-settle {
+    from { opacity: 0.4; }
+    to   { opacity: 1; }
+  }
+
+  .sb-aside .sb-icon-wrap {
+    animation: sb-icon-settle 0.3s ease-out;
+  }
+
+  .sb-icon-wrap img {
+    image-rendering: auto;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Footer buttons (Change password / Log out11) ── */
+  .sb-foot-btn {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 12px;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 500;
+    color: hsl(var(--sidebar-foreground));
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+  .sb-foot-btn:hover {
+    background: hsl(var(--sidebar-accent));
+    color: #fff;
+  }
+  .sb-foot-btn.sb-foot-min {
+    justify-content: center;
+    padding: 8px 6px;
+    gap: 0;
+  }
+  .sb-foot-btn.sb-foot-danger:hover {
+    background: hsl(0 70% 45% / 0.22);
+    color: #fecaca;
+  }
+
+  /* minimize / expand chevron: slides in from the direction it points + ring pulse */
+  @keyframes sb-chevron-in-left {
+    0%   { transform: translateX(10px) rotate(90deg) scale(0.6); opacity: 0; box-shadow: 0 0 0 0 hsl(var(--sidebar-primary) / 0.5); }
+    60%  { transform: translateX(-2px) rotate(0deg) scale(1.2); opacity: 1; box-shadow: 0 0 0 8px hsl(var(--sidebar-primary) / 0); }
+    100% { transform: translateX(0) rotate(0deg) scale(1); opacity: 1; box-shadow: 0 0 0 0 hsl(var(--sidebar-primary) / 0); }
+  }
+
+  @keyframes sb-chevron-in-right {
+    0%   { transform: translateX(-10px) rotate(-90deg) scale(0.6); opacity: 0; box-shadow: 0 0 0 0 hsl(var(--sidebar-primary) / 0.5); }
+    60%  { transform: translateX(2px) rotate(0deg) scale(1.2); opacity: 1; box-shadow: 0 0 0 8px hsl(var(--sidebar-primary) / 0); }
+    100% { transform: translateX(0) rotate(0deg) scale(1); opacity: 1; box-shadow: 0 0 0 0 hsl(var(--sidebar-primary) / 0); }
+  }
+
+  .sb-chevron-in-left  { border-radius: 999px; animation: sb-chevron-in-left 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .sb-chevron-in-right { border-radius: 999px; animation: sb-chevron-in-right 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+  /* gentle idle nudge so the button feels alive on hover */
+  @keyframes sb-chevron-nudge {
+    0%, 100% { transform: translateX(0); }
+    50%      { transform: translateX(-3px); }
+  }
+
+  .sb-minimize-icon-btn:hover .sb-chevron-in-left,
+  .sb-minimize-btn:hover .sb-chevron-in-left {
+    animation: sb-chevron-nudge 0.9s ease-in-out infinite;
+  }
+
+  .sb-minimize-icon-btn:hover .sb-chevron-in-right,
+  .sb-minimize-btn:hover .sb-chevron-in-right {
+    animation: sb-chevron-nudge 0.9s ease-in-out infinite reverse;
+  }
+`;
+
+// ─── Logo magic messages ────────────────────────────────────────────────
 const LOGO_MAGIC_MESSAGES = [
   "✨ From model to metal.",
   "🚀 Detailed to perfection.",
@@ -623,20 +945,103 @@ type LogoParticle = {
   isIcon: boolean;
 };
 
-export const AppSidebar = () => {
+// ─── Single nav link (own hover state → drives the animated icon) ─────────
+interface SidebarNavLinkProps {
+  item: NavItem;
+  badgeCount: number;
+  groupActive: boolean | null;
+  isMinimized: boolean;
+}
+
+const SidebarNavLink = ({ item, badgeCount, groupActive, isMinimized }: SidebarNavLinkProps) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <NavLink
+      to={item.to}
+      className={({ isActive }) =>
+        cn(
+          `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${isMinimized ? 'minimized-nav-item' : ''}`,
+          (groupActive ?? isActive)
+            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-white"
+        )
+      }
+      title={isMinimized ? item.label : ""}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {item.isAnimated ? (
+        <span key={isMinimized ? "min" : "max"} className={cn("sb-icon-wrap", isHovered && "sb-icon-hovered")}>
+          <item.icon
+            size="xl"
+            className={`h-5 w-5 shrink-0 ${isMinimized ? 'minimized-icon' : ''}`}
+            isParentHovered={isHovered}
+          />
+        </span>
+      ) : (
+        <item.icon className={`h-4 w-4 shrink-0 ${isMinimized ? 'minimized-icon' : ''}`} />
+      )}
+      {!isMinimized && <span className="sb-nav-label sb-label-in flex-1">{item.label}</span>}
+      {!isMinimized && badgeCount > 0 && (
+        <span
+          className="ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white"
+          aria-label={`${badgeCount} unread`}
+        >
+          {badgeCount > 9 ? "9+" : badgeCount}
+        </span>
+      )}
+      {isMinimized && badgeCount > 0 && (
+        <span
+          className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold leading-none text-white"
+          aria-label={`${badgeCount} unread`}
+        >
+          {badgeCount > 9 ? "9" : badgeCount}
+        </span>
+      )}
+    </NavLink>
+  );
+};
+
+// ─── Footer button with animated (gif/png) icon ──────────────────────────
+interface FooterButtonProps {
+  label: string;
+  icon: ComponentType<any>;
+  onClick: () => void;
+  isMinimized: boolean;
+  danger?: boolean;
+}
+
+const SidebarFooterButton = ({ label, icon: Icon, onClick, isMinimized, danger }: FooterButtonProps) => {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setHovered(true)}
+      onBlur={() => setHovered(false)}
+      className={cn("sb-foot-btn", isMinimized && "sb-foot-min", danger && "sb-foot-danger")}
+      title={isMinimized ? label : undefined}
+    >
+      <span className={cn("sb-icon-wrap", hovered && "sb-icon-hovered")} aria-hidden="true">
+        <Icon size="xl" className="h-5 w-5 shrink-0" isParentHovered={hovered} ariaLabel="" />
+      </span>
+      {!isMinimized && <span className="sb-label-in">{label}</span>}
+    </button>
+  );
+};
+
+export const AppSidebar = ({ isMinimized = false, onToggleMinimize }: AppSidebarProps) => {
   const { name, role, displayRole, refreshRoleName, logout } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [showCP, setShowCP] = useState(false);
   const { counts } = useNotifications();
 
-  // Pick up the latest custom Role Name (e.g. if an admin changed it after
-  // this session's login) whenever the sidebar mounts — i.e. on login and
-  // on every full page/profile refresh — without requiring the user to log
-  // in again. Falls back silently to whatever's already in context/storage
-  // if the request fails.
   useEffect(() => {
     refreshRoleName();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Logo click "magic" effect ────────────────────────────────────────
@@ -654,7 +1059,6 @@ export const AppSidebar = () => {
   }, []);
 
   const showNewMessage = () => {
-    // Generate new particles
     const PARTICLE_COUNT = 14;
     const colors = ["text-yellow-300", "text-cyan-300", "text-white", "text-indigo-300", "text-emerald-300"];
     const next: LogoParticle[] = Array.from({ length: PARTICLE_COUNT }).map((_, i) => {
@@ -676,21 +1080,17 @@ export const AppSidebar = () => {
     setLogoBurstKey((k) => k + 1);
     setMessageKey((k) => k + 1);
 
-    // Select a random magic message
     const message = LOGO_MAGIC_MESSAGES[Math.floor(Math.random() * LOGO_MAGIC_MESSAGES.length)];
     setMagicMessage(message);
     setMessageState('visible');
 
-    // Clear any existing timeout
     if (timeoutRef.current) {
       window.clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
 
-    // Keep visible for 2.5 seconds, then hide
     timeoutRef.current = window.setTimeout(() => {
       setMessageState('hiding');
-      // After hide animation, clear the message
       setTimeout(() => {
         setMagicMessage(null);
         setMessageState('hidden');
@@ -701,20 +1101,17 @@ export const AppSidebar = () => {
   };
 
   const handleLogoClick = () => {
-    // If a message is currently showing, clear it and show a new one
     if (timeoutRef.current) {
       window.clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
 
     if (messageState === 'visible' || messageState === 'hiding') {
-      // Force hide current message
       setMessageState('hiding');
       setTimeout(() => {
         setMagicMessage(null);
         setMessageState('hidden');
         setParticles([]);
-        // Then show new message
         setTimeout(showNewMessage, 50);
       }, 500);
     } else {
@@ -731,52 +1128,48 @@ export const AppSidebar = () => {
     navigate("/my-profile");
   };
 
-  // One-off allowance: Zeeshan gets the Media Hub link even though their
-  // role isn't OWNER. This is a name check, not a real permission system —
-  // if more people need per-user access, replace this with a backend-driven
-  // permissions list instead of stacking more name checks here.
-  const isZeeshan = (name || "").trim().toLowerCase() === "zeeshan";
+  const normalizedName = (name || "").trim().toLowerCase();
+  const isZeeshan = normalizedName === "zeeshan";
 
-  const navItems =
+  // RFI and Projects menu items follow Admin Console -> Access Control (backend flags), not user names / roles.
+  const { allowed: hasRfiAccess } = useRfiAccess();
+  const { allowed: hasProjectsAccess } = useProjectsAccess();
+  const RFI_ENTRY: NavItem = { to: "/rfi", label: "RFI", icon: AnimatedRFIIcon, isAnimated: true, badgeRoutes: ["/rfi"] };
+  const MEDIA_HUB_ENTRY: NavItem = { to: "/social-hub", label: "Media Hub", icon: AnimatedMediaHubIcon, isAnimated: true };
+  const PROJECTS_ENTRY: NavItem = { to: "/dashboard", label: "Projects", icon: AnimatedDashboardIcon, isAnimated: true };
+
+  const navItems: NavItem[] =
     role === "OWNER"
       ? [
-          { to: "/admin", label: "Admin Console", icon: ShieldCheck },
-          { to: "/employee-hub", label: "Employee Hub", icon: Users },
-          { to: "/social-hub", label: "Media Hub", icon: Share2 },
-          { to: "/hours-dashboard", label: "Dashboard", icon: BarChart3 },
-          { to: "/dashboard", label: "Projects", icon: Briefcase },
-          { to: "/documents", label: "Documents", icon: FolderOpen },
-          { to: "/messages", label: "Messages", icon: MessageSquare },
+          ADMIN_MEDIA_ENTRY,
+          ...(hasRfiAccess ? [RFI_ENTRY] : []),
+          { to: "/employee-hub", label: "Employee Hub", icon: AnimatedTeamHubIcon, isAnimated: true },
+          ...(hasProjectsAccess ? [PROJECTS_ENTRY] : []),
         ]
       : role === "LEAD"
       ? [
-          ...(isZeeshan ? [{ to: "/social-hub", label: "Media Hub", icon: Share2 }] : []),
-          { to: "/reports", label: "Work Report", icon: FileText },
-          { to: "/dashboard", label: "Projects", icon: Briefcase },
-          { to: "/documents", label: "Documents", icon: FolderOpen },
-          { to: "/leave", label: "Leave Report", icon: CalendarDays },
-          { to: "/permission", label: "Permission Portal", icon: Timer },
-          { to: "/weekend-attendance", label: "Weekend Entry", icon: CalendarCheck },
-          { to: "/messages", label: "Messages", icon: MessageSquare },
+          ...(isZeeshan ? [MEDIA_HUB_ENTRY] : []),
+          ...(hasRfiAccess ? [RFI_ENTRY] : []),
+          WORK_ATTENDANCE_ENTRY,
+          ...(hasProjectsAccess ? [PROJECTS_ENTRY] : []),
+          LEAVE_PERMISSION_ENTRY,
         ]
       : [
-          ...(isZeeshan ? [{ to: "/social-hub", label: "Media Hub", icon: Share2 }] : []),
-          { to: "/reports", label: "Work Report", icon: FileText },
-          { to: "/leave", label: "Leave Portal", icon: CalendarDays },
-          { to: "/permission", label: "Permission Portal", icon: Timer },
-          { to: "/weekend-attendance", label: "Weekend Entry", icon: CalendarCheck },
-          { to: "/documents", label: "Documents", icon: FolderOpen },
-          { to: "/messages", label: "Messages", icon: MessageSquare },
+          ...(isZeeshan ? [MEDIA_HUB_ENTRY] : []),
+          ...(hasRfiAccess ? [RFI_ENTRY] : []),
+          ...(hasProjectsAccess ? [PROJECTS_ENTRY] : []),
+          WORK_ATTENDANCE_ENTRY,
+          LEAVE_PERMISSION_ENTRY,
         ];
 
   return (
     <>
-      <style>{sidebarStyles}</style>
+      <style>{sidebarStyles + minimizedStyles}</style>
       {showCP && <ChangePasswordModal onClose={() => setShowCP(false)} />}
 
-      <aside className="flex h-full w-full min-h-0 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+      <aside className={`flex h-full w-full min-h-0 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground sb-aside ${isMinimized ? 'sidebar-minimized' : ''}`}>
         {/* LOGO */}
-        <div className="sb-logo-block border-b border-sidebar-border">
+        <div className={`sb-logo-block border-b border-sidebar-border ${isMinimized ? 'minimized' : ''}`}>
           <div className="sb-logo-glow" />
 
           <button
@@ -787,7 +1180,7 @@ export const AppSidebar = () => {
             aria-label="Company logo"
           >
             <div key={logoBurstKey} className={cn(logoBurstKey > 0 && "sb-logo-pop")}>
-              <img src="/finalised-logo.png" alt="Company Logo" className="sb-logo-img" />
+              <img src="/finalised-logo.png" alt="Company Logo" className={`sb-logo-img ${isMinimized ? 'minimized-img' : ''}`} />
             </div>
 
             {logoBurstKey > 0 && (
@@ -820,7 +1213,7 @@ export const AppSidebar = () => {
               )
             )}
 
-            {/* ✨ MAGICAL MESSAGE - Enhanced with beautiful effects */}
+            {/* ✨ MAGICAL MESSAGE */}
             {magicMessage && (
               <div 
                 key={messageKey}
@@ -832,13 +1225,11 @@ export const AppSidebar = () => {
               >
                 <div className="sb-magic-message-outer">
                   <div className="sb-magic-message-inner">
-                    {/* Sparkle decorations */}
                     <span className="sb-magic-sparkle" />
                     <span className="sb-magic-sparkle" />
                     <span className="sb-magic-sparkle" />
                     <span className="sb-magic-sparkle" />
                     
-                    {/* Message text with gradient */}
                     <span className="sb-magic-message-text">
                       {magicMessage}
                     </span>
@@ -848,32 +1239,35 @@ export const AppSidebar = () => {
             )}
           </button>
 
-          {/* Company website link - FIXED: Added opening <a> tag */}
-          <a
-            href={COMPANY_WEBSITE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={`Visit ${COMPANY_WEBSITE_LABEL}`}
-            className="sb-site-link"
-          >
-            <div className="sb-site-content">
-              <Globe className="sb-site-globe" />
-              <span className="sb-site-text">{COMPANY_WEBSITE_LABEL}</span>
-              <ArrowUpRight className="sb-site-arrow" />
-            </div>
-          </a>
+          {/* Company website link - hidden when minimized */}
+          {!isMinimized && (
+            <a
+              href={COMPANY_WEBSITE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Visit ${COMPANY_WEBSITE_LABEL}`}
+              className="sb-site-link"
+            >
+              <div className="sb-site-content">
+                <Earth className="sb-site-earth" />
+                <span className="sb-site-text">{COMPANY_WEBSITE_LABEL}</span>
+                <ArrowUpRight className="sb-site-arrow" />
+              </div>
+            </a>
+          )}
         </div>
 
         {/* USER CHIP */}
         <button
           onClick={handleProfileClick}
-          className="w-full shrink-0 border-b border-sidebar-border px-6 py-3 transition-colors hover:bg-sidebar-accent/50 cursor-pointer text-left"
+          className={`w-full shrink-0 border-b border-sidebar-border px-6 py-3 transition-colors hover:bg-sidebar-accent/50 cursor-pointer text-left ${isMinimized ? 'minimized-chip' : ''}`}
+          title={isMinimized ? formatDisplayName(name || "User") : ""}
         >
-          <div className="flex items-center gap-3">
+          <div className={`flex items-center ${isMinimized ? 'justify-center' : 'gap-3'}`}>
             {name ? (
               <UserAvatar
                 username={name}
-                size={36}
+                size={isMinimized ? 32 : 36}
                 style={{ border: "2px solid rgba(255,255,255,0.2)" }}
               />
             ) : (
@@ -881,86 +1275,114 @@ export const AppSidebar = () => {
                 U
               </div>
             )}
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-white">{formatDisplayName(name || "User")}</div>
-              <div className="text-xs uppercase tracking-wide text-sidebar-primary">{displayRole}</div>
-            </div>
-            <User className="h-4 w-4 text-sidebar-primary shrink-0" />
+            {!isMinimized && (
+              <div className="min-w-0 flex-1 sb-label-in">
+                <div className="truncate text-sm font-medium text-white">{formatDisplayName(name || "User")}</div>
+                <div className="text-xs uppercase tracking-wide text-sidebar-primary">{displayRole}</div>
+              </div>
+            )}
           </div>
         </button>
 
         {/* NAV */}
-        <nav className="sb-nav min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-3">
+        <nav className={`sb-nav min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-3 ${isMinimized ? 'minimized-nav' : ''}`}>
           {navItems.map((item) => {
-            const badgeModule = ROUTE_NOTIFICATION_MODULE[item.to];
             const badgeCount =
               item.to === "/employee-hub"
                 ? counts.leave + counts.permission
-                : badgeModule
-                ? counts[badgeModule]
-                : 0;
+                : (item.badgeRoutes ?? [item.to]).reduce((sum, route) => {
+                    const badgeModule = ROUTE_NOTIFICATION_MODULE[route];
+                    return sum + (badgeModule ? counts[badgeModule] : 0);
+                  }, 0);
+            
+            const groupActive = item.match
+              ? item.match.some((p) => pathname === p || pathname.startsWith(p + "/"))
+              : null;
+            
             return (
-              <NavLink
+              <SidebarNavLink
                 key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-white"
-                  )
-                }
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                <span className="flex-1">{item.label}</span>
-                {badgeCount > 0 && (
-                  <span
-                    className="ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white"
-                    aria-label={`${badgeCount} unread`}
-                  >
-                    {badgeCount > 9 ? "9+" : badgeCount}
-                  </span>
-                )}
-              </NavLink>
+                item={item}
+                badgeCount={badgeCount}
+                groupActive={groupActive}
+                isMinimized={isMinimized}
+              />
             );
           })}
         </nav>
 
         {/* FOOTER */}
-        <div className="shrink-0 border-t border-sidebar-border">
-          {role === "OWNER" && (
-            <div className="p-2 border-b border-sidebar-border">
-              <button
-                onClick={() => {
-                  const cameraUrl = "rtsp://admin:password@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0";
-                  window.open(`/camera-viewer?url=${encodeURIComponent(cameraUrl)}`, "_blank");
-                }}
-                className="w-full flex justify-center py-1.5 hover:bg-sidebar-accent rounded-md transition-colors group"
+        <div className={`shrink-0 border-t border-sidebar-border ${isMinimized ? 'minimized-footer' : ''}`}>
+          {role === "OWNER" ? (
+            /* OWNER: minimize control sits directly beside the camera logo, no text label */
+            <div className={`p-2 border-b border-sidebar-border ${isMinimized ? 'text-center' : ''}`}>
+              <div
+                className={`flex items-center gap-2 ${isMinimized ? 'flex-col justify-center' : 'justify-between'}`}
               >
-                <GiCctvCamera className="text-3xl text-blue-500 group-hover:text-blue-400 transition-colors" />
+                <button
+                  onClick={() => {
+                    const cameraUrl = "rtsp://admin:password@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0";
+                    window.open(`/camera-viewer?url=${encodeURIComponent(cameraUrl)}`, "_blank");
+                  }}
+                  className={`sb-camera-btn flex flex-1 ${isMinimized ? 'w-full justify-center' : ''} items-center justify-center py-1.5 hover:bg-sidebar-accent rounded-md transition-colors group`}
+                  title="Open camera viewer"
+                >
+                  <AnimatedCctvIcon size="2xl" />
+                </button>
+
+                <button
+                  onClick={onToggleMinimize}
+                  className="sb-minimize-icon-btn shrink-0"
+                  title={isMinimized ? "Expand sidebar" : "Minimize sidebar"}
+                  aria-label={isMinimized ? "Expand sidebar" : "Minimize sidebar"}
+                >
+                  <span key={isMinimized ? "expand" : "collapse"} className={`sb-minimize-icon-inner ${isMinimized ? "sb-chevron-in-right" : "sb-chevron-in-left"}`}>
+                    {isMinimized ? (
+                      <AnimatedRightIcon size="xl" />
+                    ) : (
+                      <AnimatedLeftIcon size="xl" />
+                    )}
+                  </span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* OTHER ROLES: minimize control kept exactly as before, with its text label */
+            <div className={`p-2 border-b border-sidebar-border ${isMinimized ? 'text-center' : ''}`}>
+              <button
+                onClick={onToggleMinimize}
+                className={`sb-minimize-btn w-full flex ${isMinimized ? 'justify-center' : 'justify-between'} items-center px-3 py-2 rounded-md hover:bg-sidebar-accent transition-colors group`}
+                title={isMinimized ? "Expand sidebar" : "Minimize sidebar"}
+              >
+                {!isMinimized && (
+                  <span className="sb-label-in text-xs font-semibold text-sidebar-foreground">Minimize</span>
+                )}
+                <div key={isMinimized ? "expand" : "collapse"} className={`sb-minimize-icon-inner text-sidebar-primary ${isMinimized ? "sb-chevron-in-right" : "sb-chevron-in-left"}`}>
+                  {isMinimized ? (
+                    <AnimatedRightIcon size="xl" />
+                  ) : (
+                    <AnimatedLeftIcon size="xl" />
+                  )}
+                </div>
               </button>
             </div>
           )}
 
-          <div className="p-3">
-            <Button
-              variant="ghost"
+          <div className={`p-3 space-y-2 ${isMinimized ? 'text-center' : ''}`}>
+            <SidebarFooterButton
+              label="Change Password"
+              icon={AnimatedChangePasswordIcon}
               onClick={() => setShowCP(true)}
-              className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-white mb-1"
-            >
-              <KeyRound className="mr-2 h-4 w-4" />
-              Change Password
-            </Button>
+              isMinimized={isMinimized}
+            />
 
-            <Button
-              variant="ghost"
+            <SidebarFooterButton
+              label="Log out"
+              icon={AnimatedLogoutIcon}
               onClick={handleLogout}
-              className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-white"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Log out
-            </Button>
+              isMinimized={isMinimized}
+              danger
+            />
           </div>
         </div>
       </aside>

@@ -1,4 +1,22 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+import { createPortal } from "react-dom";
+import {
+  AnimatedTotalHoursIcon,
+  AnimatedReportIcon,
+  AnimatedAddReportIcon,
+  AnimatedCalendarIcon,
+  AnimatedMyReportsIcon,
+  AnimatedEditIcon,
+  AnimatedChangeDateIcon,
+} from "@/components/icons/AnimatedWorkReportIcons";
 import { format } from "date-fns";
 import api, { getErrorMessage } from "@/lib/api";
 import { groupByYear } from "@/lib/yearGrouping";
@@ -36,7 +54,6 @@ import {
 } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import {
-  Plus,
   Trash2,
   Clock,
   AlertCircle,
@@ -371,6 +388,45 @@ const isWithinDeleteWindow = (createdAt?: string) => {
 };
 
 /* ─── Animations & Global Styles ────────────────────────── */
+/* ─── Submit-button effects (confetti / burst) ──────────── */
+
+type SubmitState = "idle" | "sending" | "success" | "error";
+
+const WR_CONFETTI_COLORS = ["#ffffff", "#fde68a", "#34d399", "#38bdf8", "#a78bfa", "#f9a8d4"];
+const WR_CONFETTI = Array.from({ length: 18 }, (_, i) => ({
+  angle: (360 / 18) * i + (i % 2 ? 6 : -6),
+  color: WR_CONFETTI_COLORS[i % WR_CONFETTI_COLORS.length],
+  delay: (i % 4) * 35,
+  distance: 38 + (i % 5) * 9,
+  size: 4 + (i % 3) * 2,
+  round: i % 3 !== 0,
+}));
+
+// Big burst that flies OUTSIDE the button (rendered in a fixed, click-through layer).
+const WR_FX_COLORS = ["#6366f1", "#8b5cf6", "#a78bfa", "#34d399", "#fde68a", "#38bdf8", "#ffffff"];
+const WR_FX_PARTICLES = Array.from({ length: 34 }, (_, i) => {
+  const angle = ((Math.PI * 2) / 34) * i + (i % 2 ? 0.08 : -0.08);
+  const dist = 90 + ((i * 37) % 120);
+  return {
+    tx: Math.round(Math.cos(angle) * dist),
+    ty: Math.round(Math.sin(angle) * dist) + 30,
+    rot: (i * 53) % 360,
+    size: 5 + (i % 4) * 2,
+    color: WR_FX_COLORS[i % WR_FX_COLORS.length],
+    delay: (i % 5) * 30,
+    round: i % 3 !== 0,
+  };
+});
+
+const WR_SHAKE_KEYFRAMES: Keyframe[] = [
+  { transform: "translateX(0)" },
+  { transform: "translateX(-6px)" },
+  { transform: "translateX(5px)" },
+  { transform: "translateX(-4px)" },
+  { transform: "translateX(2px)" },
+  { transform: "translateX(0)" },
+];
+
 const animationStyles = `
   @keyframes fadeSlideDown {
     0%   { opacity: 0; transform: translateY(-14px) scale(0.97); }
@@ -517,6 +573,67 @@ const animationStyles = `
 
   [data-work-report-table] .entry-row:hover {
     background: rgba(99,102,241,.05) !important;
+  }
+
+  /* ── My reports: animated "pop-up" on row hover ── */
+  /* Entrance animation must not keep holding its final transform,
+     otherwise it would override the hover transform below. */
+  [data-work-report-table] .entry-row.table-row-animate {
+    animation-fill-mode: backwards;
+    opacity: 1;
+  }
+
+  [data-work-report-table] .entry-row {
+    position: relative;
+    transition:
+      transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 0.28s ease,
+      background-color 0.2s ease;
+    will-change: transform;
+  }
+
+  [data-work-report-table] .entry-row:hover {
+    transform: translateY(-3px) scale(1.012);
+    z-index: 5;
+    box-shadow:
+      0 14px 28px -10px rgba(99, 102, 241, 0.35),
+      0 6px 12px -6px rgba(0, 0, 0, 0.12),
+      inset 3px 0 0 0 #6366f1;
+    background: rgba(99, 102, 241, 0.07) !important;
+  }
+
+  [data-work-report-table] .entry-row:active {
+    transform: translateY(-1px) scale(1.004);
+  }
+
+  .dark [data-work-report-table] .entry-row:hover {
+    box-shadow:
+      0 14px 30px -10px rgba(0, 0, 0, 0.7),
+      0 0 0 1px rgba(129, 140, 248, 0.25),
+      inset 3px 0 0 0 #818cf8;
+    background: rgba(99, 102, 241, 0.14) !important;
+  }
+
+  /* Inner pills pop slightly after the row lifts */
+  [data-work-report-table] .entry-row td span {
+    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) 0.04s;
+  }
+  [data-work-report-table] .entry-row:hover td span {
+    transform: scale(1.08);
+  }
+  [data-work-report-table] .entry-row:hover td span.weekend-badge {
+    transform: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-work-report-table] .entry-row,
+    [data-work-report-table] .entry-row td span {
+      transition: background-color 0.15s ease;
+    }
+    [data-work-report-table] .entry-row:hover,
+    [data-work-report-table] .entry-row:hover td span {
+      transform: none;
+    }
   }
 
   [data-work-report-table] thead tr {
@@ -868,6 +985,559 @@ const animationStyles = `
       opacity: 1 !important;
     }
   }
+  /* ═══════════════════════════════════════════════════════════════
+     SUBMIT WORK REPORT — form animations (mirrors the Create RFI form)
+     Everything is prefixed "wr-" so it cannot clash with other pages.
+     ═══════════════════════════════════════════════════════════════ */
+  .wr-form, .wr-pop-content, .wr-submit, .wr-fx { --wr-rgb: 99 102 241; }
+  .wr-form[data-mode="edit"] { --wr-rgb: 245 158 11; }
+
+  /* ── Card: glowing border that gently breathes ── */
+  .wr-card {
+    border-width: 1.5px;
+    animation: stepIn 0.32s cubic-bezier(0.34,1.05,0.64,1) both,
+               wr-card-glow 4s ease-in-out 0.4s infinite;
+  }
+  @keyframes wr-card-glow {
+    0%, 100% { box-shadow: 0 0 0 4px rgb(var(--wr-rgb) / 0.04), 0 18px 40px -18px rgb(var(--wr-rgb) / 0.28); }
+    50%      { box-shadow: 0 0 0 5px rgb(var(--wr-rgb) / 0.09), 0 22px 46px -16px rgb(var(--wr-rgb) / 0.46); }
+  }
+
+  /* ── Header: icon wiggle, back-arrow slide, accent line that draws itself ── */
+  .wr-hdr-icon { transition: transform 320ms cubic-bezier(0.34,1.56,0.64,1); }
+
+  /* ── Select-a-date card ── */
+  .wr-date-glow {
+    position: absolute;
+    inset: -40% -20% auto auto;
+    width: 60%;
+    height: 90%;
+    background: radial-gradient(closest-side, rgba(129, 140, 248, 0.22), transparent 70%);
+    opacity: 0;
+    transform: scale(0.6);
+    transition: opacity 0.5s ease, transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+  }
+  .wr-date-card:hover .wr-date-glow,
+  .wr-date-card:focus-within .wr-date-glow { opacity: 1; transform: scale(1); }
+
+  .wr-date-icon { transition: transform 360ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .wr-date-card:hover .wr-date-icon,
+  .wr-date-card:focus-within .wr-date-icon { transform: translateY(-2px) rotate(-6deg) scale(1.08); }
+
+  .wr-date-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 1rem;
+    background: radial-gradient(closest-side, rgba(129, 140, 248, 0.55), rgba(168, 85, 247, 0.25) 70%, transparent);
+    opacity: 0;
+  }
+  .wr-date-card:hover .wr-date-ring,
+  .wr-date-card:focus-within .wr-date-ring { animation: wr-date-ping 1.4s ease-out infinite; }
+  @keyframes wr-date-ping {
+    0%   { opacity: 0.45; transform: scale(1); }
+    100% { opacity: 0;    transform: scale(1.7); }
+  }
+
+  .wr-quick-pick {
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 9999px;
+    border: 1px solid rgb(226 232 240);
+    color: rgb(71 85 105);
+    background: rgb(248 250 252);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.2s ease;
+  }
+  .wr-quick-pick:hover { transform: translateY(-2px) scale(1.06); border-color: rgb(165 180 252); color: rgb(79 70 229); box-shadow: 0 6px 14px -6px rgba(99, 102, 241, 0.45); }
+  .wr-quick-pick:active { transform: scale(0.95); }
+  .wr-quick-pick[data-active="true"] {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 6px 14px -6px rgba(99, 102, 241, 0.6);
+  }
+  .dark .wr-quick-pick { border-color: rgb(51 65 85); color: rgb(203 213 225); background: rgba(30, 41, 59, 0.6); }
+  .dark .wr-quick-pick:hover { border-color: rgb(129 140 248); color: rgb(165 180 252); }
+  .dark .wr-quick-pick[data-active="true"] { color: #fff; border-color: transparent; background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wr-date-card:hover .wr-date-ring,
+    .wr-date-card:focus-within .wr-date-ring { animation: none; }
+    .wr-date-card:hover .wr-date-icon,
+    .wr-date-card:focus-within .wr-date-icon,
+    .wr-quick-pick:hover { transform: none; }
+  }
+  .wr-hdr:hover .wr-hdr-icon { transform: rotate(-8deg) scale(1.1); }
+  .wr-back svg { transition: transform 240ms cubic-bezier(0.34,1.56,0.64,1); }
+  .wr-back:hover:not(:disabled) svg { transform: translateX(-3px); }
+  .wr-header-bar {
+    height: 2px;
+    transform-origin: left;
+    background: linear-gradient(90deg, rgb(var(--wr-rgb)), rgb(var(--wr-rgb) / 0.05));
+    animation: wr-line-in 600ms cubic-bezier(0.16,1,0.3,1) both;
+  }
+  @keyframes wr-line-in { 0% { transform: scaleX(0); } 100% { transform: scaleX(1); } }
+
+  /* ── Fields: hover / focus glow, "filled" tint, invalid pulse ── */
+  .wr-form .wr-field {
+    transition: border-color 180ms ease, box-shadow 180ms ease,
+                background-color 240ms ease, opacity 200ms ease;
+  }
+  .wr-form .wr-field:hover:not(:disabled) { border-color: rgb(var(--wr-rgb) / 0.55); }
+  .wr-form .wr-field:focus,
+  .wr-form .wr-field:focus-visible,
+  .wr-form .wr-field[data-state="open"] {
+    border-color: rgb(var(--wr-rgb));
+    box-shadow: 0 0 0 3px rgb(var(--wr-rgb) / 0.16);
+    outline: none;
+  }
+  .wr-form .wr-field[data-filled="true"]:not(:focus):not([data-state="open"]) {
+    border-color: rgb(var(--wr-rgb) / 0.42);
+    background-color: rgb(var(--wr-rgb) / 0.05);
+  }
+  .wr-form .wr-field svg { transition: transform 280ms cubic-bezier(0.34,1.56,0.64,1); }
+  .wr-form .wr-field[data-state="open"] svg { transform: rotate(180deg); }
+  .wr-form .wr-field[data-invalid="true"] {
+    border-color: #f43f5e !important;
+    box-shadow: 0 0 0 3px rgb(244 63 94 / 0.12);
+    animation: wr-invalid-pulse 900ms ease-out 1;
+  }
+  @keyframes wr-invalid-pulse {
+    0%   { box-shadow: 0 0 0 0 rgb(244 63 94 / 0.55); }
+    100% { box-shadow: 0 0 0 8px rgb(244 63 94 / 0); }
+  }
+
+  /* Picking a value: a ring + light sweep play over the field */
+  .wr-ping {
+    position: absolute; inset: 0; border-radius: 6px; pointer-events: none;
+    border: 2px solid rgb(var(--wr-rgb) / 0.7);
+    animation: wr-ping 650ms cubic-bezier(0.22,1,0.36,1) forwards;
+  }
+  @keyframes wr-ping {
+    0%   { opacity: 0.9; transform: scale(1); }
+    100% { opacity: 0;   transform: scale(1.1, 1.7); }
+  }
+  .wr-sweep { position: absolute; inset: 0; border-radius: 6px; overflow: hidden; pointer-events: none; }
+  .wr-sweep::after {
+    content: ""; position: absolute; top: 0; bottom: 0; left: -45%; width: 40%;
+    background: linear-gradient(100deg, transparent, rgb(var(--wr-rgb) / 0.28), transparent);
+    transform: skewX(-20deg);
+    animation: wr-sweep 650ms ease-out forwards;
+  }
+  @keyframes wr-sweep { 0% { left: -45%; } 100% { left: 125%; } }
+
+  .wr-value-in { display: block; animation: wr-value-in 320ms cubic-bezier(0.16,1,0.3,1) both; }
+  @keyframes wr-value-in {
+    0%   { opacity: 0; transform: translateY(6px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .wr-chip-in { animation: wr-chip-in 340ms cubic-bezier(0.34,1.56,0.64,1) both; }
+  @keyframes wr-chip-in {
+    0%   { opacity: 0; transform: translateY(3px) scale(0.7); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .wr-shake { animation: wr-shake 380ms cubic-bezier(0.36,0.07,0.19,0.97) both; }
+  @keyframes wr-shake {
+    10%, 90% { transform: translateX(-1px); }
+    20%, 80% { transform: translateX(2px); }
+    30%, 50%, 70% { transform: translateX(-4px); }
+    40%, 60% { transform: translateX(4px); }
+  }
+
+  /* ── Rows: stagger in, flash when added, slide out when removed ── */
+  .wr-row-in { animation: wr-row-in 420ms cubic-bezier(0.16,1,0.3,1) both; }
+  @keyframes wr-row-in {
+    0%   { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .wr-row-new {
+    animation: wr-row-in 420ms cubic-bezier(0.16,1,0.3,1) both,
+               wr-row-flash 1400ms ease-out both;
+  }
+  @keyframes wr-row-flash {
+    0%   { background-color: rgb(var(--wr-rgb) / 0.16); }
+    100% { background-color: transparent; }
+  }
+  .wr-row-out { animation: wr-row-out 240ms cubic-bezier(0.4,0,1,1) forwards !important; pointer-events: none; }
+  @keyframes wr-row-out {
+    0%   { opacity: 1; transform: translateX(0); }
+    100% { opacity: 0; transform: translateX(28px); }
+  }
+
+  /* ── Dropdown panels (client / project / work type) ── */
+  .wr-pop-content {
+    border-radius: 12px;
+    border-color: rgb(var(--wr-rgb) / 0.25);
+    box-shadow: 0 24px 48px -18px rgb(15 23 42 / 0.42), 0 3px 10px rgb(15 23 42 / 0.08);
+  }
+  .wr-pop-content [role="option"],
+  .wr-pop-content [role="menuitemcheckbox"] {
+    position: relative;
+    border-radius: 8px;
+    animation: wr-item-in 280ms cubic-bezier(0.16,1,0.3,1) both;
+    transition: background-color 160ms ease, transform 200ms cubic-bezier(0.22,1,0.36,1), color 160ms ease;
+  }
+  .wr-pop-content [role="option"]:nth-child(1), .wr-pop-content [role="menuitemcheckbox"]:nth-child(3)  { animation-delay: 20ms; }
+  .wr-pop-content [role="option"]:nth-child(2), .wr-pop-content [role="menuitemcheckbox"]:nth-child(4)  { animation-delay: 45ms; }
+  .wr-pop-content [role="option"]:nth-child(3), .wr-pop-content [role="menuitemcheckbox"]:nth-child(5)  { animation-delay: 70ms; }
+  .wr-pop-content [role="option"]:nth-child(4), .wr-pop-content [role="menuitemcheckbox"]:nth-child(6)  { animation-delay: 95ms; }
+  .wr-pop-content [role="option"]:nth-child(5), .wr-pop-content [role="menuitemcheckbox"]:nth-child(7)  { animation-delay: 120ms; }
+  .wr-pop-content [role="option"]:nth-child(6), .wr-pop-content [role="menuitemcheckbox"]:nth-child(8)  { animation-delay: 145ms; }
+  .wr-pop-content [role="option"]:nth-child(7), .wr-pop-content [role="menuitemcheckbox"]:nth-child(9)  { animation-delay: 170ms; }
+  .wr-pop-content [role="option"]:nth-child(n+8), .wr-pop-content [role="menuitemcheckbox"]:nth-child(n+10) { animation-delay: 190ms; }
+  @keyframes wr-item-in {
+    0%   { opacity: 0; transform: translateY(-6px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .wr-pop-content [role="option"]::before,
+  .wr-pop-content [role="menuitemcheckbox"]::before {
+    content: ""; position: absolute; left: 2px; top: 50%; width: 3px; height: 0;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgb(var(--wr-rgb)), rgb(var(--wr-rgb) / 0.5));
+    transform: translateY(-50%);
+    transition: height 260ms cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .wr-pop-content [data-highlighted]::before { height: 60%; }
+  .wr-pop-content [data-highlighted] { transform: translateX(2px); background-color: rgb(var(--wr-rgb) / 0.09) !important; }
+  .wr-pop-content [data-state="checked"] { font-weight: 600; color: rgb(79 70 229); }
+  .dark .wr-pop-content [data-state="checked"] { color: rgb(165 180 252); }
+  .wr-pop-content [data-state="checked"] svg { animation: wr-check-pop 380ms cubic-bezier(0.34,1.56,0.64,1) both; }
+  @keyframes wr-check-pop {
+    0%   { transform: scale(0) rotate(-90deg); opacity: 0; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+
+  /* ── Total hours + 8h goal ── */
+  .wr-num-pop { display: inline-block; animation: wr-num-pop 360ms cubic-bezier(0.34,1.56,0.64,1) both; }
+  @keyframes wr-num-pop {
+    0%   { opacity: 0.3; transform: translateY(4px) scale(0.75); }
+    100% { opacity: 1;   transform: translateY(0) scale(1); }
+  }
+  .wr-progress-done {
+    background-image: linear-gradient(90deg, #10b981, #34d399, #10b981) !important;
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite !important;
+    box-shadow: 0 0 12px rgb(16 185 129 / 0.55);
+  }
+
+  /* ── Small button flourishes ── */
+  .wr-add svg { transition: transform 280ms cubic-bezier(0.34,1.56,0.64,1); }
+  .wr-add:hover:not(:disabled) svg { transform: rotate(90deg) scale(1.2); }
+  .wr-trash:hover:not(:disabled) svg { animation: wr-wiggle 500ms ease-in-out; }
+  @keyframes wr-wiggle {
+    0%, 100% { transform: rotate(0); }
+    25% { transform: rotate(-14deg) scale(1.15); }
+    75% { transform: rotate(14deg) scale(1.15); }
+  }
+  .wr-continue svg { transition: transform 260ms cubic-bezier(0.34,1.56,0.64,1); }
+  .wr-continue:hover:not(:disabled) svg { transform: translateX(4px); }
+
+  /* ── Submit button ── */
+  .wr-submit {
+    --wr-a: 79 70 229; --wr-b: 147 51 234;
+    position: relative; isolation: isolate; overflow: hidden; color: #fff;
+    background-color: rgb(var(--wr-a));
+    background-image: linear-gradient(110deg, rgb(var(--wr-a)), rgb(var(--wr-b)), rgb(var(--wr-a))) !important;
+    background-size: 200% 100%;
+    background-position: 0% 50%;
+    transition: box-shadow 250ms ease, transform 180ms cubic-bezier(0.34,1.56,0.64,1),
+                filter 200ms ease, background-position 600ms ease;
+    will-change: transform, width;
+    border-radius: 9999px;
+  }
+  .wr-submit[data-mode="edit"] { --wr-a: 245 158 11; --wr-b: 249 115 22; }
+  .wr-submit[data-state="idle"]:not(:disabled) {
+    animation: wr-breathe 2.8s ease-in-out infinite, wr-gradient-flow 7s linear infinite;
+  }
+  @keyframes wr-breathe {
+    0%, 100% { box-shadow: 0 4px 12px -4px rgb(var(--wr-a) / 0.35), 0 0 0 0 rgb(var(--wr-a) / 0); }
+    50%      { box-shadow: 0 6px 18px -4px rgb(var(--wr-a) / 0.55), 0 0 0 5px rgb(var(--wr-a) / 0.12); }
+  }
+  .wr-submit:hover:not(:disabled) {
+    background-position: 100% 50%;
+    filter: brightness(1.08);
+    box-shadow: 0 10px 24px -6px rgb(var(--wr-a) / 0.6);
+    transform: translateY(-2px) scale(1.04);
+    animation: wr-gradient-flow 2.2s linear infinite;
+  }
+  .wr-submit:active:not(:disabled) { transform: translateY(0) scale(0.94); transition-duration: 90ms; }
+  .wr-submit:focus-visible { outline: 2px solid rgb(var(--wr-a) / 0.6); outline-offset: 3px; }
+
+  .wr-submit-shine {
+    position: absolute; top: 0; bottom: 0; left: -60%; width: 40%;
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,0.45), transparent);
+    transform: skewX(-20deg); pointer-events: none; z-index: 1; opacity: 0;
+  }
+  .wr-submit:hover:not(:disabled) .wr-submit-shine { animation: wr-shine 700ms ease-out; }
+  @keyframes wr-shine {
+    0%   { left: -60%; opacity: 0; }
+    20%  { opacity: 1; }
+    100% { left: 130%; opacity: 0; }
+  }
+  .wr-submit-icon { transition: transform 260ms cubic-bezier(0.34,1.56,0.64,1); }
+
+  /* ── Submit button: aurora, cursor spotlight, sparkles, flying plane ── */
+  .wr-aurora {
+    position: absolute; inset: -60%; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(38% 55% at 22% 32%, rgba(255,255,255,0.30), transparent 62%),
+      radial-gradient(34% 50% at 78% 70%, rgba(255,255,255,0.20), transparent 62%);
+    mix-blend-mode: soft-light;
+    animation: wr-aurora 7s linear infinite;
+  }
+  @keyframes wr-aurora { to { transform: rotate(360deg); } }
+
+  .wr-spot {
+    position: absolute; inset: 0; pointer-events: none; z-index: 1; opacity: 0;
+    background: radial-gradient(70px circle at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,0.38), transparent 65%);
+    transition: opacity 250ms ease;
+  }
+  .wr-submit:hover:not(:disabled) .wr-spot { opacity: 1; }
+
+  .wr-spark {
+    position: absolute; width: 6px; height: 6px; pointer-events: none; z-index: 1; opacity: 0;
+    background: #fff;
+    clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+    animation: wr-twinkle 2.6s ease-in-out infinite;
+  }
+  .wr-spark-1 { left: 12%; top: 22%; animation-delay: 0s; }
+  .wr-spark-2 { left: 78%; top: 18%; width: 5px; height: 5px; animation-delay: 0.7s; }
+  .wr-spark-3 { left: 62%; top: 68%; width: 4px; height: 4px; animation-delay: 1.4s; }
+  .wr-spark-4 { left: 30%; top: 70%; width: 5px; height: 5px; animation-delay: 2s; }
+  .wr-submit:hover:not(:disabled) .wr-spark { animation-duration: 1.1s; }
+  @keyframes wr-twinkle {
+    0%, 100% { opacity: 0; transform: scale(0.2) rotate(0deg); }
+    50%      { opacity: 0.95; transform: scale(1.15) rotate(45deg); }
+  }
+
+  /* decorations only while idle */
+  .wr-submit:not([data-state="idle"]) .wr-aurora,
+  .wr-submit:not([data-state="idle"]) .wr-spot,
+  .wr-submit:not([data-state="idle"]) .wr-spark { display: none; }
+
+  /* paper plane: glides out top-right, re-enters bottom-left */
+  .wr-submit:hover:not(:disabled) .wr-plane { animation: wr-plane-fly 1000ms ease-in-out infinite; transform: none; }
+  @keyframes wr-plane-fly {
+    0%   { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+    42%  { transform: translate(16px, -14px) rotate(6deg); opacity: 0; }
+    43%  { transform: translate(-16px, 14px) rotate(-6deg); opacity: 0; }
+    100% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  }
+  /* pencil: "writes" a little squiggle */
+  .wr-submit:hover:not(:disabled) .wr-pencil { animation: wr-pencil-write 700ms ease-in-out infinite; transform: none; }
+  @keyframes wr-pencil-write {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    25%      { transform: translate(2px, 1px) rotate(8deg); }
+    50%      { transform: translate(-1px, 2px) rotate(-6deg); }
+    75%      { transform: translate(2px, 0) rotate(6deg); }
+  }
+
+  /* label nudges as the cursor arrives */
+  .wr-label { position: relative; transition: letter-spacing 250ms ease; }
+  .wr-submit:hover:not(:disabled) .wr-label { letter-spacing: 0.06em; }
+
+  /* disabled (no date yet) → calm and muted */
+  .wr-submit:disabled[data-state="idle"] { filter: saturate(0.35) brightness(0.97); cursor: not-allowed; opacity: 0.8 !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wr-aurora, .wr-spark { animation: none; }
+    .wr-submit:hover:not(:disabled) .wr-plane,
+    .wr-submit:hover:not(:disabled) .wr-pencil { animation: none; }
+    .wr-submit[data-state="idle"]:not(:disabled) { animation: none; }
+  }
+  .wr-submit:hover:not(:disabled) .wr-submit-icon { transform: scale(1.25) rotate(-10deg); }
+
+  .wr-ripple {
+    position: absolute; border-radius: 9999px; pointer-events: none; z-index: 2;
+    background: radial-gradient(circle, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.25) 55%, transparent 70%);
+    animation: wr-ripple 650ms cubic-bezier(0.22,1,0.36,1) forwards;
+  }
+  @keyframes wr-ripple {
+    0%   { transform: translate(-50%, -50%) scale(0); opacity: 0.55; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+  }
+
+  /* Result colour floods outward from the centre */
+  .wr-submit-overlay {
+    position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    clip-path: circle(0% at 50% 50%);
+    transition: clip-path 500ms cubic-bezier(0.22,1,0.36,1);
+  }
+  .wr-submit-overlay-success { background: linear-gradient(135deg, #059669, #10b981 55%, #34d399); clip-path: circle(150% at 50% 50%); }
+  .wr-submit-overlay-error   { background: linear-gradient(135deg, #b91c1c, #ef4444 55%, #f87171); clip-path: circle(150% at 50% 50%); }
+
+  /* Sending: flowing gradient + progress sliver + bouncing dots */
+  /* Sending: the pill MORPHS into a round orb (width -> 36px) with a spinning ring */
+  .wr-submit[data-state="sending"] {
+    animation: wr-morph-in 460ms cubic-bezier(0.65,0,0.35,1) forwards,
+               wr-gradient-flow 1.4s linear infinite;
+    flex: none; min-width: 0; padding-left: 0; padding-right: 0;
+  }
+  @keyframes wr-morph-in { from { width: var(--wr-w, 150px); } to { width: 36px; } }
+  @keyframes wr-morph-out { from { width: 36px; } to { width: var(--wr-w, 150px); } }
+
+  .wr-orb { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; }
+  .wr-orb-ring { position: absolute; inset: 0; width: 100%; height: 100%; animation: wr-spin 900ms linear infinite; }
+  .wr-orb-track { fill: none; stroke: rgba(255,255,255,0.28); stroke-width: 2; }
+  .wr-orb-arc { fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 28 70; }
+  .wr-orb-doc { position: relative; width: 14px; height: 14px; animation: wr-doc-bob 1100ms ease-in-out infinite; opacity: 0; animation-fill-mode: forwards; }
+  @keyframes wr-doc-bob {
+    0%   { opacity: 0; transform: translateY(5px) scale(0.8); }
+    30%  { opacity: 1; transform: translateY(0) scale(1); }
+    70%  { opacity: 1; transform: translateY(-1px) scale(1); }
+    100% { opacity: 0; transform: translateY(-7px) scale(0.85); }
+  }
+  @keyframes wr-gradient-flow { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+  .wr-progress {
+    position: absolute; left: 0; bottom: 0; height: 3px; width: 40%; border-radius: 9999px; z-index: 3;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.95), transparent);
+    animation: wr-progress 1.1s ease-in-out infinite; pointer-events: none;
+  }
+  @keyframes wr-progress { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+  .wr-launch-ring {
+    position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    border: 2px solid rgba(255,255,255,0.7);
+    animation: wr-launch-ring 700ms ease-out forwards;
+  }
+  @keyframes wr-launch-ring { 0% { transform: scale(0.7); opacity: 0.6; } 100% { transform: scale(1.7); opacity: 0; } }
+  .wr-spin-ring {
+    width: 14px; height: 14px; border-radius: 9999px;
+    border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff;
+    animation: wr-spin 700ms linear infinite;
+  }
+  @keyframes wr-spin { to { transform: rotate(360deg); } }
+  .wr-dot { display: inline-block; animation: wr-dot-bounce 1.2s ease-in-out infinite; }
+  .wr-dot:nth-of-type(2) { animation-delay: 150ms; }
+  .wr-dot:nth-of-type(3) { animation-delay: 300ms; }
+  @keyframes wr-dot-bounce {
+    0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+    40%           { opacity: 1;    transform: translateY(-3px); }
+  }
+
+  /* Success: pop, ring, self-drawing tick, confetti */
+  .wr-submit[data-state="success"] { animation: wr-morph-out 520ms cubic-bezier(0.34,1.3,0.64,1) forwards, wr-success-pop 600ms 380ms cubic-bezier(0.34,1.56,0.64,1); }
+  @keyframes wr-success-pop { 0% { transform: scale(0.96); } 45% { transform: scale(1.1); } 100% { transform: scale(1); } }
+  .wr-success-ring {
+    position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    border: 2px solid rgba(255,255,255,0.85);
+    animation: wr-success-ring 700ms ease-out forwards;
+  }
+  @keyframes wr-success-ring { 0% { transform: scale(0.8); opacity: 0.8; } 100% { transform: scale(1.6); opacity: 0; } }
+  .wr-check-circle { stroke: rgba(255,255,255,0.9); stroke-width: 2; stroke-dasharray: 63; stroke-dashoffset: 63; animation: wr-draw 450ms ease-out forwards; }
+  .wr-check-tick { stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 18; stroke-dashoffset: 18; animation: wr-draw 350ms 300ms ease-out forwards; }
+  @keyframes wr-draw { to { stroke-dashoffset: 0; } }
+  .wr-check { transform-origin: center; animation: wr-check-spin 600ms 220ms cubic-bezier(0.34,1.56,0.64,1) both; }
+  @keyframes wr-check-spin { 0% { transform: scale(0) rotate(-120deg); } 100% { transform: scale(1) rotate(0); } }
+  .wr-text-pop { display: inline-block; animation: wr-text-pop 400ms 380ms cubic-bezier(0.34,1.56,0.64,1) both; }
+  @keyframes wr-text-pop {
+    0%   { opacity: 0; transform: translateY(8px) scale(0.8); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .wr-confetti-dot {
+    position: absolute; top: 50%; left: 50%;
+    width: var(--size, 5px); height: var(--size, 5px); border-radius: 9999px;
+    background: var(--dot-color); z-index: 4; pointer-events: none;
+    animation: wr-confetti 800ms cubic-bezier(0.22,1,0.36,1) forwards;
+    animation-delay: var(--delay);
+  }
+  .wr-confetti-square { border-radius: 1px; }
+  @keyframes wr-confetti {
+    0%   { transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0) scale(1); opacity: 1; }
+    70%  { opacity: 1; }
+    100% { transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(-1 * var(--dist))) scale(0); opacity: 0; }
+  }
+
+  /* Error: button shakes, icon wobbles */
+  .wr-submit[data-state="error"] { animation: wr-morph-out 420ms cubic-bezier(0.34,1.3,0.64,1) forwards, wr-btn-shake 480ms 320ms cubic-bezier(0.36,0.07,0.19,0.97); }
+  @keyframes wr-btn-shake {
+    10%, 90% { transform: translateX(-2px); }
+    20%, 80% { transform: translateX(4px); }
+    30%, 50%, 70% { transform: translateX(-6px); }
+    40%, 60% { transform: translateX(6px); }
+  }
+  .wr-icon-wobble { animation: wr-wobble 600ms ease-in-out; }
+  @keyframes wr-wobble {
+    0%, 100% { transform: rotate(0) scale(1); }
+    25% { transform: rotate(-18deg) scale(1.25); }
+    75% { transform: rotate(18deg) scale(1.25); }
+  }
+
+  /* ── Outside-the-button effects (fixed, full-screen, click-through) ── */
+  .wr-fx { position: fixed; width: 0; height: 0; z-index: 9999; pointer-events: none; overflow: visible; }
+  .wr-fx-wave {
+    position: absolute; left: 0; top: 0; width: 90px; height: 34px; border-radius: 9999px;
+    border: 2px solid rgb(var(--wr-rgb)); background: rgb(var(--wr-rgb) / 0.08);
+    animation: wr-fx-wave 1.8s ease-out infinite;
+  }
+  @keyframes wr-fx-wave {
+    0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 0.55; }
+    100% { transform: translate(-50%, -50%) scale(5);   opacity: 0; }
+  }
+  .wr-fx-doc {
+    position: absolute; left: 0; top: 0; width: 16px; height: 20px; border-radius: 3px; opacity: 0;
+    background: #fff; border: 1.5px solid rgb(var(--wr-rgb));
+    box-shadow: 0 6px 14px -4px rgb(var(--wr-rgb) / 0.55);
+    animation: wr-fx-doc 1.5s cubic-bezier(0.3,0.7,0.4,1) infinite;
+  }
+  .wr-fx-doc::before {
+    content: ""; position: absolute; left: 3px; right: 3px; top: 4px; height: 2px; border-radius: 1px;
+    background: rgb(var(--wr-rgb) / 0.6);
+    box-shadow: 0 4px 0 rgb(var(--wr-rgb) / 0.45), 0 8px 0 rgb(var(--wr-rgb) / 0.3);
+  }
+  @keyframes wr-fx-doc {
+    0%   { transform: translate(-50%, -50%) translate(0, 0) scale(0.5) rotate(0); opacity: 0; }
+    15%  { opacity: 1; }
+    100% { transform: translate(-50%, -50%) translate(var(--dx), -130px) scale(1) rotate(var(--dr)); opacity: 0; }
+  }
+  .wr-fx-shock {
+    position: absolute; left: 0; top: 0; width: 90px; height: 40px; border-radius: 9999px;
+    border: 3px solid #10b981; background: rgba(16,185,129,0.12);
+    animation: wr-fx-shock 900ms cubic-bezier(0.22,1,0.36,1) forwards;
+  }
+  .wr-fx-shock-error { border-color: #ef4444; background: rgba(239,68,68,0.12); }
+  @keyframes wr-fx-shock {
+    0%   { transform: translate(-50%, -50%) scale(0.3); opacity: 0.8; }
+    100% { transform: translate(-50%, -50%) scale(7);   opacity: 0; }
+  }
+  .wr-fx-particle {
+    position: absolute; left: 0; top: 0; width: var(--size); height: var(--size);
+    border-radius: 9999px; background: var(--c);
+    animation: wr-fx-particle 1000ms cubic-bezier(0.15,0.85,0.3,1) forwards;
+  }
+  .wr-fx-particle-sq { border-radius: 2px; }
+  @keyframes wr-fx-particle {
+    0%   { transform: translate(-50%, -50%) translate(0, 0) rotate(0) scale(1); opacity: 1; }
+    80%  { opacity: 1; }
+    100% { transform: translate(-50%, -50%) translate(var(--tx), var(--ty)) rotate(var(--rot)) scale(0.2); opacity: 0; }
+  }
+  .wr-fx-badge {
+    position: absolute; left: 0; top: 0; white-space: nowrap; padding: 6px 14px; border-radius: 9999px;
+    font-size: 12px; font-weight: 700; color: #fff;
+    background: linear-gradient(135deg, #059669, #10b981);
+    box-shadow: 0 10px 24px -8px rgba(16,185,129,0.8);
+    animation: wr-fx-badge 1.15s cubic-bezier(0.34,1.56,0.64,1) forwards;
+  }
+  @keyframes wr-fx-badge {
+    0%   { transform: translate(-50%, 0) scale(0.5); opacity: 0; }
+    25%  { transform: translate(-50%, -52px) scale(1.1); opacity: 1; }
+    80%  { transform: translate(-50%, -62px) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -76px) scale(0.95); opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wr-card, .wr-header-bar, .wr-ping, .wr-sweep::after, .wr-value-in, .wr-chip-in, .wr-shake,
+    .wr-row-in, .wr-row-new, .wr-pop-content [role="option"], .wr-pop-content [role="menuitemcheckbox"],
+    .wr-pop-content [data-state="checked"] svg, .wr-num-pop, .wr-progress-done, .wr-submit,
+    .wr-submit-shine, .wr-ripple, .wr-progress, .wr-launch-ring, .wr-spin-ring, .wr-dot,
+    .wr-success-ring, .wr-check, .wr-text-pop, .wr-confetti-dot, .wr-icon-wobble,
+    .wr-form .wr-field[data-invalid="true"] { animation: none !important; }
+    .wr-check-circle, .wr-check-tick { animation: none !important; stroke-dashoffset: 0; }
+    .wr-row-out { animation-duration: 1ms !important; }
+    .wr-submit, .wr-submit-overlay, .wr-submit-icon, .wr-hdr-icon, .wr-add svg, .wr-back svg,
+    .wr-continue svg, .wr-form .wr-field svg { transition: none !important; }
+    .wr-confetti-dot, .wr-ripple, .wr-fx { display: none; }
+  }
 `;
 
 if (typeof document !== "undefined") {
@@ -1179,7 +1849,27 @@ const EmployeeView = () => {
   const [deletingEntryId, setDeletingEntryId] = useState<string | number | null>(null);
   const [pendingDeleteEntryId, setPendingDeleteEntryId] = useState<string | number | null>(null);
 
-  const [submitting, setSubmitting] = useState(false);
+  const [submitState, setSubmitState] = useState<SubmitState>("idle");
+  const isBusy = submitState === "sending" || submitState === "success";
+
+  // Animation helpers
+  const [showInvalid, setShowInvalid] = useState(false);
+  const [removingIds, setRemovingIds] = useState<string[]>([]);
+  const [newRowId, setNewRowId] = useState<string | null>(null);
+  const [timeShakeId, setTimeShakeId] = useState<string | null>(null);
+  const [btnW, setBtnW] = useState<number | null>(null);
+  const [fxReady, setFxReady] = useState(false);
+  const [isHeaderHovered, setIsHeaderHovered] = useState(false);
+  const [isHoursHovered, setIsHoursHovered] = useState(false);
+  const [isAddHovered, setIsAddHovered] = useState(false);
+  const [isDateCardHovered, setIsDateCardHovered] = useState(false);
+  const [isChangeDateHovered, setIsChangeDateHovered] = useState(false);
+  const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([]);
+  const [fxOrigin, setFxOrigin] = useState<{ x: number; y: number } | null>(null);
+  const rippleIdRef = useRef(0);
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hasInteracted, setHasInteracted] = useState(false);
   const [clientsError, setClientsError] = useState(false);
 
@@ -1219,6 +1909,84 @@ const EmployeeView = () => {
   const isClientProjectOptional = (workTypes: WorkType[]) => {
     return workTypes.length > 0 && workTypes.every((wt) => OPTIONAL_WORK_TYPES.has(wt));
   };
+
+  /** Which required fields of a row are still empty (drives the red "invalid" pulse). */
+  const getMissing = (e: WorkEntry) => {
+    const optional = isClientProjectOptional(e.workTypes);
+    return {
+      types: e.workTypes.length === 0,
+      client: !optional && !e.client,
+      project: !optional && !e.project,
+      time: !e.time,
+      description: !e.description.trim(),
+    };
+  };
+
+  const triggerShake = () => {
+    if (typeof window === "undefined") return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    tableRef.current?.animate(WR_SHAKE_KEYFRAMES, { duration: 380, easing: "ease-out" });
+  };
+
+  const triggerTimeShake = (id: string) => {
+    setTimeShakeId(id);
+    window.setTimeout(() => setTimeShakeId((cur) => (cur === id ? null : cur)), 400);
+  };
+
+  // Material-style click ripple that starts exactly where the pointer landed.
+  const spawnRipple = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (isBusy) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height) * 2.2;
+    const id = ++rippleIdRef.current;
+    const x = e.clientX ? e.clientX - rect.left : rect.width / 2;
+    const y = e.clientY ? e.clientY - rect.top : rect.height / 2;
+    setRipples((r) => [...r, { id, x, y, size }]);
+    window.setTimeout(() => setRipples((r) => r.filter((i) => i.id !== id)), 650);
+  };
+
+  // Remember where the button is so the outside-the-button effects burst from it.
+  // While the pill morphs into an orb its centre moves, so we follow it with rAF;
+  // the success burst waits until the button has expanded back to full width.
+  useEffect(() => {
+    const measure = () => {
+      const el = submitBtnRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setFxOrigin((prev) => {
+        const next = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        return prev && Math.abs(prev.x - next.x) < 0.5 && Math.abs(prev.y - next.y) < 0.5 ? prev : next;
+      });
+    };
+
+    if (submitState === "idle") {
+      setFxReady(false);
+      return;
+    }
+    if (submitState === "success") {
+      setFxReady(false);
+      const t = window.setTimeout(() => {
+        measure();
+        setFxReady(true);
+      }, 500);
+      return () => window.clearTimeout(t);
+    }
+    // sending / error: follow the button for the first 600ms
+    let raf = 0;
+    const t0 = performance.now();
+    const loop = () => {
+      measure();
+      if (performance.now() - t0 < 600) raf = requestAnimationFrame(loop);
+    };
+    loop();
+    return () => cancelAnimationFrame(raf);
+  }, [submitState]);
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
 
   /* Fetch clients */
   useEffect(() => {
@@ -1396,6 +2164,9 @@ const EmployeeView = () => {
     setDate("");
     setDraftDate(today);
     setHasInteracted(false);
+    setShowInvalid(false);
+    setRemovingIds([]);
+    setNewRowId(null);
   };
 
   const handleCancelEdit = () => handleChangeDate();
@@ -1443,19 +2214,29 @@ const EmployeeView = () => {
 
   const addEntry = () => {
     setHasInteracted(true);
-    setEntries((prev) => [...prev, createEntry()]);
+    const fresh = createEntry();
+    setNewRowId(fresh.localId);
+    setEntries((prev) => [...prev, fresh]);
     toast({ title: "Row added", description: "Fill in the details for the new entry.", className: "bg-indigo-500 text-white border-none text-xs", duration: 1200 });
   };
 
   const removeEntry = (localId: string) => {
-    if (entries.length <= 1) {
+    if (entries.length - removingIds.length <= 1) {
       toast({ title: "Cannot remove", description: "At least one entry is required.", variant: "destructive" });
       return;
     }
-    setEntries((prev) => prev.filter((e) => e.localId !== localId));
+    if (removingIds.includes(localId)) return;
+    // Slide the row out first, then actually drop it from state.
+    setRemovingIds((prev) => [...prev, localId]);
+    window.setTimeout(() => {
+      setEntries((prev) => prev.filter((e) => e.localId !== localId));
+      setRemovingIds((prev) => prev.filter((i) => i !== localId));
+    }, 240);
   };
 
   const handleFinalSubmit = async () => {
+    if (isBusy) return;
+
     if (!date) {
       toast({ title: "No date selected", description: "Please pick a date first.", variant: "destructive" });
       return;
@@ -1470,17 +2251,22 @@ const EmployeeView = () => {
     });
 
     if (incompleteEntry) {
+      setShowInvalid(true);
+      triggerShake();
       toast({ title: "Incomplete rows", description: "Please fill in all required fields — including at least one type — for every row.", variant: "destructive" });
       return;
     }
 
     const timeSum = entries.reduce((s, e) => s + (parseFloat(e.time) || 0), 0);
     if (timeSum > 24) {
+      triggerShake();
       toast({ title: "Invalid time", description: "Total time cannot exceed 24 hours in a day.", variant: "destructive" });
       return;
     }
 
-    setSubmitting(true);
+    setShowInvalid(false);
+    setBtnW(submitBtnRef.current?.offsetWidth ?? 150);
+    setSubmitState("sending");
     try {
       const payload = entries.flatMap((e) => {
         const optional = isClientProjectOptional(e.workTypes);
@@ -1511,12 +2297,20 @@ const EmployeeView = () => {
         });
       }
 
-      handleChangeDate();
-      await loadReports();
+      // Let the success animation play, then go back to the date step.
+      setSubmitState("success");
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+      successTimerRef.current = setTimeout(async () => {
+        handleChangeDate();
+        setSubmitState("idle");
+        await loadReports();
+      }, 1800);
     } catch (err) {
+      triggerShake();
+      setSubmitState("error");
       toast({ title: isEditMode ? "Update failed" : "Submission failed", description: getErrorMessage(err) || "An unexpected error occurred.", variant: "destructive" });
-    } finally {
-      setSubmitting(false);
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+      successTimerRef.current = setTimeout(() => setSubmitState("idle"), 900);
     }
   };
 
@@ -1526,25 +2320,62 @@ const EmployeeView = () => {
 
         {/* ══ STEP 1 — Date selection ══ */}
         {!hasDate && (
-          <section className="rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm shadow-sm card-hover animate-step-in p-4 sm:p-6">
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className="p-1.5 rounded-xl shadow-sm bg-gradient-to-br from-indigo-500 to-purple-600">
-                <Calendar className="h-4 w-4 text-white" aria-hidden="true" />
+          <section
+            className="wr-form wr-card wr-date-card relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm shadow-sm card-hover animate-step-in p-4 sm:p-6"
+            onMouseEnter={() => setIsDateCardHovered(true)}
+            onMouseLeave={() => setIsDateCardHovered(false)}
+            onFocusCapture={() => setIsDateCardHovered(true)}
+            onBlurCapture={() => setIsDateCardHovered(false)}
+          >
+            {/* soft animated glow behind the card content */}
+            <span className="wr-date-glow" aria-hidden="true" />
+
+            <div className="relative flex items-center gap-3 mb-5">
+              <div className="wr-date-icon relative flex-shrink-0">
+                <span className="wr-date-ring" aria-hidden="true" />
+                <AnimatedCalendarIcon
+                  size="2xl"
+                  className="relative !h-11 !w-11 drop-shadow-sm"
+                  triggerParentHover
+                  isParentHovered={isDateCardHovered}
+                />
               </div>
-              <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-                Select a date
-              </h2>
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 leading-tight">
+                  Select a date
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Choose the day you want to report on
+                </p>
+              </div>
             </div>
 
-            <Label htmlFor="date-step" className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5" aria-hidden="true" /> Report date
-            </Label>
+            {/* quick picks */}
+            <div className="relative flex flex-wrap items-center gap-2 mb-3" role="group" aria-label="Quick date picks">
+              {[
+                { label: "Today", value: today },
+                { label: "Yesterday", value: format(new Date(Date.now() - 86400000), "yyyy-MM-dd") },
+              ].map((q) => (
+                <button
+                  key={q.label}
+                  type="button"
+                  onClick={() => setDraftDate(q.value)}
+                  data-active={draftDate === q.value ? "true" : "false"}
+                  className="wr-quick-pick"
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
+
+            <Label htmlFor="date-step" className="sr-only">Date</Label>
             <Input
               id="date-step"
               type="date"
               autoFocus
-              className="date-step-input h-12 text-base font-medium border-slate-200 dark:border-slate-700 focus-visible:border-indigo-400 dark:focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-100 dark:focus-visible:ring-indigo-900/40 w-full max-w-[min(20rem,calc(100vw-4rem))]"
+              className="wr-field date-step-input relative h-12 text-base font-medium border-slate-200 dark:border-slate-700 focus-visible:border-indigo-400 dark:focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-100 dark:focus-visible:ring-indigo-900/40 w-full max-w-[min(20rem,calc(100vw-4rem))]"
               value={draftDate}
+              data-filled={draftDate ? "true" : "false"}
               onChange={(e) => setDraftDate(e.target.value)}
               max={today}
             />
@@ -1552,7 +2383,8 @@ const EmployeeView = () => {
             {draftDate && (
               <div
                 role="status"
-                className={`mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs animate-fade-in-up max-w-[min(20rem,calc(100vw-4rem))] ${existingReportForDraft
+                key={draftDate}
+                className={`relative mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs animate-fade-in-up max-w-[min(20rem,calc(100vw-4rem))] ${existingReportForDraft
                     ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
                     : "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
                   }`}
@@ -1560,12 +2392,12 @@ const EmployeeView = () => {
                 {existingReportForDraft ? (
                   <>
                     <Pencil className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" aria-hidden="true" />
-                    <span>A report already exists for <span className="font-semibold">{fmt(draftDate)}</span> — continuing will let you edit it.</span>
+                    <span>A report already exists for <span className="font-semibold">{fmtLong(draftDate)}</span> — continuing will let you edit it.</span>
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" aria-hidden="true" />
-                    <span><span className="font-semibold">{fmt(draftDate)}</span> is open — you'll start a fresh report.</span>
+                    <span><span className="font-semibold">{fmtLong(draftDate)}</span> is open — you'll start a fresh report.</span>
                   </>
                 )}
               </div>
@@ -1574,7 +2406,7 @@ const EmployeeView = () => {
             <Button
               onClick={() => commitDate(draftDate)}
               disabled={!draftDate}
-              className="mt-5 h-10 w-full sm:w-auto gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-sm font-semibold shadow-sm btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 px-5"
+              className="wr-continue relative mt-5 h-10 w-full sm:w-auto gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-sm font-semibold shadow-sm btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 px-5"
             >
               Continue
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -1591,7 +2423,8 @@ const EmployeeView = () => {
         {/* ══ STEP 2 — Submit / Edit Form ══ */}
         {hasDate && (
           <section
-            className={`rounded-2xl border bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-4 sm:p-5 shadow-sm card-hover transition-colors duration-300 animate-step-in ${isEditMode
+            data-mode={isEditMode ? "edit" : "new"}
+            className={`wr-form wr-card rounded-2xl border bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-4 sm:p-5 shadow-sm card-hover transition-colors duration-300 animate-step-in ${isEditMode
                 ? "border-amber-300 dark:border-amber-700/80 ring-1 ring-amber-200/60 dark:ring-amber-800/40"
                 : "border-slate-200/80 dark:border-slate-700/60"
               }`}
@@ -1614,25 +2447,41 @@ const EmployeeView = () => {
             )}
 
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 animate-fade-in-up min-w-0">
+              <div
+                className="wr-hdr flex items-center gap-2.5 animate-fade-in-up min-w-0"
+                onMouseEnter={() => setIsHeaderHovered(true)}
+                onMouseLeave={() => setIsHeaderHovered(false)}
+              >
                 <button
                   type="button"
                   onClick={handleChangeDate}
+                  disabled={isBusy}
                   aria-label="Back to date selection"
-                  className="p-1.5 rounded-xl text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors duration-150 btn-hover-scale flex-shrink-0"
+                  className="wr-back p-1.5 rounded-xl text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors duration-150 btn-hover-scale flex-shrink-0"
                 >
                   <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                 </button>
                 <div
-                  className={`p-1.5 rounded-xl shadow-sm flex-shrink-0 ${isEditMode
-                      ? "bg-gradient-to-br from-amber-500 to-orange-500"
-                      : "bg-gradient-to-br from-indigo-500 to-purple-600"
+                  className={`wr-hdr-icon flex-shrink-0 ${isEditMode
+                      ? ""
+                      : "p-1.5 rounded-xl shadow-sm bg-gradient-to-br from-indigo-500 to-purple-600 dark:bg-none dark:bg-transparent dark:shadow-none dark:p-0"
                     }`}
                 >
                   {isEditMode ? (
-                    <Pencil className="h-4 w-4 text-white" aria-hidden="true" />
+                    <AnimatedEditIcon
+                      size="2xl"
+                      className="!h-9 !w-9"
+                      triggerParentHover
+                      isParentHovered={isHeaderHovered}
+                    />
                   ) : (
-                    <Calendar className="h-4 w-4 text-white" aria-hidden="true" />
+                    <AnimatedReportIcon
+                      size="lg"
+                      className="dark:!h-8 dark:!w-8"
+                      forceWhite
+                      triggerParentHover
+                      isParentHovered={isHeaderHovered}
+                    />
                   )}
                 </div>
                 <div className="min-w-0">
@@ -1648,24 +2497,48 @@ const EmployeeView = () => {
               <button
                 type="button"
                 onClick={handleChangeDate}
+                disabled={isBusy}
                 className="flex items-center gap-1.5 h-8 px-3 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-50 dark:bg-slate-800/60 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-700 rounded-lg transition-colors duration-150 btn-hover-scale animate-fade-in-up"
                 style={{ animationDelay: "0.05s" }}
+                onMouseEnter={() => setIsChangeDateHovered(true)}
+                onMouseLeave={() => setIsChangeDateHovered(false)}
+                onFocus={() => setIsChangeDateHovered(true)}
+                onBlur={() => setIsChangeDateHovered(false)}
               >
-                <Calendar className="h-3 w-3" aria-hidden="true" />
+                <AnimatedChangeDateIcon
+                  size="lg"
+                  triggerParentHover
+                  isParentHovered={isChangeDateHovered}
+                />
                 Change date
               </button>
             </div>
 
+            <div className="wr-header-bar -mt-2 mb-4 w-full rounded-full" aria-hidden="true" />
+
             {/* Progress bar */}
             {showProgress && (
-              <div className="mb-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 border border-slate-100/80 dark:border-slate-800/60 animate-fade-in-up">
+              <div
+                onMouseEnter={() => setIsHoursHovered(true)}
+                onMouseLeave={() => setIsHoursHovered(false)}
+                className="mb-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 border border-slate-100/80 dark:border-slate-800/60 animate-fade-in-up"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <Clock className="h-3.5 w-3.5 text-indigo-500" aria-hidden="true" />
+                    <AnimatedTotalHoursIcon
+                      size="lg"
+                      triggerParentHover
+                      isParentHovered={isHoursHovered}
+                    />
                     <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total hours</span>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                    {progressPercent >= 100 && (
+                      <span className="wr-chip-in inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> 8h goal reached
+                      </span>
+                    )}
+                    <span key={totalHours.toFixed(1)} className="wr-num-pop text-sm font-bold text-indigo-600 dark:text-indigo-400">
                       {totalHours.toFixed(1)}h
                     </span>
                   </div>
@@ -1679,7 +2552,7 @@ const EmployeeView = () => {
                   aria-label="Progress toward an 8 hour day"
                 >
                   <div
-                    className={`progress-bar-fill h-full rounded-full ${isEditMode
+                    className={`progress-bar-fill h-full rounded-full ${progressPercent >= 100 ? "wr-progress-done" : ""} ${isEditMode
                         ? "bg-gradient-to-r from-amber-400 to-orange-400"
                         : "bg-gradient-to-r from-indigo-500 to-purple-500"
                       }`}
@@ -1692,6 +2565,7 @@ const EmployeeView = () => {
             {/* Entries table */}
             <div
               data-work-report-table=""
+              ref={tableRef}
               className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm animate-fade-in-up custom-scrollbar"
               style={{ animationDelay: "0.1s" }}
             >
@@ -1712,103 +2586,146 @@ const EmployeeView = () => {
                   {entries.map((entry, index) => {
                     const isOptional = isClientProjectOptional(entry.workTypes);
                     const safeClients = Array.isArray(clients) ? clients : [];
+                    const miss = showInvalid ? getMissing(entry) : null;
+                    const isRemoving = removingIds.includes(entry.localId);
+                    const typesKey = entry.workTypes.join(",");
                     return (
                       <TableRow
                         key={entry.localId}
-                        className="entry-row"
-                        style={{ animationDelay: `${index * 0.04}s` }}
+                        className={`entry-row ${newRowId === entry.localId ? "wr-row-new" : "wr-row-in"} ${isRemoving ? "wr-row-out" : ""}`}
+                        style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
                       >
                         <TableCell className="py-2">
                           <Label htmlFor={`client-${entry.localId}`} className="sr-only">Client</Label>
-                          <Select
-                            value={entry.client}
-                            onValueChange={(v) => updateEntry(entry.localId, "client", v)}
-                            disabled={isOptional}
-                          >
-                            <SelectTrigger id={`client-${entry.localId}`} className={`h-8 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 ${isOptional ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}>
-                              <SelectValue placeholder={isOptional ? "Not required" : (clientsError ? "Error loading" : "Select client")} />
-                            </SelectTrigger>
-                            <SelectContent
-                              side="top"
-                              align="start"
-                              sideOffset={4}
-                              className="max-h-[320px] overflow-y-auto"
+                          <div className="relative">
+                            <Select
+                              value={entry.client}
+                              onValueChange={(v) => updateEntry(entry.localId, "client", v)}
+                              disabled={isOptional || isBusy}
                             >
-                              {safeClients.length === 0 && !clientsError ? (
-                                <SelectItem value="loading" disabled>Loading clients...</SelectItem>
-                              ) : (
-                                safeClients.map((c) => (
-                                  <SelectItem key={c} value={c} className="text-xs py-1.5">
-                                    {c}
-                                  </SelectItem>
-                                ))
-                              )}
-                            </SelectContent>
-                          </Select>
+                              <SelectTrigger
+                                id={`client-${entry.localId}`}
+                                data-filled={entry.client ? "true" : "false"}
+                                data-invalid={miss?.client ? "true" : "false"}
+                                className={`wr-field h-8 text-xs border-slate-200 dark:border-slate-700 ${isOptional ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}
+                              >
+                                <SelectValue placeholder={isOptional ? "Not required" : (clientsError ? "Error loading" : "Select client")} />
+                              </SelectTrigger>
+                              <SelectContent
+                                side="top"
+                                align="start"
+                                sideOffset={4}
+                                className="wr-pop-content max-h-[320px] overflow-y-auto"
+                              >
+                                {safeClients.length === 0 && !clientsError ? (
+                                  <SelectItem value="loading" disabled>Loading clients...</SelectItem>
+                                ) : (
+                                  safeClients.map((c) => (
+                                    <SelectItem key={c} value={c} className="text-xs py-1.5">
+                                      {c}
+                                    </SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                            {entry.client && (
+                              <span key={entry.client} aria-hidden="true">
+                                <span className="wr-ping" />
+                                <span className="wr-sweep" />
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="py-2">
                           <Label htmlFor={`project-${entry.localId}`} className="sr-only">Project</Label>
-                          <Select
-                            value={entry.project}
-                            disabled={isOptional || !entry.client || loadingProjects[entry.client]}
-                            onValueChange={(v) => updateEntry(entry.localId, "project", v)}
-                          >
-                            <SelectTrigger id={`project-${entry.localId}`} className={`h-8 text-xs border-slate-200 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 ${isOptional ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}>
-                              <SelectValue placeholder={
-                                isOptional ? "Not required" :
-                                  !entry.client
-                                    ? "Select client first"
-                                    : loadingProjects[entry.client]
-                                      ? "Loading..."
-                                      : "Select project"
-                              } />
-                            </SelectTrigger>
-                            <SelectContent className="year-grouped-select-content max-h-[320px] overflow-y-auto custom-scrollbar">
-                              {(projectsCache[entry.client] ?? []).length === 0 ? (
-                                <div className="px-2 py-3 text-center text-xs text-slate-400 dark:text-slate-500">
-                                  No projects found for this client yet.
-                                </div>
-                              ) : (
-                                (projectsCache[entry.client] ?? []).map((group, idx) => (
-                                  <SelectGroup key={group.year}>
-                                    {idx > 0 && <SelectSeparator className="my-1.5 bg-slate-200 dark:bg-slate-700" />}
-                                    <SelectLabel className="year-group-label sticky top-0 z-10 flex items-center gap-1.5 py-1.5 pl-2 pr-2 text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50/90 dark:bg-indigo-950/40 backdrop-blur-sm rounded-sm">
-                                      <Calendar className="h-3 w-3" aria-hidden="true" />
-                                      {group.year}
-                                      <span className="ml-auto font-medium text-slate-400 dark:text-slate-500 normal-case tracking-normal">
-                                        {group.projects.length}
-                                      </span>
-                                    </SelectLabel>
-                                    {group.projects.map((p) => (
-                                      <SelectItem key={`${group.year}-${p}`} value={p} className="year-group-item text-xs pl-6">
-                                        {p}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectGroup>
-                                ))
-                              )}
-                            </SelectContent>
-                          </Select>
+                          <div className="relative">
+                            <Select
+                              value={entry.project}
+                              disabled={isOptional || !entry.client || loadingProjects[entry.client] || isBusy}
+                              onValueChange={(v) => updateEntry(entry.localId, "project", v)}
+                            >
+                              <SelectTrigger
+                                id={`project-${entry.localId}`}
+                                data-filled={entry.project ? "true" : "false"}
+                                data-invalid={miss?.project ? "true" : "false"}
+                                className={`wr-field h-8 text-xs border-slate-200 dark:border-slate-700 ${isOptional ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}
+                              >
+                                <SelectValue placeholder={
+                                  isOptional ? "Not required" :
+                                    !entry.client
+                                      ? "Select client first"
+                                      : loadingProjects[entry.client]
+                                        ? "Loading..."
+                                        : "Select project"
+                                } />
+                              </SelectTrigger>
+                              <SelectContent className="wr-pop-content year-grouped-select-content max-h-[320px] overflow-y-auto custom-scrollbar">
+                                {(projectsCache[entry.client] ?? []).length === 0 ? (
+                                  <div className="px-2 py-3 text-center text-xs text-slate-400 dark:text-slate-500">
+                                    No projects found for this client yet.
+                                  </div>
+                                ) : (
+                                  (projectsCache[entry.client] ?? []).map((group, idx) => (
+                                    <SelectGroup key={group.year}>
+                                      {idx > 0 && <SelectSeparator className="my-1.5 bg-slate-200 dark:bg-slate-700" />}
+                                      <SelectLabel className="year-group-label sticky top-0 z-10 flex items-center gap-1.5 py-1.5 pl-2 pr-2 text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50/90 dark:bg-indigo-950/40 backdrop-blur-sm rounded-sm">
+                                        <Calendar className="h-3 w-3" aria-hidden="true" />
+                                        {group.year}
+                                        <span className="ml-auto font-medium text-slate-400 dark:text-slate-500 normal-case tracking-normal">
+                                          {group.projects.length}
+                                        </span>
+                                      </SelectLabel>
+                                      {group.projects.map((p) => (
+                                        <SelectItem key={`${group.year}-${p}`} value={p} className="year-group-item text-xs pl-6">
+                                          {p}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                            {entry.project && (
+                              <span key={entry.project} aria-hidden="true">
+                                <span className="wr-ping" />
+                                <span className="wr-sweep" />
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="py-2">
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                type="button"
-                                aria-label={entry.workTypes.length === 0 ? "Select work type(s)" : `${entry.workTypes.length} work type(s) selected`}
-                                className="flex h-8 w-full items-center justify-between gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs hover:border-indigo-300 dark:hover:border-indigo-600 focus:border-indigo-400 dark:focus:border-indigo-500 focus:outline-none"
-                              >
-                                <span className={`truncate ${entry.workTypes.length === 0 ? "text-slate-400 dark:text-slate-500" : "text-slate-700 dark:text-slate-300"}`}>
-                                  {entry.workTypes.length === 0
-                                    ? "Select type(s)"
-                                    : entry.workTypes.length === 1
-                                      ? WORK_TYPE_LABELS[entry.workTypes[0]]
-                                      : `${entry.workTypes.length} types selected`}
+                            <div className="relative">
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  data-filled={entry.workTypes.length > 0 ? "true" : "false"}
+                                  data-invalid={miss?.types ? "true" : "false"}
+                                  aria-label={entry.workTypes.length === 0 ? "Select work type(s)" : `${entry.workTypes.length} work type(s) selected`}
+                                  className="wr-field flex h-8 w-full items-center justify-between gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs hover:border-indigo-300 dark:hover:border-indigo-600 focus:border-indigo-400 dark:focus:border-indigo-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  <span
+                                    key={typesKey}
+                                    className={`wr-value-in truncate ${entry.workTypes.length === 0 ? "text-slate-400 dark:text-slate-500" : "text-slate-700 dark:text-slate-300"}`}
+                                  >
+                                    {entry.workTypes.length === 0
+                                      ? "Select type(s)"
+                                      : entry.workTypes.length === 1
+                                        ? WORK_TYPE_LABELS[entry.workTypes[0]]
+                                        : `${entry.workTypes.length} types selected`}
+                                  </span>
+                                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              {entry.workTypes.length > 0 && (
+                                <span key={typesKey} aria-hidden="true">
+                                  <span className="wr-ping" />
+                                  <span className="wr-sweep" />
                                 </span>
-                                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500" aria-hidden="true" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="max-h-[320px] overflow-y-auto">
+                              )}
+                            </div>
+                            <DropdownMenuContent align="start" className="wr-pop-content max-h-[320px] overflow-y-auto">
                               <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
                                 Select one or more
                               </DropdownMenuLabel>
@@ -1843,7 +2760,7 @@ const EmployeeView = () => {
                               {entry.workTypes.map((wt) => (
                                 <span
                                   key={wt}
-                                  className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium ${WORK_TYPE_COLORS[wt] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"}`}
+                                  className={`wr-chip-in inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium ${WORK_TYPE_COLORS[wt] ?? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"}`}
                                 >
                                   {WORK_TYPE_LABELS[wt]}
                                 </span>
@@ -1853,32 +2770,42 @@ const EmployeeView = () => {
                         </TableCell>
                         <TableCell className="py-2">
                           <Label htmlFor={`time-${entry.localId}`} className="sr-only">Time in hours</Label>
-                          <Input
-                            id={`time-${entry.localId}`}
-                            type="number"
-                            min="0.5"
-                            max="24"
-                            step="0.5"
-                            placeholder="0"
-                            inputMode="decimal"
-                            className="h-8 text-xs border-slate-200 dark:border-slate-700 focus-visible:border-indigo-400 dark:focus-visible:border-indigo-500"
-                            value={entry.time}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              if (value === "") { updateEntry(entry.localId, "time", value); return; }
-                              const numValue = parseFloat(value);
-                              if (!isNaN(numValue) && numValue >= 0 && numValue <= 24) {
-                                updateEntry(entry.localId, "time", value);
-                              }
-                            }}
-                          />
+                          <div className={timeShakeId === entry.localId ? "wr-shake" : ""}>
+                            <Input
+                              id={`time-${entry.localId}`}
+                              type="number"
+                              min="0.5"
+                              max="24"
+                              step="0.5"
+                              placeholder="0"
+                              inputMode="decimal"
+                              disabled={isBusy}
+                              data-filled={entry.time ? "true" : "false"}
+                              data-invalid={miss?.time ? "true" : "false"}
+                              className="wr-field h-8 text-xs border-slate-200 dark:border-slate-700 focus-visible:border-indigo-400 dark:focus-visible:border-indigo-500"
+                              value={entry.time}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === "") { updateEntry(entry.localId, "time", value); return; }
+                                const numValue = parseFloat(value);
+                                if (!isNaN(numValue) && numValue >= 0 && numValue <= 24) {
+                                  updateEntry(entry.localId, "time", value);
+                                } else {
+                                  triggerTimeShake(entry.localId);
+                                }
+                              }}
+                            />
+                          </div>
                         </TableCell>
                         <TableCell className="py-2">
                           <Label htmlFor={`desc-${entry.localId}`} className="sr-only">Description</Label>
                           <Input
                             id={`desc-${entry.localId}`}
                             placeholder="Description..."
-                            className="h-8 text-xs border-slate-200 dark:border-slate-700 focus-visible:border-indigo-400 dark:focus-visible:border-indigo-500"
+                            disabled={isBusy}
+                            data-filled={entry.description.trim() ? "true" : "false"}
+                            data-invalid={miss?.description ? "true" : "false"}
+                            className="wr-field h-8 text-xs border-slate-200 dark:border-slate-700 focus-visible:border-indigo-400 dark:focus-visible:border-indigo-500"
                             value={entry.description}
                             onChange={(e) => updateEntry(entry.localId, "description", e.target.value)}
                             maxLength={500}
@@ -1889,8 +2816,8 @@ const EmployeeView = () => {
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-slate-400 dark:text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors duration-150 rounded-lg"
-                            disabled={entries.length <= 1}
+                            className="wr-trash h-7 w-7 text-slate-400 dark:text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors duration-150 rounded-lg"
+                            disabled={entries.length - removingIds.length <= 1 || isBusy}
                             onClick={() => removeEntry(entry.localId)}
                             aria-label="Remove this row"
                           >
@@ -1910,9 +2837,17 @@ const EmployeeView = () => {
                 variant="outline"
                 size="sm"
                 onClick={addEntry}
-                className="gap-1.5 h-8 text-xs border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 btn-hover-scale transition-colors duration-150 w-full sm:w-auto justify-center"
+                onMouseEnter={() => setIsAddHovered(true)}
+                onMouseLeave={() => setIsAddHovered(false)}
+                disabled={isBusy}
+                className="wr-add gap-1.5 h-8 text-xs border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 btn-hover-scale transition-colors duration-150 w-full sm:w-auto justify-center"
               >
-                <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add row
+                <AnimatedAddReportIcon
+                  size="lg"
+                  triggerParentHover
+                  isParentHovered={isAddHovered}
+                />
+                Add row
               </Button>
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 {isEditMode && (
@@ -1921,34 +2856,141 @@ const EmployeeView = () => {
                     variant="ghost"
                     size="sm"
                     onClick={handleCancelEdit}
+                    disabled={isBusy}
                     className="h-8 text-xs text-slate-500 dark:text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 btn-hover-scale transition-colors duration-150 flex-1 sm:flex-none"
                   >
                     Discard changes
                   </Button>
                 )}
                 <Button
+                  ref={submitBtnRef}
+                  type="button"
                   onClick={handleFinalSubmit}
-                  disabled={submitting || !date}
+                  onPointerDown={spawnRipple}
+                  onPointerMove={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
+                    e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
+                  }}
+                  disabled={isBusy || !date}
+                  data-state={submitState}
+                  data-mode={isEditMode ? "edit" : "new"}
+                  style={btnW ? ({ "--wr-w": `${btnW}px` } as CSSProperties) : undefined}
+                  aria-label={submitState === "sending" ? (isEditMode ? "Updating report" : "Submitting report") : undefined}
                   size="sm"
-                  className={`gap-1.5 h-8 text-xs shadow-sm btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 flex-1 sm:flex-none justify-center ${isEditMode
-                      ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
-                      : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-                    }`}
+                  className="wr-submit gap-1.5 h-9 min-w-[150px] px-4 text-xs font-bold tracking-wide shadow-md disabled:opacity-100 flex-1 sm:flex-none justify-center"
                 >
-                  {submitting ? (
+                  <span className="wr-aurora" aria-hidden="true" />
+                  <span className="wr-spot" aria-hidden="true" />
+                  <span className="wr-spark wr-spark-1" aria-hidden="true" />
+                  <span className="wr-spark wr-spark-2" aria-hidden="true" />
+                  <span className="wr-spark wr-spark-3" aria-hidden="true" />
+                  <span className="wr-spark wr-spark-4" aria-hidden="true" />
+                  <span className="wr-submit-shine" aria-hidden="true" />
+
+                  <span
+                    className={`wr-submit-overlay ${
+                      submitState === "success"
+                        ? "wr-submit-overlay-success"
+                        : submitState === "error"
+                          ? "wr-submit-overlay-error"
+                          : ""
+                    }`}
+                    aria-hidden="true"
+                  />
+
+                  {ripples.map((r) => (
+                    <span
+                      key={r.id}
+                      className="wr-ripple"
+                      aria-hidden="true"
+                      style={{ left: r.x, top: r.y, width: r.size, height: r.size }}
+                    />
+                  ))}
+
+                  {submitState === "sending" && (
                     <>
-                      <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
-                      {isEditMode ? "Updating…" : "Submitting…"}
-                    </>
-                  ) : isEditMode ? (
-                    <>
-                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Update report
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Submit report
+                      <span className="wr-launch-ring" aria-hidden="true" />
                     </>
                   )}
+
+                  {submitState === "success" && (
+                    <>
+                      <span className="wr-success-ring" aria-hidden="true" />
+                      {WR_CONFETTI.map((p, i) => (
+                        <span
+                          key={i}
+                          className={`wr-confetti-dot ${p.round ? "" : "wr-confetti-square"}`}
+                          style={
+                            {
+                              "--angle": `${p.angle}deg`,
+                              "--dist": `${p.distance}px`,
+                              "--delay": `${p.delay}ms`,
+                              "--dot-color": p.color,
+                              "--size": `${p.size}px`,
+                            } as CSSProperties
+                          }
+                        />
+                      ))}
+                    </>
+                  )}
+
+                  <span className="relative z-10 inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
+                    {submitState === "sending" && (
+                      <>
+                        <span className="wr-orb" aria-hidden="true">
+                          <svg className="wr-orb-ring" viewBox="0 0 36 36">
+                            <circle className="wr-orb-track" cx="18" cy="18" r="15" />
+                            <circle className="wr-orb-arc" cx="18" cy="18" r="15" />
+                          </svg>
+                          <svg className="wr-orb-doc" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m22 2-7 20-4-9-9-4Z" />
+                            <path d="M22 2 11 13" />
+                          </svg>
+                        </span>
+                      </>
+                    )}
+                    {submitState === "success" && (
+                      <>
+                        <svg className="wr-check h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <circle className="wr-check-circle" cx="12" cy="12" r="10" />
+                          <path className="wr-check-tick" d="M7 12.5l3.2 3.2L17 8.8" />
+                        </svg>
+                        <span className="wr-text-pop">{isEditMode ? "Updated!" : "Submitted!"}</span>
+                      </>
+                    )}
+                    {submitState === "error" && (
+                      <>
+                        <AlertCircle className="wr-icon-wobble h-4 w-4" aria-hidden="true" />
+                        <span className="wr-text-pop">Try again</span>
+                      </>
+                    )}
+                    {submitState === "idle" && (
+                      isEditMode ? (
+                        <>
+                          <Pencil className="wr-submit-icon wr-pencil h-3.5 w-3.5" aria-hidden="true" />
+                          <span className="wr-label">Update report</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="wr-submit-icon wr-plane h-3.5 w-3.5"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="m22 2-7 20-4-9-9-4Z" />
+                            <path d="M22 2 11 13" />
+                          </svg>
+                          <span className="wr-label">Submit report</span>
+                        </>
+                      )
+                    )}
+                  </span>
                 </Button>
               </div>
             </div>
@@ -1958,7 +3000,7 @@ const EmployeeView = () => {
         {/* ══ My Reports ══ */}
         <section className="animate-slide-right">
           <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-indigo-400" aria-hidden="true" />
+            <AnimatedMyReportsIcon size="xl" />
             My reports
             {!loadingReports && reports.length > 0 && (
               <span className="text-xs font-normal text-slate-400 dark:text-slate-500">
@@ -2118,6 +3160,66 @@ const EmployeeView = () => {
           )}
         </section>
       </div>
+
+      {fxOrigin &&
+        submitState !== "idle" &&
+        createPortal(
+          <div className="wr-fx" aria-hidden="true" style={{ left: fxOrigin.x, top: fxOrigin.y }}>
+            {/* Sending: soft radar wave + report sheets floating up and away */}
+            {submitState === "sending" && (
+              <>
+                <span className="wr-fx-wave" />
+                <span className="wr-fx-wave" style={{ animationDelay: "0.9s" }} />
+                {[
+                  { dx: -18, dr: "-14deg", d: "0s" },
+                  { dx: 14, dr: "12deg", d: "0.35s" },
+                  { dx: -6, dr: "-6deg", d: "0.7s" },
+                  { dx: 22, dr: "16deg", d: "1.05s" },
+                ].map((p, i) => (
+                  <span
+                    key={i}
+                    className="wr-fx-doc"
+                    style={{ "--dx": `${p.dx}px`, "--dr": p.dr, animationDelay: p.d } as CSSProperties}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* Success: shockwave + confetti explosion + floating badge */}
+            {submitState === "success" && fxReady && (
+              <>
+                <span className="wr-fx-shock" />
+                <span className="wr-fx-shock" style={{ animationDelay: "120ms" }} />
+                {WR_FX_PARTICLES.map((p, i) => (
+                  <span
+                    key={i}
+                    className={`wr-fx-particle ${p.round ? "" : "wr-fx-particle-sq"}`}
+                    style={
+                      {
+                        "--tx": `${p.tx}px`,
+                        "--ty": `${p.ty}px`,
+                        "--rot": `${p.rot}deg`,
+                        "--size": `${p.size}px`,
+                        "--c": p.color,
+                        animationDelay: `${p.delay}ms`,
+                      } as CSSProperties
+                    }
+                  />
+                ))}
+                <span className="wr-fx-badge">{isEditMode ? "✓ Report updated" : "✓ Report submitted"}</span>
+              </>
+            )}
+
+            {/* Error: red shockwave */}
+            {submitState === "error" && (
+              <>
+                <span className="wr-fx-shock wr-fx-shock-error" />
+                <span className="wr-fx-shock wr-fx-shock-error" style={{ animationDelay: "150ms" }} />
+              </>
+            )}
+          </div>,
+          document.body
+        )}
 
       <DateDetailModal
         open={detailOpen}

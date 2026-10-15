@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import * as XLSX from "xlsx";
 import {
   Building2,
   Hash,
@@ -12,15 +11,28 @@ import {
   MessageSquareText,
   Copy,
   Check,
-  Eye,
-  Download,
   Trash2,
   Pencil,
   X,
   Plus,
   ChevronRight,
   AlertTriangle,
+  ClipboardEdit,
+  History as HistoryIcon,
 } from "lucide-react";
+import ShareLinkDialog from "@/components/ShareLinkDialogFixed";
+import { ActionIcon } from "@/components/icons/ActionIcon";
+import { useAuth } from "@/context/AuthContext";
+import { useRfiAccess } from "@/hooks/useRfiAccess";
+import { RfiForm } from "@/components/rfi/RfiForm";
+import { RfiList } from "@/components/rfi/RfiList";
+import { AnimatedSyncGmailIcon } from "@/components/icons/AnimatedSyncGmailIconFixed";
+import { toast } from "@/hooks/use-toast";
+import {
+  getRfis as fetchProjectRfis,
+  syncAllRfisForProject,
+  getErrorMessage as getRfiErrorMessage,
+} from "@/lib/rfiApi";
 
 // ─── API CONFIG ───────────────────────────────────────────────────────────────
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
@@ -435,18 +447,26 @@ const styles = `
   .client-card::after { content: ''; position: absolute; right: -16px; bottom: -16px; width: 80px; height: 80px; border-radius: 50%; background: var(--teal-dim); transition: transform .35s; }
   .client-card:hover, .client-card:focus-visible { border-color: var(--teal); box-shadow: var(--shadow), 0 0 0 3px rgba(15,113,117,0.12); transform: translateY(-2px); }
   .client-card:hover::after, .client-card:focus-visible::after { transform: scale(2.8); }
-  .client-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; position: relative; z-index: 1; }
-  .client-card-name { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; color: var(--text); transition: color .25s; min-width: 0; overflow-wrap: break-word; word-break: break-word; }
+  /* flex-wrap: when a long client name needs the whole width, the action buttons drop to the next row instead of squeezing the name. */
+  /* Same layout on every client tile: name on its own full-width row, then count (left) + action buttons (right). */
+  .client-card-top { display: flex; align-items: flex-start; position: relative; z-index: 1; }
+  .client-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; position: relative; z-index: 1; }
+  .client-card-name { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; color: var(--text); transition: color .25s; flex: 1 1 auto; max-width: 100%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; word-break: normal; }
   .client-card:hover .client-card-name, .client-card:focus-visible .client-card-name { color: var(--teal); }
   .client-card-count { font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; font-family: 'JetBrains Mono', monospace; position: relative; z-index: 1; }
-  .client-card-actions { flex-shrink: 0; z-index: 2; display: flex; gap: 6px; }
+  .client-card-foot .client-card-count { margin-top: 0; }
+  .client-card-actions { flex-shrink: 0; z-index: 2; display: flex; gap: 6px; margin-left: auto; }
 
   .project-list { display: flex; flex-direction: column; gap: 10px; }
   .project-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; cursor: pointer; background: var(--surface); box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: space-between; gap: 16px; transition: border-color .2s, box-shadow .2s, transform .15s; position: relative; overflow: hidden; }
   .project-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--copper); transform: scaleY(0); transition: transform .25s; transform-origin: bottom; }
   .project-card:hover, .project-card:focus-visible { border-color: var(--copper-light); box-shadow: var(--shadow); transform: translateX(2px); }
   .project-card:hover::before, .project-card:focus-visible::before { transform: scaleY(1); }
-  .project-name { font-weight: 600; font-size: 0.95rem; color: var(--text); }
+  .project-info { flex: 1 1 0; min-width: 0; }
+  /* Project name: always ONE line, words/letters are never split. If the tile is too narrow the name ends with an ellipsis (full name on hover). */
+  .project-name { font-weight: 600; font-size: 0.95rem; color: var(--text); min-width: 0; max-width: 100%; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+  .project-name-text { display: block; min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; word-break: keep-all; overflow-wrap: normal; }
+  .project-name > button, .project-name > span:not(.project-name-text) { flex-shrink: 0; }
   .project-meta { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
   .project-job { font-family: 'JetBrains Mono', monospace; font-size: 0.73rem; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); padding: 3px 9px; border-radius: 6px; }
   .project-arrow { color: var(--text-dim); font-size: 1rem; transition: transform .2s, color .2s; display: inline-flex; }
@@ -466,7 +486,7 @@ const styles = `
   .view-table tr:hover td { background: var(--surface-2); }
   .view-table td.view-field-label { color: var(--text-muted); font-weight: 600; width: 200px; white-space: nowrap; }
 
-  .modal-overlay { position: fixed; inset: 0; z-index: 300; background: rgba(26,25,23,0.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(26,25,23,0.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 16px; }
   .modal-box { background: var(--surface); border: 1px solid var(--border-dark); border-radius: 20px; width: 100%; max-width: 960px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
   .modal-header { padding: 22px 26px 0; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface-2); }
   .modal-title { font-family: 'Playfair Display', serif; font-size: 1.55rem; font-weight: 700; letter-spacing: -0.01em; color: var(--text); padding-right: 40px; }
@@ -730,7 +750,7 @@ const styles = `
   ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
   .confirm-modal-overlay {
-    position: fixed; inset: 0; z-index: 400;
+    position: fixed; inset: 0; z-index: 1100;
     background: rgba(26,25,23,0.7); backdrop-filter: blur(8px);
     display: flex; align-items: center; justify-content: center;
     padding: 16px;
@@ -755,7 +775,7 @@ const styles = `
     font-weight: 600; cursor: pointer; transition: all .2s;
     display: inline-flex; align-items: center; gap: 6px; }
   .client-modal-overlay {
-    position: fixed; inset: 0; z-index: 420;
+    position: fixed; inset: 0; z-index: 1120;
     background: rgba(26,25,23,0.7); backdrop-filter: blur(8px);
     display: flex; align-items: center; justify-content: center; padding: 16px;
   }
@@ -812,7 +832,7 @@ const styles = `
     .icon-btn { width: 30px; height: 30px; }
     .project-card { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 16px; }
     .project-info { width: 100%; min-width: 0; }
-    .project-name { white-space: normal; overflow-wrap: break-word; word-break: break-word; }
+    .project-name { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
     .project-meta { width: 100%; justify-content: flex-start; flex-wrap: wrap; row-gap: 8px; }
     .project-meta .project-job { order: -1; flex-basis: 100%; }
     .project-arrow { margin-left: auto; }
@@ -839,7 +859,253 @@ const styles = `
     .form-actions { justify-content: stretch; }
     .form-actions .btn { flex: 1 1 auto; justify-content: center; }
   }
+
+  /* ═══════════════════════════════════════════════════════════
+     ✨ ANIMATED POLISH — visual only (no data / logic changes)
+     Pure CSS + two tiny pointer handlers; runs in the browser,
+     so it adds nothing to server load or hosting cost.
+     Uses the individual "translate / scale / rotate" properties
+     so it never fights framer-motion's inline transforms.
+  ═══════════════════════════════════════════════════════════ */
+  @property --dash-ang { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+
+  /* ---- living background + cursor glow ----
+     Drawn directly on .dash-root (no pseudo-elements, no z-index, no isolation)
+     so it creates NO stacking context — the project popup (position: fixed)
+     must stay free to sit above the sidebar. */
+  @property --o1x { syntax: '<percentage>'; inherits: false; initial-value: 15%; }
+  @property --o1y { syntax: '<percentage>'; inherits: false; initial-value: 20%; }
+  @property --o2x { syntax: '<percentage>'; inherits: false; initial-value: 85%; }
+  @property --o2y { syntax: '<percentage>'; inherits: false; initial-value: 72%; }
+  .dash-root {
+    --gx: 50%; --gy: 15%;
+    background:
+      radial-gradient(520px circle at var(--gx) var(--gy), var(--indigo-dim), transparent 60%),
+      radial-gradient(420px 420px at var(--o1x) var(--o1y), rgba(61,79,124,0.14), transparent 70%),
+      radial-gradient(380px 380px at var(--o2x) var(--o2y), rgba(181,115,42,0.14), transparent 70%),
+      radial-gradient(ellipse 70% 40% at 0% 0%, rgba(61,79,124,0.05) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 30% at 100% 100%, rgba(181,115,42,0.06) 0%, transparent 60%),
+      var(--bg);
+    animation: dashOrbs 18s ease-in-out infinite alternate;
+  }
+  @keyframes dashOrbs {
+    0%   { --o1x: 15%; --o1y: 20%; --o2x: 85%; --o2y: 72%; }
+    100% { --o1x: 32%; --o1y: 38%; --o2x: 66%; --o2y: 52%; }
+  }
+
+  /* ---- headings ---- */
+  .section-title {
+    width: fit-content; max-width: 100%; position: relative; margin-bottom: 14px;
+    background: linear-gradient(100deg, var(--text) 0%, var(--text) 38%, var(--indigo) 50%, var(--copper) 62%, var(--text) 80%);
+    background-size: 260% 100%;
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    animation: dashTitle 9s ease-in-out infinite;
+  }
+  .section-title::after {
+    content: ''; position: absolute; left: 0; bottom: -7px; height: 3px; width: 46%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--indigo), var(--copper)); transform-origin: left;
+    animation: dashUnderline 900ms 150ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  .section-subtitle { animation: dashRise 600ms 120ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  @keyframes dashTitle { 0%, 100% { background-position: 100% 50%; } 50% { background-position: 0% 50%; } }
+  @keyframes dashUnderline { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
+  @keyframes dashRise { from { opacity: 0; translate: 0 14px; } to { opacity: 1; translate: 0 0; } }
+
+  /* ---- shared card behaviour ---- */
+  .year-card, .client-card, .project-card {
+    transition: border-color .25s, box-shadow .25s,
+      translate .38s cubic-bezier(0.34, 1.56, 0.64, 1), scale .38s cubic-bezier(0.34, 1.56, 0.64, 1);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .year-card:active, .client-card:active, .project-card:active { scale: 0.975; }
+
+  /* ---- year cards: spotlight + spinning gradient ring + shimmering number ---- */
+  .year-card::before {
+    background:
+      radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), var(--indigo-glow), transparent 65%),
+      linear-gradient(135deg, var(--indigo-dim), transparent 70%);
+  }
+  .year-card::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 2px; pointer-events: none; opacity: 0;
+    background: conic-gradient(from var(--dash-ang), transparent 0 55%, var(--indigo), var(--copper), var(--teal), transparent 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    transition: opacity .3s; animation: dashSpin 3s linear infinite;
+  }
+  .year-card:hover::after, .year-card:focus-visible::after { opacity: 1; }
+  @keyframes dashSpin { to { --dash-ang: 360deg; } }
+  .year-card-num { transition: color .25s, scale .4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .year-card:hover .year-card-num, .year-card:focus-visible .year-card-num {
+    scale: 1.1;
+    background: linear-gradient(90deg, var(--indigo), var(--copper), var(--teal), var(--indigo));
+    background-size: 250% 100%;
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    animation: dashShimmer 1.8s linear infinite;
+  }
+  @keyframes dashShimmer { to { background-position: 250% 0; } }
+  .year-card-label { transition: color .25s, letter-spacing .35s ease; }
+  .year-card:hover .year-card-label, .year-card:focus-visible .year-card-label { letter-spacing: 0.2em; }
+
+  /* ---- client cards ---- */
+  .client-card::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s;
+    background: radial-gradient(230px circle at var(--mx, 50%) var(--my, 50%), var(--teal-dim), transparent 65%);
+  }
+  .client-card:hover::before, .client-card:focus-visible::before { opacity: 1; }
+  .client-card-name { transition: color .25s, translate .35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .client-card:hover .client-card-name, .client-card:focus-visible .client-card-name { translate: 5px 0; }
+  .client-card:hover { animation: dashGlowTeal 2.2s ease-in-out infinite; }
+  @keyframes dashGlowTeal {
+    0%, 100% { box-shadow: var(--shadow), 0 0 0 3px rgba(15,113,117,0.12); }
+    50%      { box-shadow: var(--shadow-lg), 0 0 0 6px rgba(15,113,117,0.20); }
+  }
+
+  /* ---- project cards: colour sweep, spotlight, bouncing arrow ---- */
+  .project-card::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s;
+    background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), var(--copper-dim), transparent 70%);
+  }
+  .project-card:hover::after, .project-card:focus-visible::after { opacity: 1; }
+  .project-card {
+    background-image: linear-gradient(90deg, var(--copper-dim), transparent 75%);
+    background-repeat: no-repeat; background-size: 0% 100%;
+    transition: border-color .25s, box-shadow .25s, background-size .5s ease,
+      translate .38s cubic-bezier(0.34, 1.56, 0.64, 1), scale .38s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .project-card:hover, .project-card:focus-visible { background-size: 100% 100%; translate: 6px 0; scale: 1.008; }
+  .project-card:hover .project-arrow, .project-card:focus-visible .project-arrow { animation: dashNudge 900ms ease-in-out infinite; }
+  @keyframes dashNudge { 0%, 100% { translate: 0 0; } 50% { translate: 6px 0; } }
+  .project-job { transition: rotate .3s cubic-bezier(0.34, 1.56, 0.64, 1), scale .3s cubic-bezier(0.34, 1.56, 0.64, 1), background .2s, color .2s; }
+  .project-card:hover .project-job { rotate: -3deg; scale: 1.07; color: var(--copper); background: var(--copper-dim); }
+
+  /* ---- click ripple (spawned by a tiny pointer handler) ---- */
+  .dash-ripple {
+    position: absolute; z-index: 0; width: 20px; height: 20px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, var(--indigo-glow), transparent 70%);
+    translate: -50% -50%; scale: 0; animation: dashRipple 700ms ease-out forwards;
+  }
+  @keyframes dashRipple { to { scale: 22; opacity: 0; } }
+
+  /* ---- buttons ---- */
+  .btn { overflow: hidden; transition: all .18s, scale .2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .btn::after {
+    content: ''; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; transform: skewX(-20deg);
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,0.38), transparent); opacity: 0; pointer-events: none;
+  }
+  .btn:hover:not(:disabled)::after { animation: dashShine 700ms ease-out; }
+  .btn:hover:not(:disabled) { scale: 1.04; }
+  .btn:active:not(:disabled) { scale: 0.95; }
+  .btn:hover:not(:disabled) svg { animation: dashWiggle 500ms ease-in-out; }
+  @keyframes dashShine { 0% { left: -60%; opacity: 0; } 25% { opacity: 1; } 100% { left: 130%; opacity: 0; } }
+  @keyframes dashWiggle { 0%, 100% { rotate: 0deg; } 25% { rotate: -14deg; } 60% { rotate: 12deg; } }
+
+  .icon-btn { transition: background .15s, color .15s, border-color .15s, transform .15s, scale .25s cubic-bezier(0.34, 1.56, 0.64, 1), rotate .25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .icon-btn:hover:not(:disabled) { scale: 1.15; rotate: -6deg; }
+  .icon-btn:active:not(:disabled) { scale: 0.9; }
+  .back-btn { transition: all .2s, translate .3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .back-btn:hover { translate: -5px 0; box-shadow: var(--shadow); }
+
+  /* ---- project popup ---- */
+  .modal-header { position: relative; }
+  .modal-header::before {
+    content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; pointer-events: none;
+    background: linear-gradient(90deg, var(--indigo), var(--copper), var(--teal), var(--indigo));
+    background-size: 300% 100%; animation: dashBar 5s linear infinite;
+  }
+  @keyframes dashBar { to { background-position: 300% 0; } }
+  .modal-close { transition: background .2s, color .2s, border-color .2s, rotate .35s cubic-bezier(0.34, 1.56, 0.64, 1), scale .3s ease; }
+  .modal-close:hover { rotate: 90deg; scale: 1.12; }
+  .modal-tab { transition: color .2s, border-color .2s, background .2s; border-radius: 8px 8px 0 0; }
+  .modal-tab:hover:not(.active) { background: var(--indigo-dim); }
+
+  .detail-section { animation: dashRise 520ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  .detail-section:nth-child(2) { animation-delay: 70ms; }
+  .detail-section:nth-child(3) { animation-delay: 140ms; }
+  .detail-section:nth-child(4) { animation-delay: 210ms; }
+  .detail-section:nth-child(n+5) { animation-delay: 280ms; }
+  .detail-grid > .detail-card { animation: dashPop 460ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+  .detail-grid > .detail-card:nth-child(1) { animation-delay: 60ms; }
+  .detail-grid > .detail-card:nth-child(2) { animation-delay: 110ms; }
+  .detail-grid > .detail-card:nth-child(3) { animation-delay: 160ms; }
+  .detail-grid > .detail-card:nth-child(4) { animation-delay: 210ms; }
+  .detail-grid > .detail-card:nth-child(5) { animation-delay: 260ms; }
+  .detail-grid > .detail-card:nth-child(6) { animation-delay: 310ms; }
+  .detail-grid > .detail-card:nth-child(n+7) { animation-delay: 360ms; }
+  @keyframes dashPop { from { opacity: 0; scale: 0.88; } to { opacity: 1; scale: 1; } }
+  .detail-hero { animation: dashPop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+
+  /* ---- tables ---- */
+  .co-table tbody tr, .view-table tbody tr { animation: dashRow 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  .co-table tbody tr:nth-child(1), .view-table tbody tr:nth-child(1) { animation-delay: 40ms; }
+  .co-table tbody tr:nth-child(2), .view-table tbody tr:nth-child(2) { animation-delay: 90ms; }
+  .co-table tbody tr:nth-child(3), .view-table tbody tr:nth-child(3) { animation-delay: 140ms; }
+  .co-table tbody tr:nth-child(4), .view-table tbody tr:nth-child(4) { animation-delay: 190ms; }
+  .co-table tbody tr:nth-child(5), .view-table tbody tr:nth-child(5) { animation-delay: 240ms; }
+  .co-table tbody tr:nth-child(6), .view-table tbody tr:nth-child(6) { animation-delay: 290ms; }
+  .co-table tbody tr:nth-child(n+7), .view-table tbody tr:nth-child(n+7) { animation-delay: 340ms; }
+  @keyframes dashRow { from { opacity: 0; translate: -14px 0; } to { opacity: 1; translate: 0 0; } }
+  .co-table tr:hover td:first-child, .view-table tr:hover td:first-child { box-shadow: inset 3px 0 0 var(--copper); }
+  .co-table td, .view-table td { transition: background .2s; }
+
+  /* ---- states ---- */
+  .empty-state { animation: dashBob 4s ease-in-out infinite; }
+  @keyframes dashBob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -7px; } }
+  .loading-text { animation: dashPulse 1.6s ease-in-out infinite; }
+  @keyframes dashPulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+  .spinner { box-shadow: 0 0 18px var(--indigo-glow); }
+
+  @media (hover: none) {
+    .year-card:hover, .client-card:hover, .project-card:hover { translate: 0 0; scale: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dash-root, .section-title, .section-title::after, .section-subtitle,
+    .year-card::after, .year-card-num, .client-card, .project-card, .project-arrow,
+    .modal-header::before, .detail-section, .detail-grid > .detail-card, .detail-hero,
+    .co-table tbody tr, .view-table tbody tr, .empty-state, .loading-text, .dash-ripple, .btn::after { animation: none !important; }
+    .year-card, .client-card, .project-card, .btn, .icon-btn, .back-btn, .modal-close { transition: none !important; }
+    .section-title { -webkit-text-fill-color: currentColor; background: none; }
+  }
 `;
+
+
+// ─── POINTER FX (visual only) ───────────────────────────────────────────────
+// Cursor glow + card spotlight + click ripple. Writes CSS variables / appends a
+// short-lived <span>; never touches React state, so nothing re-renders.
+const DASH_CARD_SELECTOR = ".year-card, .client-card, .project-card";
+let dashFxFrame = 0;
+
+function handleDashPointerMove(e) {
+  if (dashFxFrame) return;
+  const root = e.currentTarget;
+  const x = e.clientX;
+  const y = e.clientY;
+  const target = e.target;
+  dashFxFrame = requestAnimationFrame(() => {
+    dashFxFrame = 0;
+    const rr = root.getBoundingClientRect();
+    root.style.setProperty("--gx", `${x - rr.left}px`);
+    root.style.setProperty("--gy", `${y - rr.top}px`);
+    const card = target && target.closest ? target.closest(DASH_CARD_SELECTOR) : null;
+    if (card) {
+      const r = card.getBoundingClientRect();
+      card.style.setProperty("--mx", `${x - r.left}px`);
+      card.style.setProperty("--my", `${y - r.top}px`);
+    }
+  });
+}
+
+function handleDashPointerDown(e) {
+  const card = e.target && e.target.closest ? e.target.closest(DASH_CARD_SELECTOR) : null;
+  if (!card) return;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const r = card.getBoundingClientRect();
+  const dot = document.createElement("span");
+  dot.className = "dash-ripple";
+  dot.style.left = `${e.clientX - r.left}px`;
+  dot.style.top = `${e.clientY - r.top}px`;
+  dot.addEventListener("animationend", () => dot.remove());
+  card.appendChild(dot);
+}
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 // Sorts change orders ascending by their CO number. Uses a "numeric" locale
@@ -938,7 +1204,7 @@ function safeFileName(name = "project") {
   return (name || "project").replace(/[\\/:*?"<>|]/g, "_").trim() || "project";
 }
 
-function buildProjectWorkbook(project, changeOrders = []) {
+function buildProjectWorkbook(XLSX, project, changeOrders = []) {
   const team = parseTeam(project.team);
 
   const mainRows = [
@@ -992,8 +1258,9 @@ function buildProjectWorkbook(project, changeOrders = []) {
   return wb;
 }
 
-function downloadProjectWorkbook(project, changeOrders = []) {
-  const wb = buildProjectWorkbook(project, changeOrders);
+async function downloadProjectWorkbook(project, changeOrders = []) {
+  const XLSX = await import("xlsx"); // loaded only when the user clicks download
+  const wb = buildProjectWorkbook(XLSX, project, changeOrders);
   XLSX.writeFile(wb, `${safeFileName(project.projectName)}_details.xlsx`);
 }
 
@@ -1019,7 +1286,7 @@ function uniqueSheetName(rawName, usedNames) {
   return candidate;
 }
 
-function buildClientWorkbook(clientName, projects = [], changeOrdersByProject = {}) {
+function buildClientWorkbook(XLSX, clientName, projects = [], changeOrdersByProject = {}) {
   const wb = XLSX.utils.book_new();
 
   const summaryHeader = [
@@ -1105,8 +1372,9 @@ function buildClientWorkbook(clientName, projects = [], changeOrdersByProject = 
   return wb;
 }
 
-function downloadClientWorkbook(clientName, projects = [], changeOrdersByProject = {}) {
-  const wb = buildClientWorkbook(clientName, projects, changeOrdersByProject);
+async function downloadClientWorkbook(clientName, projects = [], changeOrdersByProject = {}) {
+  const XLSX = await import("xlsx"); // loaded only when the user clicks download
+  const wb = buildClientWorkbook(XLSX, clientName, projects, changeOrdersByProject);
   XLSX.writeFile(wb, `${safeFileName(clientName)}_all_projects.xlsx`);
 }
 
@@ -1150,6 +1418,15 @@ function BtnSpinner({ dark = false }) {
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function Dashboard() {
+  // "Share live link" is for the OWNER (and Zeeshan) only - same rule as the Social Hub / RFI pages.
+  const { role, name } = useAuth();
+  const canShareLinks = role === "OWNER" || (name || "").trim().toLowerCase() === "zeeshan";
+  // Same gate the sidebar's standalone RFI page uses (AppSidebar's
+  // hasRfiAccess) - keeps the in-project RFI tab visible to the same users
+  // who can already see the top-level RFI nav entry.
+  // Now driven by Admin Console -> RFI Access (backend flag), not user names.
+  const { allowed: canAccessRfi } = useRfiAccess();
+
   const [allProjects, setAllProjects] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -1160,6 +1437,14 @@ export default function Dashboard() {
 
   const [changeOrders, setChangeOrders] = useState([]);
   const [coLoading, setCoLoading] = useState(false);
+
+  // ── RFI tab (embedded, project-scoped: no client/project picker — the
+  // open project is always the implicit target) ──────────────────────────
+  const [rfiView, setRfiView] = useState("history"); // "history" | "create"
+  const [projectRfis, setProjectRfis] = useState([]);
+  const [rfiLoading, setRfiLoading] = useState(false);
+  const [rfiSyncingAll, setRfiSyncingAll] = useState(false);
+  const [rfiSyncHovered, setRfiSyncHovered] = useState(false);
 
   const [editingProjectMode, setEditingProjectMode] = useState(false);
   const [editProjectData, setEditProjectData] = useState({});
@@ -1198,6 +1483,7 @@ export default function Dashboard() {
   const [showAddYear, setShowAddYear] = useState(false);
   const [newYearInput, setNewYearInput] = useState("");
 
+  const [shareTarget, setShareTarget] = useState(null); // null = "Share live link" dialog closed
   const [viewProject, setViewProject] = useState(null);
   const [viewData, setViewData] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
@@ -1246,6 +1532,67 @@ export default function Dashboard() {
     }
   }, [selectedProject, activeTab]);
 
+  const loadProjectRfis = useCallback(() => {
+    if (!selectedProject) return;
+    setRfiLoading(true);
+    fetchProjectRfis(selectedProject.projectName)
+      .then(setProjectRfis)
+      .catch((err) =>
+        toast({ title: "Failed to load RFIs", description: getRfiErrorMessage(err), variant: "destructive" })
+      )
+      .finally(() => setRfiLoading(false));
+  }, [selectedProject]);
+
+  useEffect(() => {
+    if (selectedProject && activeTab === "rfi") {
+      loadProjectRfis();
+    }
+  }, [selectedProject, activeTab, loadProjectRfis]);
+
+  // Reset the RFI sub-view back to the default whenever a different
+  // project's modal is opened, so switching projects never leaves you
+  // stranded on "Create RFI" mid-draft for the wrong job.
+  useEffect(() => {
+    setRfiView("history");
+  }, [selectedProject && selectedProject.id]);
+
+  // After a successful send, reload the RFI list and refresh the project
+  // record so the next "Create RFI" defaults its To/CC fields to whatever
+  // was just used (mirrors the standalone RFI page's onSent behavior).
+  const handleRfiSent = () => {
+    loadProjectRfis();
+    api.getAllProjects(false)
+      .then((data) => {
+        setAllProjects(data);
+        setSelectedProject((prev) => {
+          if (!prev) return prev;
+          const fresh = data.find((p) => p.id === prev.id);
+          return fresh ? fresh : prev;
+        });
+      })
+      .catch(() => {});
+  };
+
+  const handleSyncAllProjectRfis = async () => {
+    if (!selectedProject) return;
+    setRfiSyncingAll(true);
+    try {
+      const results = await syncAllRfisForProject(selectedProject.projectName);
+      const successCount = results.filter((r) => r.success).length;
+      const newMessages = results.reduce((sum, r) => sum + (r.newMessagesCount ?? 0), 0);
+      toast({
+        title: `Sync complete — ${successCount}/${results.length} RFIs checked`,
+        description: newMessages > 0 ? `${newMessages} new message(s) imported.` : "No new replies.",
+        className: "bg-emerald-600 text-white border-none shadow-xl",
+      });
+      loadProjectRfis();
+    } catch (err) {
+      toast({ title: "Sync failed", description: getRfiErrorMessage(err), variant: "destructive" });
+    } finally {
+      setRfiSyncingAll(false);
+    }
+  };
+
   const refreshProjects = async () => {
     const data = await api.getAllProjects(false);
     setAllProjects(data);
@@ -1285,7 +1632,7 @@ export default function Dashboard() {
     setDownloadingKey(key);
     try {
       const cos = await api.getChangeOrders(p.projectName);
-      downloadProjectWorkbook(p, cos);
+      await downloadProjectWorkbook(p, cos);
     } catch (err) {
       setError(err.message || "Failed to download project details");
     } finally {
@@ -1303,7 +1650,7 @@ export default function Dashboard() {
       );
       const changeOrdersByProject = {};
       projects.forEach((p, i) => { changeOrdersByProject[p.projectName] = results[i]; });
-      downloadClientWorkbook(client, projects, changeOrdersByProject);
+      await downloadClientWorkbook(client, projects, changeOrdersByProject);
     } catch (err) {
       setError(err.message || "Failed to download client projects");
     } finally {
@@ -1656,7 +2003,7 @@ export default function Dashboard() {
   return (
     <>
       <style>{styles}</style>
-      <div className="dash-root">
+      <div className="dash-root" onPointerMove={handleDashPointerMove} onPointerDown={handleDashPointerDown}>
         <div className="dash-content">
           <AnimatePresence mode="wait">
 
@@ -1726,7 +2073,7 @@ export default function Dashboard() {
                       }));
                     }
                   }}>
-                    {showAddProject ? <><X size={14} /> Cancel</> : <><Plus size={14} /> New project</>}
+                    {showAddProject ? <><X size={14} /> Cancel</> : <><ActionIcon kind="new" size="md" onColor /> New project</>}
                   </button>
                 </div>
                 <AnimatePresence>
@@ -1764,8 +2111,22 @@ export default function Dashboard() {
                           whileTap={{ scale: 0.98 }}
                         >
                           <div className="client-card-top">
-                            <div className="client-card-name">{client}</div>
+                            <div className="client-card-name" title={client}>{client}</div>
+                          </div>
+                          <div className="client-card-foot">
+                            <div className="client-card-count">{clientProjects.length} project{clientProjects.length === 1 ? "" : "s"}</div>
                             <div className="client-card-actions">
+                              {canShareLinks && (
+                                <button
+                                  type="button"
+                                  className="icon-btn"
+                                  title="Share live link with this client"
+                                  aria-label={`Share live link for ${client}`}
+                                  onClick={(e) => { e.stopPropagation(); setShareTarget({ scope: "CLIENT", client, year: selectedYear }); }}
+                                >
+                                  <ActionIcon kind="share" size="lg" />
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 className="icon-btn"
@@ -1773,7 +2134,7 @@ export default function Dashboard() {
                                 aria-label={`View all projects for ${client}`}
                                 onClick={(e) => handleViewClientAll(e, client, clientProjects)}
                               >
-                                <Eye size={15} />
+                                <ActionIcon kind="view" size="lg" />
                               </button>
                               <button
                                 type="button"
@@ -1783,11 +2144,10 @@ export default function Dashboard() {
                                 disabled={downloadingClient}
                                 onClick={(e) => handleDownloadClientAll(e, client, clientProjects)}
                               >
-                                {downloadingClient ? <span className="btn-spinner btn-spinner-dark" aria-hidden="true" /> : <Download size={15} />}
+                                {downloadingClient ? <span className="btn-spinner btn-spinner-dark" aria-hidden="true" /> : <ActionIcon kind="download" size="lg" />}
                               </button>
                             </div>
                           </div>
-                          <div className="client-card-count">{clientProjects.length} project{clientProjects.length === 1 ? "" : "s"}</div>
                         </motion.div>
                       );
                     })}
@@ -1803,6 +2163,16 @@ export default function Dashboard() {
                 <p className="section-title">{selectedClient}</p>
                 <p className="section-subtitle">{projectsForClient.length} project{projectsForClient.length === 1 ? "" : "s"} in {selectedYear}</p>
                 <div className="section-actions">
+                  {canShareLinks && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => setShareTarget({ scope: "CLIENT", client: selectedClient, year: selectedYear })}
+                      title="Create a live read-only link for this client"
+                    >
+                      <ActionIcon kind="share" size="lg" /> Share live link
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn btn-ghost"
@@ -1810,7 +2180,7 @@ export default function Dashboard() {
                     onClick={(e) => handleViewClientAll(e, selectedClient, projectsForClient)}
                     title="View all of this client's projects"
                   >
-                    <Eye size={15} /> View all
+                    <ActionIcon kind="view" size="lg" /> View all
                   </button>
                   <button
                     type="button"
@@ -1819,7 +2189,7 @@ export default function Dashboard() {
                     onClick={(e) => handleDownloadClientAll(e, selectedClient, projectsForClient)}
                     title="Download all of this client's projects as one Excel file"
                   >
-                    {downloadingClient ? <BtnSpinner dark /> : <Download size={15} />} Download all (Excel)
+                    {downloadingClient ? <BtnSpinner dark /> : <ActionIcon kind="download" size="lg" onColor />} Download all (Excel)
                   </button>
                   <button className="btn btn-gold" onClick={() => {
                     setShowAddProject(v => !v);
@@ -1831,7 +2201,7 @@ export default function Dashboard() {
                       }));
                     }
                   }}>
-                    {showAddProject ? <><X size={14} /> Cancel</> : <><Plus size={14} /> New project</>}
+                    {showAddProject ? <><X size={14} /> Cancel</> : <><ActionIcon kind="new" size="md" onColor /> New project</>}
                   </button>
                 </div>
                 <AnimatePresence>
@@ -1868,7 +2238,7 @@ export default function Dashboard() {
                       >
                         <div className="project-info">
                           <div className="project-name" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            {p.projectName}
+                            <span className="project-name-text" title={p.projectName}>{p.projectName}</span>
                             <CopyButton text={p.projectName} label="project name" />
                           </div>
                           <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
@@ -1878,6 +2248,17 @@ export default function Dashboard() {
                         </div>
                         <div className="project-meta">
                           {p.jobNumber && <span className="project-job">#{p.jobNumber}</span>}
+                          {canShareLinks && (
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="Share live link for this project"
+                              aria-label={`Share live link for ${p.projectName}`}
+                              onClick={(e) => { e.stopPropagation(); setShareTarget({ scope: "PROJECT", projectId: p.id, projectName: p.projectName, client: p.client }); }}
+                            >
+                              <ActionIcon kind="share" size="lg" />
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="icon-btn"
@@ -1885,7 +2266,7 @@ export default function Dashboard() {
                             aria-label={`View details for ${p.projectName}`}
                             onClick={(e) => handleViewProject(e, p)}
                           >
-                            <Eye size={15} />
+                            <ActionIcon kind="view" size="lg" />
                           </button>
                           <button
                             type="button"
@@ -1898,7 +2279,7 @@ export default function Dashboard() {
                             {downloadingKey === (p.jobNumber || p.projectName) ? (
                               <span className="btn-spinner btn-spinner-dark" aria-hidden="true" />
                             ) : (
-                              <Download size={15} />
+                              <ActionIcon kind="download" size="lg" />
                             )}
                           </button>
                           <span className="project-arrow" aria-hidden="true"><ChevronRight size={18} /></span>
@@ -1968,6 +2349,9 @@ export default function Dashboard() {
                   <div className="modal-tabs" role="tablist" aria-label="Project sections">
                     <button role="tab" aria-selected={activeTab === "main"} className={`modal-tab ${activeTab === "main" ? "active" : ""}`} onClick={() => { setActiveTab("main"); setEditingProjectMode(false); }}>Main details</button>
                     <button role="tab" aria-selected={activeTab === "change"} className={`modal-tab ${activeTab === "change" ? "active" : ""}`} onClick={() => setActiveTab("change")}>Change orders</button>
+                    {canAccessRfi && (
+                      <button role="tab" aria-selected={activeTab === "rfi"} className={`modal-tab ${activeTab === "rfi" ? "active" : ""}`} onClick={() => setActiveTab("rfi")}>RFI</button>
+                    )}
                   </div>
                 </div>
 
@@ -2099,6 +2483,63 @@ export default function Dashboard() {
                         )}
                       </motion.div>
                     )}
+
+                    {activeTab === "rfi" && canAccessRfi && (
+                      <motion.div key="rfi-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <div className="co-header">
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <button
+                              className={`btn btn-sm ${rfiView === "history" ? "btn-teal" : "btn-ghost"}`}
+                              onClick={() => setRfiView("history")}
+                            >
+                              <HistoryIcon size={13} /> RFI's
+                            </button>
+                            <button
+                              className={`btn btn-sm ${rfiView === "create" ? "btn-teal" : "btn-ghost"}`}
+                              onClick={() => setRfiView("create")}
+                            >
+                              <ClipboardEdit size={13} /> Create RFI
+                            </button>
+                          </div>
+                          {rfiView === "history" && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              disabled={rfiSyncingAll}
+                              onClick={handleSyncAllProjectRfis}
+                              onMouseEnter={() => setRfiSyncHovered(true)}
+                              onMouseLeave={() => setRfiSyncHovered(false)}
+                              title="Check Gmail for new replies across all RFIs in this project"
+                            >
+                              <AnimatedSyncGmailIcon
+                                size="sm"
+                                isParentHovered={rfiSyncHovered && !rfiSyncingAll}
+                                className={rfiSyncingAll ? "animate-spin" : ""}
+                              />
+                              {rfiSyncingAll ? "Syncing…" : "Sync Gmail"}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* No client/project selector here on purpose — this tab is
+                            always scoped to the project already open in this modal. */}
+                        {rfiView === "create" ? (
+                          <RfiForm
+                            projectName={selectedProject.projectName}
+                            initialRecipientEmail={selectedProject.rfiRecipientEmail ?? ""}
+                            initialCcEmails={selectedProject.rfiCcEmails ?? ""}
+                            onSent={handleRfiSent}
+                          />
+                        ) : (
+                          <RfiList
+                            projectName={selectedProject.projectName}
+                            rfis={projectRfis}
+                            loading={rfiLoading}
+                            onRefresh={loadProjectRfis}
+                          />
+                        )}
+                      </motion.div>
+                    )}
                   </AnimatePresence>
                 </div>
               </motion.div>
@@ -2148,11 +2589,19 @@ export default function Dashboard() {
                   ) : viewData && (
                     <>
                       <div className="section-actions">
+                        {canShareLinks && (
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => setShareTarget({ scope: "PROJECT", projectId: viewProject.id, projectName: viewProject.projectName, client: viewProject.client })}
+                          >
+                            <ActionIcon kind="share" size="md" /> Share live link
+                          </button>
+                        )}
                         <button
                           className="btn btn-gold btn-sm"
                           onClick={() => downloadProjectWorkbook(viewData.project, viewData.changeOrders)}
                         >
-                          <Download size={13} /> Download as Excel
+                          <ActionIcon kind="download" size="md" onColor /> Download as Excel
                         </button>
                       </div>
 
@@ -2272,7 +2721,7 @@ export default function Dashboard() {
                             downloadClientWorkbook(viewClient.client, viewClient.projects, changeOrdersByProject);
                           }}
                         >
-                          <Download size={13} /> Download all (Excel)
+                          <ActionIcon kind="download" size="md" onColor /> Download all (Excel)
                         </button>
                       </div>
 
@@ -2289,7 +2738,7 @@ export default function Dashboard() {
                                 className="btn btn-ghost btn-sm"
                                 onClick={() => downloadProjectWorkbook(project, cos)}
                               >
-                                <Download size={13} /> This project
+                                <ActionIcon kind="download" size="md" /> This project
                               </button>
                             </div>
 
@@ -2409,6 +2858,9 @@ export default function Dashboard() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* ════ SHARE LIVE LINK DIALOG (client or single project) ════ */}
+        {canShareLinks && <ShareLinkDialog target={shareTarget} onClose={() => setShareTarget(null)} />}
       </div>
     </>
   );

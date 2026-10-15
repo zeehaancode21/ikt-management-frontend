@@ -857,3 +857,119 @@ p {
 @media (prefers-color-scheme: dark) {
   /* Add dark mode styles if needed */
 }
+
+/* Animation Keyframes & Helper Classes */
+@keyframes rfiSectionEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rfiPop {
+  0% { transform: scale(0.9); opacity: 0; }
+  70% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes rfiDotPulse {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+
+@keyframes rfiConfettiBurst {
+  0% {
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(-1 * var(--dist))) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes rfiLaunchRing {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+.rfi-section-enter {
+  animation: rfiSectionEnter 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--rfi-delay, 0ms);
+  will-change: transform, opacity;
+}
+
+.animate-rfi-pop {
+  animation: rfiPop 200ms cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.rfi-dot {
+  display: inline-block;
+  animation: rfiDotPulse 1.2s infinite ease-in-out;
+}
+
+.rfi-dot:nth-child(1) { animation-delay: 0s; }
+.rfi-dot:nth-child(2) { animation-delay: 0.2s; }
+.rfi-dot:nth-child(3) { animation-delay: 0.4s; }
+
+.rfi-confetti-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  background-color: var(--dot-color);
+  animation: rfiConfettiBurst 600ms cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  animation-delay: var(--delay);
+  pointer-events: none;
+}
+
+.rfi-launch-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 0.5rem;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  animation: rfiLaunchRing 800ms ease-out infinite;
+  pointer-events: none;
+}
+
+.rfi-send {
+  position: relative;
+  overflow: hidden;
+  transition: transform 150ms ease, box-shadow 150ms ease, background-color 200ms ease;
+  background-color: hsl(var(--primary));
+}
+
+.rfi-send:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.rfi-send:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.rfi-send-overlay {
+  position: absolute;
+  inset: 0;
+  transition: opacity 300ms ease;
+  pointer-events: none;
+}
+
+.rfi-send-overlay-success {
+  background-color: #10b981;
+}
+
+.rfi-send-overlay-error {
+  background-color: hsl(var(--destructive));
+}
+
+.rfi-drag-active {
+  background-color: hsl(var(--primary) / 0.08);
+  border-color: hsl(var(--primary));
+  box-shadow: inset 0 0 10px hsl(var(--primary) / 0.1);
+}

@@ -201,3 +201,345 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
      why only the Leave Portal's calendar icon stayed dark/invisible. */
   color-scheme: light;
 }
+
+/* ── Animated "Preview" eye icon (RFI attachment buttons) ────────────────
+   Used by AnimatedEyeIcon.tsx. Split into two overlapping shapes — an
+   "open eye" group (outline + iris) and a "closed eyelid" line — since a
+   blink is really a cross-fade between two distinct shapes, not something
+   a single path can animate on its own. Both are idle (closed hidden,
+   iris centered) until the surrounding Button (className="group") is
+   hovered, at which point one blink-and-look cycle plays. */
+.rfi-eye-icon {
+  overflow: visible;
+  transition: transform 150ms ease-out;
+}
+.rfi-eye-icon .rfi-eye-closed {
+  opacity: 0;
+}
+.rfi-eye-icon .rfi-eye-iris {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.group:hover .rfi-eye-icon .rfi-eye-open {
+  animation: rfi-eye-blink-open 700ms ease-in-out;
+}
+.group:hover .rfi-eye-icon .rfi-eye-closed {
+  animation: rfi-eye-blink-closed 700ms ease-in-out;
+}
+.group:hover .rfi-eye-icon .rfi-eye-iris {
+  animation: rfi-eye-look 900ms ease-in-out;
+}
+.group:active .rfi-eye-icon {
+  transform: scale(0.88);
+}
+
+@keyframes rfi-eye-blink-open {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  45%,
+  55% {
+    opacity: 0;
+  }
+}
+@keyframes rfi-eye-blink-closed {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  45%,
+  55% {
+    opacity: 1;
+  }
+}
+@keyframes rfi-eye-look {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-1.4px);
+  }
+  62% {
+    transform: translateX(1.4px);
+  }
+  85% {
+    transform: translateX(0);
+  }
+}
+.rfi-sync-icon {
+  overflow: visible;
+  transition: transform 150ms ease-out;
+}
+.rfi-sync-icon .rfi-sync-rotor {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.group:active .rfi-sync-icon {
+  transform: scale(0.88);
+}
+
+/* Hover: one full rotation, same trigger pattern as .group:hover on the eye
+   icon — "resumes" automatically every time the pointer re-enters because
+   it's plain CSS, not a GIF that has to be reloaded. */
+.group:hover .rfi-sync-icon:not(.rfi-sync-icon--active) .rfi-sync-rotor {
+  animation: rfi-sync-spin 700ms ease-in-out;
+}
+
+/* Actively syncing: continuous spin regardless of hover, stops only when
+   the `active` prop is cleared after the request finishes. */
+.rfi-sync-icon--active .rfi-sync-rotor {
+  animation: rfi-sync-spin-continuous 900ms linear infinite;
+}
+
+@keyframes rfi-sync-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes rfi-sync-spin-continuous {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rfi-sync-icon .rfi-sync-rotor { animation: none !important; }
+}
+
+.rfi-svg-icon .rfi-cancel-ring, .rfi-svg-icon .rfi-cancel-x1,
+.rfi-svg-icon .rfi-cancel-x2, .rfi-svg-icon .rfi-review-glint { stroke-dasharray: 1; stroke-dashoffset: 0; }
+.rfi-svg-icon .rfi-review-glass { transform-box: fill-box; transform-origin: center; }
+
+.rfi-svg-icon[data-active="true"] .rfi-cancel-ring  { animation: rfi-svg-draw 480ms ease-out both; }
+.rfi-svg-icon[data-active="true"] .rfi-cancel-x1    { animation: rfi-svg-draw 240ms ease-out 360ms both; }
+.rfi-svg-icon[data-active="true"] .rfi-cancel-x2    { animation: rfi-svg-draw 240ms ease-out 540ms both; }
+.rfi-svg-icon[data-active="true"] .rfi-review-glass { animation: rfi-svg-scan 900ms ease-in-out both; }
+.rfi-svg-icon[data-active="true"] .rfi-review-glint { animation: rfi-svg-draw 360ms ease-out 480ms both; }
+
+@keyframes rfi-svg-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes rfi-svg-scan {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(-1.6px, -1px) rotate(-8deg); }
+  50% { transform: translate(1.4px, -1.6px) rotate(6deg); }
+  75% { transform: translate(1.6px, 1px) rotate(-4deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rfi-svg-icon[data-active="true"] * { animation: none; }
+}
+
+
+@keyframes sync-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+ 
+.sync-icon-spinning {
+  animation: sync-spin 1s linear infinite;
+}
+ 
+.animate-spin {
+  animation: sync-spin 1s linear infinite;
+}
+ 
+/* ─────────────────────────────────────────────────────────────────────
+   Button Transitions
+   ───────────────────────────────────────────────────────────────────── */
+ 
+.rfi-sync-btn {
+  transition: 
+    transform 160ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 200ms ease,
+    background-color 200ms ease;
+}
+ 
+.rfi-sync-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+ 
+.rfi-sync-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.96);
+}
+ 
+.rfi-sync-btn:disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+ 
+/* Dark mode for disabled button */
+.dark .rfi-sync-btn:disabled {
+  opacity: 0.4;
+}
+ 
+/* ─────────────────────────────────────────────────────────────────────
+   Icon Image Transitions
+   ───────────────────────────────────────────────────────────────────── */
+ 
+.sync-icon-img {
+  transition: opacity 200ms ease-in-out;
+  display: inline-block;
+  user-select: none;
+}
+ 
+/* Smooth transition between PNG and GIF */
+.sync-icon-img.loading {
+  opacity: 0.7;
+}
+ 
+/* ─────────────────────────────────────────────────────────────────────
+   Dark Mode Icon Styling
+   ───────────────────────────────────────────────────────────────────── */
+ 
+.dark .sync-icon-img {
+  /* Invert colors for dark mode */
+  filter: invert(1) brightness(0.95);
+}
+ 
+/* Slightly reduce brightness to prevent excessive glow in dark mode */
+.dark .sync-icon-img:hover {
+  filter: invert(1) brightness(0.9);
+}
+ 
+/* ─────────────────────────────────────────────────────────────────────
+   Hover Animation for Icon Swap (PNG to GIF)
+   ───────────────────────────────────────────────────────────────────── */
+ 
+.sync-button-wrapper:hover .sync-icon-img {
+  /* Optional: add slight scale effect on hover */
+  transform: scale(1.05);
+  transition: transform 150ms ease;
+}
+ 
+/* ─────────────────────────────────────────────────────────────────────
+   Loading State Animations
+   ───────────────────────────────────────────────────────────────────── */
+ 
+.sync-btn-syncing {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.7;
+}
+ 
+.sync-btn-syncing::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+ 
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+ 
+/* ─────────────────────────────────────────────────────────────────────
+   Accessibility: Reduced Motion
+   ───────────────────────────────────────────────────────────────────── */
+ 
+@media (prefers-reduced-motion: reduce) {
+  .sync-icon-spinning,
+  .animate-spin {
+    animation: none;
+  }
+ 
+  .rfi-sync-btn {
+    transition: none;
+  }
+ 
+  .sync-icon-img {
+    transition: none;
+  }
+ 
+  @keyframes sync-spin {
+    /* Disabled */
+  }
+ 
+  @keyframes pulse-glow {
+    /* Disabled */
+  }
+}
+ 
+/* ─────────────────────────────────────────────────────────────────────
+   Mobile/Touch Styles
+   ───────────────────────────────────────────────────────────────────── */
+ 
+@media (hover: none) and (pointer: coarse) {
+  /* Touch devices - reduce hover effects */
+  .rfi-sync-btn:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+ 
+  /* Remove hover glow on touch devices */
+  .sync-button-wrapper:active .sync-icon-img {
+    transform: scale(1);
+  }
+}
+ 
+/* ─────────────────────────────────────────────────────────────────────
+   Tooltip Styling (Optional)
+   ───────────────────────────────────────────────────────────────────── */
+ 
+.sync-button-tooltip {
+  pointer-events: none;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.375rem;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-0.5rem);
+}
+ 
+.dark .sync-button-tooltip {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+ 
+.rfi-sync-btn:hover .sync-button-tooltip {
+  opacity: 1;
+}
+ 
+/* ─────────────────────────────────────────────────────────────────────
+   Layout Prevention (no layout shift when icons change)
+   ───────────────────────────────────────────────────────────────────── */
+ 
+.sync-icon-container {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Ensure consistent size regardless of PNG vs GIF */
+  width: 1rem; /* h-4 */
+  height: 1rem;
+  flex-shrink: 0;
+}
+ 
+.sync-icon-container.sm {
+  width: 0.75rem; /* h-3 */
+  height: 0.75rem;
+}
+ 
+.sync-icon-container.lg {
+  width: 1.25rem; /* h-5 */
+  height: 1.25rem;
+}
+ 
+.sync-icon-container.xl {
+  width: 1.5rem; /* h-6 */
+  height: 1.5rem;
+}

@@ -26,7 +26,6 @@ export const WebSocketProvider = ({ children }: { children: ReactNode }) => {
       connectHeaders: {
         Authorization: `Bearer ${token}`,
       },
-      debug: (str) => console.log("STOMP: ", str),
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, FormEvent, useCallback, useId } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { format } from "date-fns";
 import { useNotifications } from "@/context/NotificationsContext";
 import {
@@ -17,6 +18,12 @@ import {
   CalendarRange,
   Send,
   History,
+  RotateCcw,
+  User,
+  Stethoscope,
+  Briefcase,
+  AlertTriangle,
+  MoreHorizontal,
 } from "lucide-react";
 import api, { getErrorMessage } from "../lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -42,6 +49,8 @@ import {
 } from "@/components/ui/select";
 
 import { toast } from "@/hooks/use-toast";
+import "@/lib/portalFx"; // shared hover / entrance animations for Leave + Permission portals
+import { ApplyBanner, ApplyStep, ChoiceGrid, CharMeter, LiveChip, type Choice } from "@/components/ApplyFormKit";
 
 /* =========================================================
    TYPES
@@ -203,6 +212,23 @@ const previewHours = (start: string, end: string): number | null => {
 
 const getToday = () => format(new Date(), "yyyy-MM-dd");
 
+// Option cards for the "Permission type" step of the Apply form.
+const PERMISSION_CHOICES: Choice[] = [
+  { value: "PERSONAL", label: "Personal", icon: User, tone: "#6366f1" },
+  { value: "MEDICAL", label: "Medical", icon: Stethoscope, tone: "#ef4444" },
+  { value: "OFFICIAL", label: "Official", icon: Briefcase, tone: "#0ea5e9" },
+  { value: "EMERGENCY", label: "Emergency", icon: AlertTriangle, tone: "#f97316" },
+  { value: "OTHER", label: "Other", icon: MoreHorizontal, tone: "#64748b" },
+];
+
+// The apply form's day timeline shows 6 AM → 10 PM.
+const TL_START = 6 * 60;
+const TL_END = 22 * 60;
+const toMinutes = (t: string) => {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+};
+
 // A permission request can only be changed ("reapproval") while it is
 // APPROVED and its date hasn't arrived yet — mirrors the Leave Portal rule.
 const canRequestChange = (p: Permission) => {
@@ -278,7 +304,7 @@ const EmptyState = ({
   message: string;
 }) => (
   <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
-    <Icon className="h-8 w-8 opacity-30" aria-hidden="true" />
+    <Icon className="pfx-float h-8 w-8 opacity-30" aria-hidden="true" />
     <p className="text-sm">{message}</p>
   </div>
 );
@@ -304,14 +330,23 @@ const ErrorState = ({ message, onRetry }: { message: string; onRetry: () => void
    QUOTA SUMMARY
 ========================================================= */
 
-const QuotaSummary = ({ quota, label }: { quota: Quota; label?: string }) => {
+const QuotaSummary = ({
+  quota,
+  label,
+  hideLimits = false,
+}: {
+  quota: Quota;
+  label?: string;
+  /** Employee view: hide remaining-hours and the "/ 2h" and "/ 12 requests" limit figures. */
+  hideLimits?: boolean;
+}) => {
   const monthPct = Math.min((quota.hoursUsedThisMonth / (quota.maxHoursPerMonth || 1)) * 100, 100);
   const hasSurplus = quota.surplusHoursThisMonth > 0;
 
   return (
     <div
       role="status"
-      className={`rounded-lg border px-4 py-2 ${
+      className={`pfx-quota rounded-lg border px-4 py-2 ${
         hasSurplus
           ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30"
           : "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30"
@@ -324,11 +359,22 @@ const QuotaSummary = ({ quota, label }: { quota: Quota; label?: string }) => {
             {hasSurplus ? "Free monthly permission hours used up" : `${label || "Permission quota"} on track`}
           </p>
           <p className={`mt-0.5 text-xs ${hasSurplus ? "text-amber-600 dark:text-amber-400/80" : "text-green-600 dark:text-green-400/80"}`}>
-            {formatHours(quota.hoursUsedThisMonth)} / {formatHours(quota.maxHoursPerMonth)} free hrs used this month ·{" "}
-            {quota.requestsUsedThisMonth} / {quota.maxRequestsPerMonth} requests used
+            {hideLimits ? (
+              <>
+                {formatHours(quota.hoursUsedThisMonth)} free hrs used this month · {quota.requestsUsedThisMonth} request
+                {quota.requestsUsedThisMonth !== 1 ? "s" : ""} made
+              </>
+            ) : (
+              <>
+                {formatHours(quota.hoursUsedThisMonth)} / {formatHours(quota.maxHoursPerMonth)} free hrs used this month ·{" "}
+                {quota.requestsUsedThisMonth} / {quota.maxRequestsPerMonth} requests used
+              </>
+            )}
           </p>
           <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">
-            Max {formatHours(quota.maxHoursPerDay)}h/day · {formatHours(quota.maxHoursPerMonth)}h free/month · {quota.maxRequestsPerMonth} requests/month
+            {hideLimits
+              ? `Max ${formatHours(quota.maxHoursPerDay)}h/day`
+              : `Max ${formatHours(quota.maxHoursPerDay)}h/day · ${formatHours(quota.maxHoursPerMonth)}h free/month · ${quota.maxRequestsPerMonth} requests/month`}
           </p>
           {hasSurplus && (
             <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">
@@ -341,17 +387,23 @@ const QuotaSummary = ({ quota, label }: { quota: Quota; label?: string }) => {
             </p>
           )}
         </div>
-        <div className="flex w-full flex-col items-end gap-1 sm:w-auto">
-          <span className={`text-xs font-semibold ${hasSurplus ? "text-amber-700 dark:text-amber-400" : "text-green-700 dark:text-green-400"}`}>
-            {quota.hoursRemainingThisMonth > 0 ? `${formatHours(quota.hoursRemainingThisMonth)}h free remaining` : "Free hours used up"}
-          </span>
-          <div className="h-2 w-full overflow-hidden rounded-full border border-white/40 bg-white/60 dark:border-white/10 dark:bg-black/30 sm:w-28">
-            <div
-              className={`h-full rounded-full transition-all duration-700 ${hasSurplus ? "bg-amber-500" : "bg-green-500"}`}
-              style={{ width: `${monthPct}%` }}
-            />
+        {hideLimits ? (
+          hasSurplus || quota.hoursRemainingThisMonth <= 0 ? (
+            <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">Free hours used up</span>
+          ) : null
+        ) : (
+          <div className="flex w-full flex-col items-end gap-1 sm:w-auto">
+            <span className={`text-xs font-semibold ${hasSurplus ? "text-amber-700 dark:text-amber-400" : "text-green-700 dark:text-green-400"}`}>
+              {quota.hoursRemainingThisMonth > 0 ? `${formatHours(quota.hoursRemainingThisMonth)}h free remaining` : "Free hours used up"}
+            </span>
+            <div className="h-2 w-full overflow-hidden rounded-full border border-white/40 bg-white/60 dark:border-white/10 dark:bg-black/30 sm:w-28">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${hasSurplus ? "bg-amber-500" : "bg-green-500"}`}
+                style={{ width: `${monthPct}%` }}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -364,6 +416,68 @@ const QuotaSummary = ({ quota, label }: { quota: Quota; label?: string }) => {
    employees one at a time just to see where everyone stands.
 ========================================================= */
 
+const STAFF_CSS = `
+  @keyframes stf-in { from { opacity: 0; transform: translateY(16px) scale(.97); } to { opacity: 1; transform: none; } }
+  @keyframes stf-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes stf-pop { 0% { transform: scale(.6) rotate(-12deg); } 60% { transform: scale(1.18) rotate(4deg); } 100% { transform: scale(1.08) rotate(0); } }
+  @keyframes stf-peek { from { opacity: 0; transform: translateY(6px) scale(.96); } to { opacity: 1; transform: none; } }
+
+  .stf-list { display: flex; flex-direction: column; gap: .5rem; perspective: 900px; }
+  .stf-row {
+    position: relative; display: grid; align-items: center; gap: .75rem 1rem; cursor: pointer;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr) auto auto;
+    padding: .8rem 1rem; border-radius: .85rem; overflow: hidden;
+    border: 1px solid hsl(var(--border)); background: hsl(var(--card));
+    animation: stf-in .5s cubic-bezier(.2,.9,.25,1) backwards; animation-delay: calc(var(--i, 0) * 45ms);
+    transition: transform .28s cubic-bezier(.3,1.4,.5,1), box-shadow .28s ease, border-color .28s ease, background-color .28s ease, opacity .28s ease, filter .28s ease;
+    will-change: transform;
+  }
+  .stf-row::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--stf-c, hsl(var(--primary)));
+    transform: scaleY(.3); opacity: .6; transition: transform .3s cubic-bezier(.3,1.4,.5,1), opacity .3s;
+  }
+  .stf-row::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s ease;
+    background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--stf-c, #6366f1) 16%, transparent), transparent 70%);
+  }
+  .stf-row > * { position: relative; z-index: 1; }
+
+  .stf-row:hover, .stf-row:focus-visible, .stf-row[data-open="true"] {
+    transform: translateY(-4px) scale(1.018); z-index: 5; outline: none;
+    border-color: var(--stf-c, hsl(var(--primary)));
+    box-shadow: 0 18px 34px -16px color-mix(in srgb, var(--stf-c, #6366f1) 55%, transparent), 0 4px 10px -4px rgba(0,0,0,.12);
+  }
+  .stf-row:hover::before, .stf-row:focus-visible::before, .stf-row[data-open="true"]::before { transform: scaleY(1); opacity: 1; }
+  .stf-row:hover::after, .stf-row:focus-visible::after { opacity: 1; }
+  .stf-list:hover .stf-row:not(:hover):not([data-open="true"]) { opacity: .55; filter: saturate(.7); transform: scale(.992); }
+  .stf-list:focus-within .stf-row:not(:focus-visible):not([data-open="true"]) { opacity: .75; }
+
+  .stf-avatar { transition: transform .3s cubic-bezier(.3,1.4,.5,1), box-shadow .3s ease; }
+  .stf-row:hover .stf-avatar, .stf-row:focus-visible .stf-avatar { animation: stf-pop .45s ease forwards; box-shadow: 0 0 0 4px color-mix(in srgb, var(--stf-c, #6366f1) 22%, transparent); }
+
+  .stf-track { overflow: hidden; border-radius: 9999px; background: hsl(var(--muted)); transition: height .25s ease; height: 8px; }
+  .stf-row:hover .stf-track { height: 11px; }
+  .stf-fill { height: 100%; border-radius: inherit; transform-origin: left; animation: stf-fill 900ms cubic-bezier(.22,1,.36,1) backwards; animation-delay: calc(var(--i, 0) * 45ms + 250ms); transition: filter .3s; }
+  .stf-row:hover .stf-fill { filter: brightness(1.12) saturate(1.2); }
+
+  .stf-view { opacity: .75; transform: translateX(-4px); transition: opacity .25s ease, transform .25s ease, background-color .2s ease; }
+  .stf-row:hover .stf-view, .stf-row:focus-visible .stf-view { opacity: 1; transform: none; }
+
+  .stf-more { grid-column: 1 / -1; display: grid; grid-template-rows: 0fr; transition: grid-template-rows .35s cubic-bezier(.2,.9,.25,1), margin .35s ease; margin-top: -.75rem; }
+  .stf-row:hover .stf-more, .stf-row:focus-visible .stf-more, .stf-row[data-open="true"] .stf-more { grid-template-rows: 1fr; margin-top: 0; }
+  .stf-more > div { overflow: hidden; min-height: 0; }
+  .stf-row:hover .stf-chip, .stf-row:focus-visible .stf-chip, .stf-row[data-open="true"] .stf-chip { animation: stf-peek .4s cubic-bezier(.2,.9,.25,1) backwards; animation-delay: calc(var(--k, 0) * 60ms + 80ms); }
+
+  @media (max-width: 720px) {
+    .stf-row { grid-template-columns: minmax(0, 1fr) auto; }
+    .stf-row .stf-bar { grid-column: 1 / -1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .stf-row, .stf-fill, .stf-avatar, .stf-chip { animation: none !important; transition: none !important; }
+    .stf-row:hover { transform: none; }
+  }
+`;
+
 const EmployeeSummaryTable = ({
   summaries,
   onView,
@@ -371,83 +485,131 @@ const EmployeeSummaryTable = ({
   summaries: EmployeeQuotaSummary[];
   onView: (employeeName: string) => void;
 }) => {
+  // Tapping a record keeps its details open (touch devices have no hover).
+  const [openName, setOpenName] = useState<string | null>(null);
+
+  const spot = (e: ReactPointerEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
+    e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
+  };
+
   return (
-    <div className="custom-scrollbar overflow-x-auto rounded-lg border border-border">
-      <table className="w-full text-sm">
-        <caption className="sr-only">Permission hours used and remaining for every employee this month</caption>
-        <thead>
-          <tr className="border-b border-border bg-muted/40 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            <th scope="col" className="px-2 py-2.5 sm:px-4">Employee</th>
-            <th scope="col" className="px-2 py-2.5 sm:px-4">Hours used</th>
-            <th scope="col" className="hidden px-2 py-2.5 sm:table-cell sm:px-4">Hours remaining</th>
-            <th scope="col" className="hidden px-2 py-2.5 lg:table-cell lg:px-4">Requests used</th>
-            <th scope="col" className="hidden px-2 py-2.5 lg:table-cell lg:px-4">Half/Full-Day permission</th>
-            <th scope="col" className="px-2 py-2.5 text-right sm:px-4">
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {summaries.map(({ employeeName, quota }) => {
-            const isTight = quota.hoursRemainingThisMonth <= 0 || quota.requestsRemainingThisMonth <= 0;
-            const pct = Math.min((quota.hoursUsedThisMonth / (quota.maxHoursPerMonth || 1)) * 100, 100);
-            return (
-              <tr key={employeeName} className="border-b border-border/60 last:border-0 hover:bg-muted/30">
-                <td className="px-2 py-3 sm:px-4">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <div
-                      className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400"
-                      aria-hidden="true"
-                    >
-                      {employeeName[0]?.toUpperCase() ?? "?"}
-                    </div>
-                    <span className="truncate font-medium text-foreground">{employeeName}</span>
+    <div>
+      <style>{STAFF_CSS}</style>
+
+      <div className="mb-2 hidden grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)_auto_auto] gap-4 px-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+        <span>Employee</span>
+        <span>Hours used</span>
+        <span className="w-[104px]">Status</span>
+        <span className="w-[76px] text-right">Action</span>
+      </div>
+
+      <ul className="stf-list" role="list" aria-label="Permission hours used and remaining for every employee this month">
+        {summaries.map(({ employeeName, quota }, i) => {
+          const hasSurplus = quota.surplusLeaveDays > 0;
+          const isTight = quota.hoursRemainingThisMonth <= 0 || quota.requestsRemainingThisMonth <= 0;
+          const pct = Math.min((quota.hoursUsedThisMonth / (quota.maxHoursPerMonth || 1)) * 100, 100);
+          const color = hasSurplus ? "#ef4444" : isTight ? "#f59e0b" : "#22c55e";
+          const tone = hasSurplus
+            ? "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400"
+            : isTight
+            ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
+            : "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400";
+          const open = openName === employeeName;
+          return (
+            <li
+              key={employeeName}
+              className="stf-row"
+              data-open={open}
+              tabIndex={0}
+              aria-expanded={open}
+              style={{ ["--i" as string]: i, ["--stf-c" as string]: color } as CSSProperties}
+              onPointerMove={spot}
+              onClick={() => setOpenName(open ? null : employeeName)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setOpenName(open ? null : employeeName);
+                }
+              }}
+            >
+              {/* employee */}
+              <div className="flex min-w-0 items-center gap-3">
+                <div
+                  className="stf-avatar flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white shadow"
+                  style={{ background: `linear-gradient(135deg, ${color}, ${color}aa)` }}
+                  aria-hidden="true"
+                >
+                  {employeeName[0]?.toUpperCase() ?? "?"}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground">{employeeName}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {formatHours(quota.hoursRemainingThisMonth)}h left · {quota.requestsUsedThisMonth}/{quota.maxRequestsPerMonth} requests
+                  </p>
+                </div>
+              </div>
+
+              {/* usage bar */}
+              <div className="stf-bar min-w-0">
+                <div className="mb-1 flex items-baseline justify-between text-xs">
+                  <span className="font-semibold text-foreground">{formatHours(quota.hoursUsedThisMonth)} / {formatHours(quota.maxHoursPerMonth)}h</span>
+                  <span className="tabular-nums text-muted-foreground">{Math.round(pct)}%</span>
+                </div>
+                <div className="stf-track" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${employeeName} permission hours used`}>
+                  <div className="stf-fill" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}, ${color}bb)` }} />
+                </div>
+              </div>
+
+              {/* status */}
+              <span className={`inline-flex w-[104px] items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${tone}`}>
+                {hasSurplus ? (quota.surplusLeaveDays >= 1 ? "⚠ Full-day" : "⚠ Half-day") : isTight ? "Limit reached" : "✓ On track"}
+              </span>
+
+              {/* action */}
+              <div className="flex w-[76px] justify-end">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="stf-view btn-hover-scale h-8 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onView(employeeName);
+                  }}
+                >
+                  <Eye className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                  View
+                </Button>
+              </div>
+
+              {/* details drawer — slides open on hover / focus / tap */}
+              <div className="stf-more">
+                <div>
+                  <div className="grid grid-cols-2 gap-2 border-t border-border/60 pt-3 sm:grid-cols-4">
+                    {[
+                      { k: "Hours used", v: `${formatHours(quota.hoursUsedThisMonth)} / ${formatHours(quota.maxHoursPerMonth)}h`, c: "text-foreground" },
+                      { k: "Hours left", v: `${formatHours(quota.hoursRemainingThisMonth)}h`, c: quota.hoursRemainingThisMonth <= 0 ? "text-amber-600" : "text-green-600" },
+                      { k: "Requests", v: `${quota.requestsUsedThisMonth} / ${quota.maxRequestsPerMonth}`, c: quota.requestsRemainingThisMonth <= 0 ? "text-amber-600" : "text-foreground" },
+                      {
+                        k: "Leave from surplus",
+                        v: hasSurplus ? `${quota.surplusLeaveDays >= 1 ? "1 day" : "½ day"} (${formatHours(quota.surplusHoursThisMonth)}h)` : "None",
+                        c: hasSurplus ? "text-red-600" : "text-muted-foreground",
+                      },
+                    ].map((d, k) => (
+                      <div key={d.k} className="stf-chip rounded-lg bg-muted/60 px-3 py-2" style={{ ["--k" as string]: k } as CSSProperties}>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{d.k}</p>
+                        <p className={`text-base font-extrabold tabular-nums leading-tight ${d.c}`}>{d.v}</p>
+                      </div>
+                    ))}
                   </div>
-                </td>
-                <td className="px-2 py-3 sm:px-4">
-                  <div className="flex flex-col items-start gap-1">
-                    <span className="text-xs font-semibold text-foreground sm:text-sm">
-                      {formatHours(quota.hoursUsedThisMonth)} / {formatHours(quota.maxHoursPerMonth)}h
-                    </span>
-                    <div className="h-1.5 w-12 overflow-hidden rounded-full bg-muted sm:w-16">
-                      <div className={`h-full rounded-full ${isTight ? "bg-amber-500" : "bg-green-500"}`} style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                </td>
-                <td className="hidden px-2 py-3 sm:table-cell sm:px-4">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      isTight
-                        ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
-                        : "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
-                    }`}
-                  >
-                    {formatHours(quota.hoursRemainingThisMonth)}h left
-                  </span>
-                </td>
-                <td className="hidden px-2 py-3 text-xs text-muted-foreground lg:table-cell lg:px-4">
-                  {quota.requestsUsedThisMonth} / {quota.maxRequestsPerMonth}
-                </td>
-                <td className="hidden px-2 py-3 lg:table-cell lg:px-4">
-                  {quota.surplusLeaveDays > 0 ? (
-                    <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
-                      {quota.surplusLeaveDays >= 1 ? "1 day" : "½ day"} ({formatHours(quota.surplusHoursThisMonth)}h)
-                    </span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </td>
-                <td className="px-2 py-3 text-right sm:px-4">
-                  <Button size="sm" variant="outline" className="btn-hover-scale h-7 text-xs" onClick={() => onView(employeeName)}>
-                    <Eye className="mr-1 h-3 w-3" aria-hidden="true" />
-                    <span className="hidden sm:inline">View</span>
-                  </Button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  <p className="pb-1 pt-2 text-xs text-muted-foreground">Click <span className="font-semibold">View</span> to open {employeeName}'s full permission history.</p>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 };
@@ -485,7 +647,8 @@ const PermissionCard = ({
   const isCanceling = cancelingId === p.id;
 
   return (
-    <div className="leave-card rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+    <div className="leave-card pfx-card rounded-xl border border-border/60 bg-card p-4 shadow-sm" data-status={(p.status || "").toLowerCase()}>
+      <span className="pfx-shine" aria-hidden="true" />
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           {showEmployee && (
@@ -502,7 +665,7 @@ const PermissionCard = ({
           </span>
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-sm font-bold text-foreground">
+          <span className="pfx-badge-pop inline-flex items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-sm font-bold text-foreground">
             <Clock3 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
             {formatHours(p.hours)}h
           </span>
@@ -512,7 +675,7 @@ const PermissionCard = ({
 
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
-          <CalendarClock className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+          <CalendarClock className="pfx-icon h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className={isReapproval ? "text-muted-foreground line-through opacity-70" : ""}>{fmtDate(p.date)}</span>
           <span className="text-xs font-normal text-muted-foreground">
             {fmtTime(p.startTime)} – {fmtTime(p.endTime)}
@@ -906,6 +1069,23 @@ const EmployeeView = () => {
   const reapprovalCount = monthFilteredPermissions.filter((p) => p.status?.toUpperCase() === "REAPPROVAL_PENDING").length;
   const livePreviewHours = previewHours(startTime, endTime);
 
+  // Live feedback for the Apply form (timeline slot, over-limit warnings, progress ring).
+  const overDay = livePreviewHours !== null && livePreviewHours > quota.maxHoursPerDay;
+  const overMonth = livePreviewHours !== null && livePreviewHours > quota.hoursRemainingThisMonth;
+  const limitTone: "good" | "warn" | "bad" = overDay ? "bad" : overMonth ? "warn" : "good";
+  const timelineBox = (() => {
+    if (!startTime || !endTime) return null;
+    const s0 = toMinutes(startTime);
+    const e0 = toMinutes(endTime);
+    if (Number.isNaN(s0) || Number.isNaN(e0) || e0 <= s0) return null;
+    const cs = Math.max(TL_START, Math.min(TL_END, s0));
+    const ce = Math.max(TL_START, Math.min(TL_END, e0));
+    const span = TL_END - TL_START;
+    return { left: ((cs - TL_START) / span) * 100, width: Math.max(((ce - cs) / span) * 100, 1.5) };
+  })();
+  const applyProgress =
+    ([!!permissionType, !!date, livePreviewHours !== null, reason.trim().length >= 10].filter(Boolean).length / 4) * 100;
+
   // ── Filtered permissions based on selected tab ────────────────────────
   const getFilteredPermissions = () => {
     switch (historyTab) {
@@ -954,7 +1134,7 @@ const EmployeeView = () => {
       : [];
 
   return (
-    <div className={employeeMode === "apply" ? "space-y-3" : "space-y-6"}>
+    <div className={`pfx-root ${employeeMode === "apply" ? "space-y-3" : "space-y-6"}`}>
       {/* MODE TOGGLE - Apply / History */}
       <div className="inline-flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
         <button
@@ -1008,7 +1188,7 @@ const EmployeeView = () => {
       </div>
 
       {/* QUOTA SUMMARY - Show only in Apply mode */}
-      {employeeMode === "apply" && <QuotaSummary quota={quota} label="Your permission quota" />}
+      {employeeMode === "apply" && <QuotaSummary quota={quota} label="Your permission quota" hideLimits />}
 
       {/* APPLY FORM - Show only in Apply mode. Intentionally NOT wrapped in
           any max-height/overflow-y-auto container — this section should
@@ -1019,102 +1199,141 @@ const EmployeeView = () => {
           constrained to the viewport width so the border stays fully
           visible without triggering a scrollbar. */}
       {employeeMode === "apply" && (
-      <section className="animate-fade-in-up card-hover w-full max-w-full overflow-visible rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
-        <div className="mb-2 flex items-center gap-2">
-          <div className="rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 p-1.5">
-            <Timer className="h-4 w-4 text-white" aria-hidden="true" />
-          </div>
-          <h2 className="text-sm font-semibold sm:text-base">Request permission</h2>
+      <section
+        className="pfx-apply pfx-section w-full max-w-full"
+        style={{ ["--pfx-from" as string]: "#8b5cf6", ["--pfx-to" as string]: "#d946ef" }}
+      >
+        <div className="pfx-apply-body">
+          <ApplyBanner
+            icon={Timer}
+            title="Request permission"
+            subtitle="Need a few hours away? Pick a slot and we'll handle the rest."
+            from="#8b5cf6"
+            to="#d946ef"
+            percent={applyProgress}
+          >
+            {PERMISSION_CHOICES.filter((c) => c.value === permissionType).map((c) => (
+              <LiveChip key={`t-${c.value}`} icon={c.icon}>
+                {c.label}
+              </LiveChip>
+            ))}
+            {date && (
+              <LiveChip key={`d-${date}`} icon={CalendarClock}>
+                {fmtDate(date)}
+              </LiveChip>
+            )}
+            {livePreviewHours !== null && (
+              <LiveChip key={`h-${livePreviewHours}-${limitTone}`} icon={Clock3} tone={limitTone}>
+                {formatHours(livePreviewHours)}h
+                {overDay ? " · over daily max" : overMonth ? " · over monthly quota" : ""}
+              </LiveChip>
+            )}
+          </ApplyBanner>
+
+          <form onSubmit={handleSubmit} className="pfx-apply-form pfx-steps overflow-visible" noValidate>
+            <ApplyStep n={1} title="What is it for?" done={!!permissionType}>
+              <Label htmlFor="perm-type" className="sr-only">
+                Permission type
+              </Label>
+              <div id="perm-type">
+                <ChoiceGrid ariaLabel="Permission type" value={permissionType} onChange={setPermissionType} options={PERMISSION_CHOICES} columns={5} />
+              </div>
+            </ApplyStep>
+
+            <ApplyStep n={2} title="When and for how long?" done={!!date && livePreviewHours !== null}>
+              <div className="min-w-0 w-full max-w-full space-y-1">
+                <Label htmlFor="perm-date">Date</Label>
+                <Input
+                  id="perm-date"
+                  type="date"
+                  required
+                  min={getToday()}
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="date-input-mobile-safe box-border block w-full min-w-0 max-w-full"
+                />
+              </div>
+
+              <div className="grid w-full max-w-full grid-cols-2 gap-2 sm:gap-3">
+                <div className="min-w-0 space-y-1">
+                  <Label htmlFor="perm-start">Start time</Label>
+                  <ClockTimePicker id="perm-start" required value={startTime} onChange={setStartTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+                </div>
+
+                <div className="min-w-0 space-y-1">
+                  <Label htmlFor="perm-end">End time</Label>
+                  <ClockTimePicker id="perm-end" required value={endTime} onChange={setEndTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+                </div>
+              </div>
+
+              {/* Live day timeline: the chosen slot slides into place as you change the times */}
+              <div className="pfx-timeline" role="img" aria-label="Your chosen time slot on a 6 AM to 10 PM day">
+                <div className="pfx-timeline-ticks" aria-hidden="true">
+                  {["6a", "9a", "12p", "3p", "6p", "10p"].map((t) => (
+                    <span key={t}>{t}</span>
+                  ))}
+                </div>
+                {timelineBox && (
+                  <span
+                    className="pfx-timeline-fill"
+                    data-bad={overDay || overMonth ? "true" : "false"}
+                    style={{ left: `${timelineBox.left}%`, width: `${timelineBox.width}%` }}
+                  />
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground" aria-live="polite">
+                {livePreviewHours !== null
+                  ? `Duration: ${formatHours(livePreviewHours)}h · Max ${formatHours(quota.maxHoursPerDay)}h/day`
+                  : `Pick a start and end time · Max ${formatHours(quota.maxHoursPerDay)}h/day`}
+              </p>
+            </ApplyStep>
+
+            <ApplyStep n={3} title="Why do you need it?" done={reason.trim().length >= 10}>
+              <Label htmlFor="perm-reason" className="sr-only">
+                Reason
+              </Label>
+              <Textarea
+                id="perm-reason"
+                required
+                rows={3}
+                maxLength={500}
+                minLength={10}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Please provide a detailed reason for your permission request..."
+                aria-describedby="perm-reason-count"
+                className="resize-none"
+              />
+              <CharMeter id="perm-reason-count" length={reason.length} min={10} max={500} />
+            </ApplyStep>
+
+            <div className="pfx-actions">
+              <Button type="submit" disabled={submitting} className="pfx-go">
+                {submitting ? (
+                  <>
+                    <Spinner className="mr-2 text-primary-foreground" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Send className="pfx-go-icon h-4 w-4" aria-hidden="true" />
+                    Submit request
+                  </>
+                )}
+              </Button>
+              <Button type="button" variant="outline" onClick={resetForm} disabled={submitting} className="pfx-reset btn-hover-scale">
+                <RotateCcw className="pfx-reset-icon mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                Reset
+              </Button>
+            </div>
+          </form>
         </div>
-
-        <form onSubmit={handleSubmit} className="flex w-full max-w-full flex-col gap-2 overflow-visible sm:gap-3" noValidate>
-          <div className="min-w-0 space-y-1 overflow-visible">
-            <Label htmlFor="perm-type">Permission type</Label>
-            <Select value={permissionType} onValueChange={setPermissionType}>
-              <SelectTrigger id="perm-type" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="z-50 overflow-visible">
-                <SelectItem value="PERSONAL">Personal</SelectItem>
-                <SelectItem value="MEDICAL">Medical</SelectItem>
-                <SelectItem value="OFFICIAL">Official</SelectItem>
-                <SelectItem value="EMERGENCY">Emergency</SelectItem>
-                <SelectItem value="OTHER">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="min-w-0 w-full max-w-full space-y-1">
-            <Label htmlFor="perm-date">Date</Label>
-            <Input
-              id="perm-date"
-              type="date"
-              required
-              min={getToday()}
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="date-input-mobile-safe box-border block w-full min-w-0 max-w-full"
-            />
-          </div>
-
-          <div className="grid w-full max-w-full grid-cols-2 gap-2 sm:gap-3">
-            <div className="min-w-0 space-y-1">
-              <Label htmlFor="perm-start">Start time</Label>
-              <ClockTimePicker id="perm-start" required value={startTime} onChange={setStartTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-            </div>
-
-            <div className="min-w-0 space-y-1">
-              <Label htmlFor="perm-end">End time</Label>
-              <ClockTimePicker id="perm-end" required value={endTime} onChange={setEndTime} className="w-full min-w-0 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-            </div>
-          </div>
-          {livePreviewHours !== null && (
-            <p className="-mt-1 hidden text-xs text-muted-foreground sm:block" aria-live="polite">
-              Duration: {formatHours(livePreviewHours)}h · Max {formatHours(quota.maxHoursPerDay)}h/day · {formatHours(quota.hoursRemainingThisMonth)}h remaining this month
-            </p>
-          )}
-
-          <div className="space-y-1">
-            <Label htmlFor="perm-reason">Reason</Label>
-            <Textarea
-              id="perm-reason"
-              required
-              rows={2}
-              maxLength={500}
-              minLength={10}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Please provide a detailed reason for your permission request..."
-              aria-describedby="perm-reason-count"
-              className="resize-none"
-            />
-            <p id="perm-reason-count" className="text-right text-xs text-muted-foreground">
-              {reason.length}/500 characters
-            </p>
-          </div>
-
-          <div className="flex flex-row gap-2">
-            <Button type="submit" disabled={submitting} className="btn-hover-scale flex-1 sm:flex-none">
-              {submitting ? (
-                <>
-                  <Spinner className="mr-2 text-primary-foreground" />
-                  Submitting...
-                </>
-              ) : (
-                "Submit request"
-              )}
-            </Button>
-            <Button type="button" variant="outline" onClick={resetForm} disabled={submitting} className="btn-hover-scale flex-1 sm:flex-none">
-              Reset
-            </Button>
-          </div>
-        </form>
       </section>
       )}
 
       {/* HISTORY - Show only in History mode */}
       {employeeMode === "history" && (
-      <section className="card-hover overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <section className="pfx-section card-hover overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 sm:px-6">
           <div>
             <h2 className="text-base font-semibold leading-tight">Permission history</h2>
@@ -1188,7 +1407,7 @@ const EmployeeView = () => {
             and only the list of permission cards scrolls internally once it
             grows past a viewport-relative max height. */}
         <div id={historyPanelId} role="tabpanel" className="p-4 sm:p-6">
-          <div className="custom-scrollbar max-h-[65vh] overflow-y-auto pr-1">
+          <div className="custom-scrollbar pfx-scroll max-h-[65vh] overflow-y-auto">
             {loading ? (
               <div className="flex justify-center py-8">
                 <FullSpinner />
@@ -1202,7 +1421,7 @@ const EmployeeView = () => {
                 <div className="space-y-5">
                   {groupedPermissions.map((group) => (
                     <div key={group.key} className="space-y-2">
-                      <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                      <div className="pfx-group-title flex items-center gap-1.5 text-sm font-semibold text-foreground">
                         <group.icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                         <span>{group.label}</span>
                         <span className="ml-0.5 min-w-[1.1rem] rounded-full bg-muted px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-muted-foreground">
@@ -1249,7 +1468,7 @@ const EmployeeView = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="perm-reapproval-title"
-            className="custom-scrollbar max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-2xl"
+            className="pfx-modal custom-scrollbar max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -1858,7 +2077,7 @@ const PermissionPortal = () => {
   return (
     <>
       <PageHeader title="Permission Portal" description={description} />
-      {role === "OWNER" ? <OwnerView /> : <EmployeeView />}
+      <div className="pfx-root">{role === "OWNER" ? <OwnerView /> : <EmployeeView />}</div>
     </>
   );
 };

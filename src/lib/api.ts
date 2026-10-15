@@ -66,9 +66,9 @@ api.interceptors.response.use(
 
       if (
         !window.location.pathname.includes("/login") &&
-        !window.location.pathname.includes("/work-weaver/login")
+        !window.location.pathname.includes("/rfi")
       ) {
-        window.location.href = "/work-weaver/login";
+        window.location.href = "/rfi";
       }
     }
 

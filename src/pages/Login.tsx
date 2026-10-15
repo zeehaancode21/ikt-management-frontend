@@ -1,13 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../lib/api";
 import type { Role } from "../lib/api";
-
-// Floating particle
-function Particle({ style }: { style: React.CSSProperties }) {
-  return <div className="particle" style={style} />;
-}
+import EngineeringBackground from "./LoginBackground";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -17,81 +13,12 @@ export default function Login() {
   const [focused, setFocused] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const { login } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     setMounted(true);
-    // Animated canvas background
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    let raf: number;
-    const particles: Array<{ x: number; y: number; vx: number; vy: number; r: number; a: number }> = [];
-
-    const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-    resize();
-    window.addEventListener("resize", resize);
-
-    // Create particles
-    for (let i = 0; i < 60; i++) {
-      particles.push({
-        x: Math.random() * window.innerWidth,
-        y: Math.random() * window.innerHeight,
-        vx: (Math.random() - 0.5) * 0.4,
-        vy: (Math.random() - 0.5) * 0.4,
-        r: Math.random() * 2 + 0.5,
-        a: Math.random() * 0.5 + 0.1,
-      });
-    }
-
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Draw connections
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const dx = particles[i].x - particles[j].x;
-          const dy = particles[i].y - particles[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 120) {
-            ctx.beginPath();
-            ctx.strokeStyle = `rgba(99,179,237,${0.06 * (1 - dist / 120)})`;
-            ctx.lineWidth = 0.5;
-            ctx.moveTo(particles[i].x, particles[i].y);
-            ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.stroke();
-          }
-        }
-      }
-
-      // Draw dots
-      particles.forEach((p) => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(99,179,237,${p.a})`;
-        ctx.fill();
-        p.x += p.vx;
-        p.y += p.vy;
-        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
-        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
-      });
-
-      raf = requestAnimationFrame(draw);
-    };
-    draw();
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", resize);
-    };
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -150,25 +77,6 @@ export default function Login() {
           display: flex; align-items: center; justify-content: center;
           font-family: 'Outfit', sans-serif;
           overflow: hidden;
-        }
-
-        .login-canvas {
-          position: absolute; inset: 0; z-index: 0;
-        }
-
-        /* Gradient mesh blobs */
-        .blob {
-          position: absolute; border-radius: 50%;
-          filter: blur(80px); opacity: 0.18; z-index: 0;
-          animation: blobFloat 12s ease-in-out infinite alternate;
-        }
-        .blob-1 { width: 600px; height: 600px; background: radial-gradient(circle, #1a4a8a, #0d2a5a); top: -150px; right: -100px; animation-delay: 0s; }
-        .blob-2 { width: 450px; height: 450px; background: radial-gradient(circle, #0f3460, #061a3a); bottom: -100px; left: -80px; animation-delay: -4s; }
-        .blob-3 { width: 350px; height: 350px; background: radial-gradient(circle, #1e5f9e, #0a2d5c); top: 40%; left: 15%; animation-delay: -8s; }
-
-        @keyframes blobFloat {
-          0% { transform: translate(0,0) scale(1); }
-          100% { transform: translate(30px, 20px) scale(1.05); }
         }
 
         .login-card {
@@ -548,7 +456,6 @@ export default function Login() {
           .login-input { padding-top: 14px; padding-bottom: 14px; font-size: 16px; }
           .login-btn { padding: 15px 0; min-height: 48px; }
           .eye-btn, .admin-link { min-height: 40px; }
-          .blob-1, .blob-2, .blob-3 { filter: blur(50px); }
         }
 
         @media (max-width: 340px) {
@@ -557,10 +464,7 @@ export default function Login() {
       `}</style>
 
       <div className="login-root">
-        <canvas ref={canvasRef} className="login-canvas" />
-        <div className="blob blob-1" />
-        <div className="blob blob-2" />
-        <div className="blob blob-3" />
+        <EngineeringBackground ready={mounted} />
 
         <div className={`login-card ${mounted ? "visible" : ""}`}>
           {/* Logo */}

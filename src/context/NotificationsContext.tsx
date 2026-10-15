@@ -5,11 +5,11 @@ import { useWebSocket } from "./WebSocketContext";
 
 // Modules that show a badge in the left sidebar. Must line up with the
 // MODULE_TYPES map on the backend (NotificationController).
-export type NotificationModule = "messages" | "leave" | "permission";
+export type NotificationModule = "messages" | "leave" | "permission" | "rfi";
 
 type ModuleCounts = Record<NotificationModule, number>;
 
-const EMPTY_COUNTS: ModuleCounts = { messages: 0, leave: 0, permission: 0 };
+const EMPTY_COUNTS: ModuleCounts = { messages: 0, leave: 0, permission: 0, rfi: 0 };
 
 interface NotificationsContextValue {
   counts: ModuleCounts;
@@ -22,8 +22,6 @@ interface NotificationsContextValue {
 }
 
 const NotificationsContext = createContext<NotificationsContextValue | undefined>(undefined);
-
-const POLL_INTERVAL_MS = 20000;
 
 const isTabVisible = () =>
   typeof document !== "undefined" && document.visibilityState === "visible";
@@ -44,9 +42,9 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
     };
   }, []);
 
-  // Unconditional fetch — always hits the server. Used internally by the
-  // poll loop, the visibility catch-up, and markModuleRead (where we always
-  // want a real answer regardless of tab state).
+  // Unconditional fetch — always hits the server. Used on page load/login,
+  // the visibility catch-up, and markModuleRead (where we always want a real
+  // answer regardless of tab state).
   const fetchCounts = useCallback(() => {
     if (!token) return;
     api
@@ -70,50 +68,30 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
     fetchCounts();
   }, [fetchCounts]);
 
-  // Poll while (and only while) the tab is visible. No interval at all
-  // runs in the background — it's created on becoming visible and torn
-  // down the instant the tab is hidden.
+  // NO POLLING. Counts are fetched:
+  //   1. once on page load / login (this effect),
+  //   2. instantly when a websocket push arrives (effect below),
+  //   3. after markModuleRead.
+  // The only listener here is a one-shot catch-up: if a websocket push arrived
+  // while the tab was hidden, fetch once when the tab becomes visible again.
   useEffect(() => {
     if (!token) {
       setCounts(EMPTY_COUNTS);
       return;
     }
 
-    let interval: ReturnType<typeof setInterval> | null = null;
-
-    const startPolling = () => {
-      if (interval) return;
-      interval = setInterval(fetchCounts, POLL_INTERVAL_MS);
-    };
-
-    const stopPolling = () => {
-      if (interval) {
-        clearInterval(interval);
-        interval = null;
-      }
-    };
-
     const handleVisibilityChange = () => {
-      if (isTabVisible()) {
-        // Catch up immediately — covers both the paused poll and any
-        // websocket push that arrived while we were hidden.
-        fetchCounts();
+      if (isTabVisible() && missedUpdateRef.current) {
         missedUpdateRef.current = false;
-        startPolling();
-      } else {
-        stopPolling();
+        fetchCounts();
       }
     };
 
-    // Initial state on mount/login.
+    // Initial load — this is what "appears when the user reloads" relies on.
     fetchCounts();
-    if (isTabVisible()) {
-      startPolling();
-    }
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
-      stopPolling();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [token, fetchCounts]);
@@ -145,7 +123,7 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
       });
   }, [fetchCounts]);
 
-  const totalCount = counts.messages + counts.leave + counts.permission;
+  const totalCount = counts.messages + counts.leave + counts.permission + counts.rfi;
 
   return (
     <NotificationsContext.Provider value={{ counts, totalCount, refresh, markModuleRead }}>
