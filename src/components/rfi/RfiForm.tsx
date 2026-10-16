@@ -174,9 +174,6 @@ const RFI_STYLES = `
     gap: 0.75rem 1.25rem;
     align-content: start;
   }
-  @container rfi (min-width: 820px) {
-    .rfi-cols { grid-template-columns: minmax(0, 8fr) minmax(0, 5fr); }
-  }
   @container rfi (max-width: 640px) {
     .rfi-subtitle { display: none; }
   }
@@ -282,95 +279,49 @@ const RFI_STYLES = `
     cursor: not-allowed;
   }
 
-  /* ── Resizable divider between body and attachment panel ── */
-  .rfi-resize-handle {
-    width: 6px;
-    cursor: col-resize;
-    background: transparent;
-    position: relative;
-    flex-shrink: 0;
-    transition: background-color 150ms ease;
-  }
-  .rfi-resize-handle::before {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 2px;
-    height: 32px;
-    border-radius: 9999px;
-    background: hsl(var(--border));
-    transition: background-color 150ms ease, height 150ms ease;
-  }
-  .rfi-resize-handle:hover::before,
-  .rfi-resize-handle[data-resizing="true"]::before {
-    background: hsl(var(--primary));
-    height: 48px;
-  }
+  /* ── Form layout ──
+     Phones / narrow panels: ONE column, in this order:
+       CC → Discipline/Priority → Subject → Email body → Attachment
+     Wide panels: two columns. The email body gets the whole right column
+     (full height, never cut off) while CC / classify / subject / attachment
+     stack on the left. The last left row stretches, so neither side ever
+     leaves an empty gap underneath. */
+  .rfi-cell-cc, .rfi-cell-classify, .rfi-cell-subject { min-width: 0; }
 
-  /* ── Side-by-side body + attachment panel ── */
-  .rfi-compose-row {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    align-items: stretch;
-    width: 100%;
-  }
-  @container rfi (min-width: 640px) {
-    .rfi-compose-row {
-      flex-direction: row;
-      align-items: stretch;
-      gap: 0;
-    }
-  }
-
-  .rfi-compose-body {
+  .rfi-cell-body {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
     min-width: 0;
-    flex: 1 1 auto;
     container-type: inline-size;
     container-name: rfibody;
   }
-
   /* Header buttons: when the body column gets narrow, show icon only
      (never wrap, never force the page to scroll). */
   @container rfibody (max-width: 250px) {
     .rfi-btn-text { display: none; }
   }
 
-  .rfi-attach-panel {
+  .rfi-cell-attach {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    width: 100%;
-    flex-shrink: 0;
+    gap: 0.4rem;
+    min-width: 0;
   }
-  @container rfi (min-width: 640px) {
-    .rfi-attach-panel {
-      width: var(--rfi-attach-width, 220px);
-      min-width: 170px;
-      max-width: 380px;
-      padding-left: 0.75rem;
-      justify-content: flex-start;
-    }
-  }
+  .rfi-attach-slot { display: flex; flex: 1 1 auto; min-height: 60px; }
+  .rfi-attach-slot > * { flex: 1 1 auto; min-width: 0; }
 
-  /* Sidebar minimized → more room: give it to the email body, keep attachment slim */
-  @container rfi (min-width: 820px) {
-    .rfi-cols[data-compact="true"] { grid-template-columns: minmax(0, 6fr) minmax(0, 7fr); }
-  }
-  @container rfi (min-width: 640px) {
-    .rfi-compose-row[data-compact="true"] .rfi-attach-panel {
-      width: var(--rfi-attach-width, 132px);
-      min-width: 112px;
-      max-width: 220px;
+  @container rfi (min-width: 760px) {
+    .rfi-cols {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+      grid-template-rows: auto auto auto 1fr;
     }
+    .rfi-cell-cc       { grid-column: 1; grid-row: 1; }
+    .rfi-cell-classify { grid-column: 1; grid-row: 2; }
+    .rfi-cell-subject  { grid-column: 1; grid-row: 3; }
+    .rfi-cell-attach   { grid-column: 1; grid-row: 4; }
+    .rfi-cell-body     { grid-column: 2; grid-row: 1 / span 4; }
   }
-  .rfi-compose-row[data-compact="true"] .rfi-body-box { min-height: 120px; max-height: 200px; }
-  .rfi-attach-compact-drop { height: 120px !important; }
 
   /* ── Discipline · Priority ──
      One slim row: a compact discipline pill + four priority circles.
@@ -399,27 +350,21 @@ const RFI_STYLES = `
   .gs-trigger.rfi-disc:hover:not(:disabled),
   .gs-trigger.rfi-disc[data-state="open"] { transform: translateY(-1px) scale(1.02); }
 
-  .rfi-file-chip {
+  /* Email body box — grows with its content so the whole email is visible.
+     Only a very long body scrolls (capped at 70% of the screen height). */
+  .rfi-body-box {
     position: relative;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.25rem;
-    height: 120px;
-    padding: 0.5rem;
-    text-align: center;
-    border-radius: 0.75rem;
-    border: 1.5px solid hsl(var(--primary) / 0.45);
-    background: linear-gradient(180deg, hsl(var(--primary) / 0.12), hsl(var(--primary) / 0.05));
+    flex: 1 1 auto;
+    min-height: 150px;
   }
-
-  /* Compact body box height — keeps body and attachment visually balanced */
-  .rfi-body-box {
-    position: relative;
-    min-height: 96px;
-    max-height: 160px;
+  .rfi-body-box > * {
+    flex: 1 1 auto;
+    max-height: 70vh;
+    overflow-y: auto;
   }
+  .rfi-body-box textarea { min-height: 150px; }
 
   /* ── Send button ── */
   @keyframes rfi-breathe {
@@ -1448,13 +1393,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   const [isHeaderHovered, setIsHeaderHovered] = useState(false);
   const [isUploadHovered, setIsUploadHovered] = useState(false);
 
-  // ── Attachment panel resize state ───────────────────────────────────
-  const [attachWidth, setAttachWidth] = useState(220);
-  const [isResizing, setIsResizing] = useState(false);
-  const composeRowRef = useRef<HTMLDivElement>(null);
-
   // Sidebar minimized? (AppLayout sets data-sidebar-minimized on <html>).
-  // When minimized we have spare width: email body gets it, attachment shrinks.
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(
     () => typeof document !== "undefined" && document.documentElement.dataset.sidebarMinimized === "true"
   );
@@ -1466,9 +1405,8 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     observer.observe(root, { attributes: true, attributeFilter: ["data-sidebar-minimized"] });
     return () => observer.disconnect();
   }, []);
-  useEffect(() => {
-    setAttachWidth(isSidebarMinimized ? 132 : 220);
-  }, [isSidebarMinimized]);
+
+  const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // ── Refs ────────────────────────────────────────────────────────────
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1690,35 +1628,13 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     };
   }, []);
 
-  // ── Attachment panel resize handlers ────────────────────────────────
+  // ── Auto-grow the email body editor so the full text is always visible ──
   useEffect(() => {
-    if (!isResizing) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!composeRowRef.current) return;
-      const rect = composeRowRef.current.getBoundingClientRect();
-      const newWidth = rect.right - e.clientX;
-      setAttachWidth(Math.min(380, Math.max(isSidebarMinimized ? 112 : 170, newWidth)));
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-  }, [isResizing, isSidebarMinimized]);
+    const el = bodyTextareaRef.current;
+    if (!isEditingBody || !el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [isEditingBody, emailBodyDraft]);
 
   // ── Event Handlers ──────────────────────────────────────────────────
 
@@ -2331,8 +2247,8 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
         {/* ───────────── Fields ───────────── */}
         <div ref={fieldsRef} data-compact={isSidebarMinimized ? "true" : "false"}
           className="rfi-scroll rfi-cols rfi-stagger pb-1 pr-0.5">
-          {/* ───────────── LEFT COLUMN ───────────── */}
-          <div className="space-y-3">
+          {/* ───────────── LEFT COLUMN (flattened into the grid) ───────────── */}
+          <div className="contents">
             {/* CC only — the To field now lives in the header above. */}
             <Popover
               open={isCcListOpen}
@@ -2342,7 +2258,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
               }}
             >
             <PopoverPrimitive.Anchor asChild>
-            <section className="rfi-panel rounded-xl border rfi-bd bg-background/60">
+            <section className="rfi-cell-cc rfi-panel rounded-xl border rfi-bd bg-background/60">
               <div className="flex items-start gap-2 px-3">
                 <Label htmlFor="rfi-cc" className={`${LABEL_CLASS} w-7 shrink-0 pt-3.5`}>
                   CC
@@ -2536,7 +2452,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
 
             {/* Discipline · Priority — one slim row of compact pills (Team Scope lives in the header, above "To") */}
             <section
-              className="rfi-classify"
+              className="rfi-cell-classify rfi-classify"
               data-compact={isSidebarMinimized ? "true" : "false"}
               aria-label="RFI classification"
             >
@@ -2559,7 +2475,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
             </section>
 
             {/* Subject */}
-            <section className="space-y-2">
+            <section className="rfi-cell-subject space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="rfi-subject" className={LABEL_CLASS}>
                   Subject line <span className="text-destructive">*</span>
@@ -2578,109 +2494,90 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
             </section>
           </div>
 
-          {/* ───────────── RIGHT COLUMN ───────────── */}
-          <div className="flex flex-col gap-3">
-            {/* Email body + Attachment, side by side on the SAME LINE. */}
-            <div
-              ref={composeRowRef}
-              className="rfi-compose-row"
-              data-compact={isSidebarMinimized ? "true" : "false"}
-              style={{ "--rfi-attach-width": `${attachWidth}px` } as CSSProperties}
-            >
-              {/* Email Body — compact, fixed-height box that scrolls internally */}
-              <section className="rfi-compose-body">
-                <div className="flex flex-nowrap items-center justify-between gap-2">
-                  <Label className={`${LABEL_CLASS} flex min-w-0 items-center gap-1.5 whitespace-nowrap`}>
-                    <span className="truncate">Email body</span>
-                    {isBodyPreviewLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/60" />}
-                    {isBodyCustomized && !isEditingBody && (
-                      <span className="rounded-full bg-primary/10 px-2 py-px text-[10px] font-semibold text-primary">
-                        Edited
-                      </span>
-                    )}
-                  </Label>
-
-                  {!isEditingBody ? (
-                    <div className="flex shrink-0 items-center gap-1">
-                      {isBodyCustomized && (
-                        <button type="button" disabled={isBusy} onClick={resetBodyToDefault} className={GHOST_BTN_CLASS} title="Reset">
-                          <RotateCcw className="h-3 w-3" />
-                          <span className="rfi-btn-text">Reset</span>
-                        </button>
-                      )}
-                      <button type="button" disabled={isBusy} onClick={startEditingBody} className={OUTLINE_BTN_CLASS} title="Edit">
-                        <Pencil className="h-3 w-3" />
-                        <span className="rfi-btn-text">Edit</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex shrink-0 items-center gap-1">
-                      <button type="button" onClick={cancelBodyEdit} className={GHOST_BTN_CLASS} title="Cancel">
-                        <X className="h-3 w-3" />
-                        <span className="rfi-btn-text">Cancel</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={saveBodyEdit}
-                        title="Save"
-                        className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md bg-primary px-2.5 py-1 text-[11px] [&>svg]:shrink-0 font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-                      >
-                        <Check className="h-3 w-3" />
-                        <span className="rfi-btn-text">Save</span>
-                      </button>
-                    </div>
+          {/* ───────────── RIGHT COLUMN (flattened into the grid) ───────────── */}
+          <div className="contents">
+            {/* Email body — full width of its column, grows to show the whole text */}
+            <section className="rfi-cell-body">
+              <div className="flex flex-nowrap items-center justify-between gap-2">
+                <Label className={`${LABEL_CLASS} flex min-w-0 items-center gap-1.5 whitespace-nowrap`}>
+                  <span className="truncate">Email body</span>
+                  {isBodyPreviewLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/60" />}
+                  {isBodyCustomized && !isEditingBody && (
+                    <span className="rounded-full bg-primary/10 px-2 py-px text-[10px] font-semibold text-primary">
+                      Edited
+                    </span>
                   )}
-                </div>
-
-                {/* Compact box — matches attachment height, scrolls internally */}
-                <div className="rfi-body-box">
-                  {!isEditingBody ? (
-                    <div
-                      onClick={() => !isBusy && startEditingBody()}
-                      className="rfi-scroll absolute inset-0 cursor-text overflow-y-auto whitespace-pre-wrap rounded-xl border rfi-bd bg-background/60 px-3.5 py-2.5 text-[13px] leading-relaxed text-foreground/80 transition-colors hover:border-primary/40 hover:bg-accent/20"
-                    >
-                      {emailBody || (isBodyPreviewLoading ? "Loading default email body…" : "—")}
-                    </div>
-                  ) : (
-                    <Textarea
-                      autoFocus
-                      value={emailBodyDraft}
-                      onChange={(e) => setEmailBodyDraft(e.target.value)}
-                      disabled={isBusy}
-                      placeholder="Email body sent along with the attachment…"
-                      className="rfi-scroll absolute inset-0 h-full w-full resize-none rounded-xl border-primary/40 bg-background px-3.5 py-2.5 text-[13px] leading-relaxed focus-visible:ring-1 focus-visible:ring-primary/50"
-                    />
-                  )}
-                </div>
-              </section>
-
-              {/* Resize handle — visible only when side-by-side */}
-              <div
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Resize attachment panel"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  setIsResizing(true);
-                }}
-                className="rfi-resize-handle hidden sm:block"
-                data-resizing={isResizing ? "true" : "false"}
-              />
-
-              {/* Attachment — compact, adjustable side panel */}
-              <section className="rfi-attach-panel">
-                <Label className={LABEL_CLASS}>
-                  Attachment (PDF) <span className="text-destructive">*</span>
                 </Label>
-                <input
-                  id="rfi-attachment"
-                  ref={fileInputRef}
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  onChange={handleFileChange}
-                  disabled={isBusy}
-                  className="hidden"
-                />
+
+                {!isEditingBody ? (
+                  <div className="flex shrink-0 items-center gap-1">
+                    {isBodyCustomized && (
+                      <button type="button" disabled={isBusy} onClick={resetBodyToDefault} className={GHOST_BTN_CLASS} title="Reset">
+                        <RotateCcw className="h-3 w-3" />
+                        <span className="rfi-btn-text">Reset</span>
+                      </button>
+                    )}
+                    <button type="button" disabled={isBusy} onClick={startEditingBody} className={OUTLINE_BTN_CLASS} title="Edit">
+                      <Pencil className="h-3 w-3" />
+                      <span className="rfi-btn-text">Edit</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button type="button" onClick={cancelBodyEdit} className={GHOST_BTN_CLASS} title="Cancel">
+                      <X className="h-3 w-3" />
+                      <span className="rfi-btn-text">Cancel</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveBodyEdit}
+                      title="Save"
+                      className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md bg-primary px-2.5 py-1 text-[11px] [&>svg]:shrink-0 font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                    >
+                      <Check className="h-3 w-3" />
+                      <span className="rfi-btn-text">Save</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="rfi-body-box">
+                {!isEditingBody ? (
+                  <div
+                    onClick={() => !isBusy && startEditingBody()}
+                    className="rfi-scroll cursor-text whitespace-pre-wrap break-words rounded-xl border rfi-bd bg-background/60 px-3.5 py-2.5 text-[13px] leading-relaxed text-foreground/80 transition-colors hover:border-primary/40 hover:bg-accent/20"
+                  >
+                    {emailBody || (isBodyPreviewLoading ? "Loading default email body…" : "—")}
+                  </div>
+                ) : (
+                  <Textarea
+                    ref={bodyTextareaRef}
+                    autoFocus
+                    value={emailBodyDraft}
+                    onChange={(e) => setEmailBodyDraft(e.target.value)}
+                    disabled={isBusy}
+                    placeholder="Email body sent along with the attachment…"
+                    className="rfi-scroll w-full resize-none rounded-xl border-primary/40 bg-background px-3.5 py-2.5 text-[13px] leading-relaxed focus-visible:ring-1 focus-visible:ring-primary/50"
+                  />
+                )}
+              </div>
+            </section>
+
+            {/* Attachment — slim strip, stretches to fill any leftover height */}
+            <section className="rfi-cell-attach">
+              <Label className={LABEL_CLASS}>
+                Attachment (PDF) <span className="text-destructive">*</span>
+              </Label>
+              <input
+                id="rfi-attachment"
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={handleFileChange}
+                disabled={isBusy}
+                className="hidden"
+              />
+              <div className="rfi-attach-slot">
                 {!file ? (
                   <label
                     htmlFor="rfi-attachment"
@@ -2695,8 +2592,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                     onMouseEnter={() => setIsUploadHovered(true)}
                     onMouseLeave={() => setIsUploadHovered(false)}
                     className={[
-                      "rfi-drop group relative flex h-[96px] cursor-pointer flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed px-3 text-center",
-                      isSidebarMinimized ? "rfi-attach-compact-drop" : "",
+                      "rfi-drop group relative flex cursor-pointer flex-row items-center justify-center gap-3 rounded-xl border border-dashed px-3 py-2 text-left",
                       isBusy ? "pointer-events-none opacity-60" : "",
                       isDragging
                         ? "rfi-drag-active"
@@ -2705,53 +2601,25 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                   >
                     <AnimatedUploadIcon
                       size="md"
-                      className="transition-transform duration-200 group-hover:-translate-y-0.5"
+                      className="shrink-0 transition-transform duration-200 group-hover:-translate-y-0.5"
                       triggerParentHover
                       isParentHovered={isUploadHovered || isDragging}
                     />
-                    {isSidebarMinimized ? (
-                      <>
-                        <span className="text-xs font-semibold text-primary group-hover:underline">Upload PDF</span>
-                        <span className="text-[10.5px] text-muted-foreground/70">or drop here</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-xs font-medium text-foreground">
-                          <span className="font-semibold text-primary group-hover:underline">Click to upload</span> or drag
-                          a PDF here
-                        </span>
-                        <span className="text-[10.5px] text-muted-foreground/70">One file · PDF only</span>
-                      </>
-                    )}
+                    <span className="flex min-w-0 flex-col">
+                      <span className="text-xs font-medium text-foreground">
+                        <span className="font-semibold text-primary group-hover:underline">Click to upload</span> or drop a PDF
+                      </span>
+                      <span className="text-[10.5px] text-muted-foreground/70">One file · PDF only</span>
+                    </span>
                   </label>
                 ) : (
-                  isSidebarMinimized ? (
-                    <div className="animate-rfi-pop rfi-file-chip shadow-sm">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        disabled={isBusy}
-                        onClick={clearFile}
-                        aria-label="Remove attachment"
-                        className="absolute right-1 top-1 h-6 w-6 rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                      <FileCheck className="h-6 w-6 shrink-0 text-primary" />
-                      <span className="w-full truncate px-1 text-[11px] font-semibold text-foreground" title={file.name}>
-                        {file.name}
-                      </span>
-                      <span className="text-[10.5px] text-muted-foreground">
-                        {(file.size / (1024 * 1024)).toFixed(2)} MB
-                      </span>
-                    </div>
-                  ) : (
-                  <div className="animate-rfi-pop flex h-[96px] items-center justify-between rounded-xl border border-primary/40 bg-primary/10 px-3.5 shadow-sm">
+                  <div className="animate-rfi-pop flex items-center justify-between gap-2 rounded-xl border border-primary/40 bg-primary/10 px-3.5 py-2 shadow-sm">
                     <div className="flex min-w-0 items-center gap-2.5">
                       <FileCheck className="h-5 w-5 shrink-0 text-primary" />
                       <div className="flex min-w-0 flex-col">
-                        <span className="truncate text-xs font-semibold text-foreground">{file.name}</span>
+                        <span className="truncate text-xs font-semibold text-foreground" title={file.name}>
+                          {file.name}
+                        </span>
                         <span className="text-[10.5px] text-muted-foreground">
                           {(file.size / (1024 * 1024)).toFixed(2)} MB
                         </span>
@@ -2769,10 +2637,9 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
-                  )
                 )}
-              </section>
-            </div>
+              </div>
+            </section>
           </div>
         </div>
       </form>
