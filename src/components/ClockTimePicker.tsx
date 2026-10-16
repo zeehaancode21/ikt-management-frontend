@@ -123,7 +123,7 @@ export function ClockTimePicker({
           id={id}
           disabled={disabled}
           className={cn(
-            "flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-background px-3 py-2 text-base ring-offset-background md:text-sm",
+            "flex h-11 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-background px-3 py-2 text-left text-base ring-offset-background sm:h-10 md:text-sm",
             "hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             "disabled:cursor-not-allowed disabled:opacity-50",
             !value && "text-muted-foreground",
@@ -139,10 +139,14 @@ export function ClockTimePicker({
       </PopoverTrigger>
 
       <PopoverContent
-        className="w-auto p-4"
-        align="start"
+        className="w-auto max-w-[calc(100vw-1.5rem)] p-3 sm:p-4"
+        align="center"
+        side="bottom"
+        sideOffset={6}
+        collisionPadding={12}
+        avoidCollisions
       >
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex w-[min(220px,calc(100vw-4rem))] flex-col items-center gap-3">
           {/* ── Digital readout: click either half to jump back to that face ── */}
           <div className="flex items-center gap-2">
             <div className="flex items-baseline gap-1 text-2xl font-semibold tabular-nums">
@@ -208,9 +212,7 @@ export function ClockTimePicker({
           {/* ── Clock face ── */}
           <svg
             viewBox="0 0 220 220"
-            width={220}
-            height={220}
-            className="select-none touch-none"
+            className="aspect-square w-full max-w-[220px] select-none touch-none"
           >
             {/* Clock face background */}
             <circle

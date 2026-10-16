@@ -238,8 +238,13 @@ export const AppLayout = () => {
           background: linear-gradient(135deg, #667eea, #764ba2);
           border: none;
           color: white;
-          font-size: 20px;
-          padding: 8px 12px;
+          font-size: 18px;
+          line-height: 1;
+          padding: 0;
+          width: 36px;
+          height: 36px;
+          align-items: center;
+          justify-content: center;
           border-radius: 8px;
           cursor: pointer;
           display: none;
@@ -311,7 +316,9 @@ export const AppLayout = () => {
           border-bottom: 1px solid hsl(var(--border));
           background: hsl(var(--card));
           padding: 0 24px;
+          gap: 12px;
           box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+          overflow: hidden;
         }
 
         .header-title {
@@ -319,6 +326,11 @@ export const AppLayout = () => {
           font-weight: 600;
           color: hsl(var(--foreground));
           margin: 0;
+          /* Title takes whatever room the icons leave and truncates,
+             so the icon row can never be pushed out of the header. */
+          flex: 1 1 auto;
+          min-width: 0;
+          overflow: hidden;
         }
 
         .header-title-btn {
@@ -333,6 +345,11 @@ export const AppLayout = () => {
           cursor: pointer;
           text-align: left;
           transition: background 0.2s ease;
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          display: block;
         }
 
         .header-title-btn:hover:not(:disabled) {
@@ -353,8 +370,15 @@ export const AppLayout = () => {
           display: flex;
           align-items: center;
           gap: 16px;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
+          flex: 0 0 auto;
           justify-content: flex-end;
+          min-width: 0;
+        }
+
+        /* Every control in the icon row keeps its size; nothing wraps. */
+        .header-actions > * {
+          flex-shrink: 0;
         }
 
         /* Shared sizing/spacing/hover treatment for every top header
@@ -416,7 +440,9 @@ export const AppLayout = () => {
         /* Mobile Styles */
         @media (max-width: 768px) {
           .mobile-menu-btn {
-            display: block;
+            display: inline-flex;
+            top: 8px;
+            left: 10px;
           }
 
           .sidebar-wrapper {
@@ -464,13 +490,34 @@ export const AppLayout = () => {
           }
 
           .header-actions {
-            gap: 8px;
+            gap: 4px;
           }
 
-          .header-icon-btn {
-            width: 36px;
-            height: 36px;
+          /* One shared size for every header control (incl. Messages link,
+             holiday + bell). Higher specificity than each component's own
+             inline <style>, so they all line up on one row. */
+          .app-header .header-actions .header-icon-btn,
+          .app-header .header-actions .messaging-badge-wrapper {
+            width: 34px;
+            height: 34px;
+            min-width: 34px;
+            min-height: 34px;
             border-radius: 9px;
+          }
+
+          /* Holiday logo is 54px by default, taller than the header. */
+          .app-header .header-actions .holiday-logo {
+            width: 34px;
+            height: 34px;
+            border-radius: 9px;
+          }
+
+          .app-header .header-actions .holiday-trigger-badge {
+            top: -4px;
+            right: -4px;
+            min-width: 18px;
+            padding: 0 4px;
+            font-size: 0.55rem;
           }
 
           .page-content {
@@ -526,13 +573,46 @@ export const AppLayout = () => {
           }
 
           .header-actions {
+            gap: 2px;
+          }
+
+          .app-header .header-actions .header-icon-btn,
+          .app-header .header-actions .messaging-badge-wrapper {
+            width: 30px;
+            height: 30px;
+            min-width: 30px;
+            min-height: 30px;
+            border-radius: 8px;
+          }
+
+          .app-header .header-actions .holiday-logo {
+            width: 30px;
+            height: 30px;
+          }
+        }
+
+        /* Very narrow phones (<= 360px) with a full employee icon row */
+        @media (max-width: 360px) {
+          .app-header {
+            padding: 0 8px;
             gap: 6px;
           }
 
-          .header-icon-btn {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
+          .header-title {
+            margin-left: 38px;
+          }
+
+          .app-header .header-actions .header-icon-btn,
+          .app-header .header-actions .messaging-badge-wrapper {
+            width: 28px;
+            height: 28px;
+            min-width: 28px;
+            min-height: 28px;
+          }
+
+          .app-header .header-actions .holiday-logo {
+            width: 28px;
+            height: 28px;
           }
         }
 
@@ -572,18 +652,9 @@ export const AppLayout = () => {
           }
         }
 
-        /* Touch-friendly targets for mobile */
-        @media (max-width: 768px) {
-          .mobile-menu-btn,
-          .header-actions button,
-          .header-actions a {
-            min-height: 44px;
-            min-width: 44px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-          }
-        }
+        /* The old rule forced every header button/link to 44x44 on mobile,
+           which made the icon row wider than the header (theme toggle fell
+           off the line). Header icons are now sized explicitly above. */
       `}</style>
     </div>
   );
