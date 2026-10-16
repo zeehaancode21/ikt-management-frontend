@@ -3171,7 +3171,7 @@ const LeaveQuotaSummary = ({
             }`}
           >
             <span aria-hidden="true">{isOverLimit ? "⚠" : "✓"}</span>{" "}
-            {isOverLimit ? "Annual leave limit exceeded" : "Your leave balance"}
+            {isOverLimit ? "Annual leave limit exceeded" : "Leaves used"}
           </p>
           <p
             className={`mt-0.5 text-xs ${
