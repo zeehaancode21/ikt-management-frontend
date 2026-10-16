@@ -82,6 +82,7 @@ const RFI_ROW_CSS = `
       background-color 0.2s ease;
   }
 
+  @media (hover: hover) and (pointer: fine) {
   /* the pop-up */
   [data-rfi-table] .rfi-row:hover {
     translate: 0 -2px;
@@ -108,11 +109,6 @@ const RFI_ROW_CSS = `
   [data-rfi-table] .rfi-row td:first-child { transition: translate 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) 0.03s; }
   [data-rfi-table] .rfi-row:hover td:first-child { translate: 4px 0; }
 
-  [data-rfi-table] .rfi-row td span { transition: scale 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) 0.04s; }
-  [data-rfi-table] .rfi-row:hover td span { scale: 1.06; }
-  [data-rfi-table] .rfi-row:hover td span span,
-  [data-rfi-table] .rfi-row:hover td div span { scale: 1; }
-
   [data-rfi-table] .rfi-row td:nth-child(5) { transition: color 0.2s ease; }
   [data-rfi-table] .rfi-row:hover td:nth-child(5) { color: rgb(79 70 229); }
   .dark [data-rfi-table] .rfi-row:hover td:nth-child(5) { color: rgb(165 180 252); }
@@ -121,6 +117,11 @@ const RFI_ROW_CSS = `
   [data-rfi-table] .rfi-row td:last-child button { transition: scale 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.15s ease; }
   [data-rfi-table] .rfi-row:hover td:last-child button:not(:disabled) { scale: 1.12; }
   [data-rfi-table] .rfi-row:hover td:last-child button:not(:disabled):hover { scale: 1.28; }
+  }
+
+  /* phone cards */
+  [data-rfi-table] .rfi-card { animation: rfi-row-in 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  [data-rfi-table] .rfi-card:active { scale: 0.99; }
 
   /* filter bar button */
   [data-rfi-filters] > button { transition: translate 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease, background-color 0.2s ease; }
@@ -128,6 +129,7 @@ const RFI_ROW_CSS = `
 
   @media (prefers-reduced-motion: reduce) {
     [data-rfi-table] .rfi-row,
+    [data-rfi-table] .rfi-card,
     [data-rfi-table] thead tr { animation: none; }
     [data-rfi-table] .rfi-row,
     [data-rfi-table] .rfi-row td,
@@ -294,6 +296,65 @@ export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh 
     return <p className="py-8 text-center text-sm text-muted-foreground">No RFIs found for this project.</p>;
   }
 
+  const renderActions = (rfi: Rfi) => (
+    <div
+      className="flex items-center justify-end gap-0.5"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/*
+        rfi.attachment can be missing for RFIs sent without a PDF
+        (or older records created before attachments were
+        required); reading .id/.originalName off it unconditionally
+        threw a TypeError that crashed the whole list, not just
+        this row. Guard it and disable the actions instead.
+      */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="group h-7 w-7"
+        title={rfi.attachment ? "Preview PDF" : "No attachment"}
+        disabled={!rfi.attachment}
+        onClick={() =>
+          rfi.attachment && previewAttachment(rfi.attachment.id, rfi.attachment.originalName)
+        }
+      >
+        <AnimatedEyeIcon className="h-3.5 w-3.5" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        title="Check for replies (sync Gmail for this RFI)"
+        aria-busy={syncingRfiId === rfi.id}
+        // Not `disabled` while syncing: a disabled button is drawn faded,
+        // which would dim the animation. Extra clicks are ignored instead.
+        className={`group h-7 w-7 ${syncingRfiId === rfi.id ? "cursor-wait" : ""}`}
+        onClick={() => {
+          if (syncingRfiId === null) handleSyncRow(rfi.id);
+        }}
+      >
+        {/* Your sync1.png / sync1.gif from public/icons: the animation
+            plays from the click until the sync request finishes. */}
+        <AnimatedSyncGmailIcon
+          size="md"
+          isParentHovered={syncingRfiId === rfi.id}
+          ariaLabel="Check for replies"
+        />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 transition-transform hover:scale-110 active:scale-90"
+        title={rfi.attachment ? "Download PDF" : "No attachment"}
+        disabled={!rfi.attachment}
+        onClick={() =>
+          rfi.attachment && downloadAttachment(rfi.attachment.id, rfi.attachment.originalName)
+        }
+      >
+        <Download className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+
   return (
     <div className="space-y-2" data-rfi-table>
       <style>{RFI_ROW_CSS}</style>
@@ -348,7 +409,7 @@ export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh 
                 selected={activeDisciplines}
                 onToggle={toggleDiscipline}
                 onClear={clearDisciplines}
-                className="flex-1 min-w-[280px]"
+                className="w-full sm:min-w-[260px] sm:flex-1 sm:w-auto"
               />
               <RfiAttributeFilter
                 label="Team Scope"
@@ -359,7 +420,7 @@ export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh 
                 selected={activeTeamTypes}
                 onToggle={toggleTeamType}
                 onClear={clearTeamTypes}
-                className="flex-1 min-w-[220px]"
+                className="w-full sm:min-w-[200px] sm:flex-1 sm:w-auto"
               />
               <RfiAttributeFilter
                 label="Priority"
@@ -370,14 +431,54 @@ export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh 
                 selected={activePriorities}
                 onToggle={togglePriority}
                 onClear={clearPriorities}
-                className="flex-1 min-w-[280px]"
+                className="w-full sm:min-w-[260px] sm:flex-1 sm:w-auto"
               />
             </div>
           </div>
         </CollapsibleContent>
       </Collapsible>
 
-      <div className="overflow-hidden rounded-lg border-[1.5px] border-foreground/25 shadow-sm">
+      {/* Phones: one card per RFI (an 8-column table is unreadable on a small screen) */}
+      <div className="space-y-2 md:hidden">
+        {visibleRfis.map((rfi, idx) => (
+          <div
+            key={rfi.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => openDetails(rfi.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                openDetails(rfi.id);
+              }
+            }}
+            style={{ animationDelay: `${Math.min(idx, 8) * 40}ms` }}
+            className="rfi-card cursor-pointer rounded-xl border-[1.5px] border-foreground/25 bg-card/70 p-3 shadow-sm transition-colors active:bg-accent/40"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <span className="text-xs font-bold text-foreground">{rfi.rfiNumber}</span>
+              <StatusBadge status={getDisplayStatus(rfi, authName)} className="shrink-0 whitespace-nowrap" />
+            </div>
+            <p className="mt-1.5 text-[13px] leading-snug text-foreground [overflow-wrap:anywhere]">{rfi.subject}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <DisciplineTag discipline={rfi.discipline} />
+              <TeamTypeTag teamType={rfi.teamType} />
+              {rfi.status !== "CANCELLED" && <PriorityTag priority={rfi.priority} />}
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/60 pt-2">
+              <span className="text-[11px] text-muted-foreground">
+                {(() => {
+                  const date = new Date(rfi.createdAt);
+                  return isValid(date) ? format(date, "dd-MM-yyyy") : "—";
+                })()}
+              </span>
+              {renderActions(rfi)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-lg border-[1.5px] border-foreground/25 shadow-sm md:block">
         {/*
           Previous approach: table-fixed with hand-picked percentage widths
           per column. That's what caused the uneven gaps — a fixed % doesn't
@@ -449,62 +550,7 @@ export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh 
                   <StatusBadge status={getDisplayStatus(rfi, authName)} className="whitespace-nowrap" />
                 </TableCell>
                 <TableCell className="whitespace-nowrap px-3 py-2.5 text-right">
-                  <div
-                    className="flex items-center justify-end gap-0.5"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {/*
-                      rfi.attachment can be missing for RFIs sent without a PDF
-                      (or older records created before attachments were
-                      required); reading .id/.originalName off it unconditionally
-                      threw a TypeError that crashed the whole list, not just
-                      this row. Guard it and disable the actions instead.
-                    */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="group h-7 w-7"
-                      title={rfi.attachment ? "Preview PDF" : "No attachment"}
-                      disabled={!rfi.attachment}
-                      onClick={() =>
-                        rfi.attachment && previewAttachment(rfi.attachment.id, rfi.attachment.originalName)
-                      }
-                    >
-                      <AnimatedEyeIcon className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Check for replies (sync Gmail for this RFI)"
-                      aria-busy={syncingRfiId === rfi.id}
-                      // Not `disabled` while syncing: a disabled button is drawn faded,
-                      // which would dim the animation. Extra clicks are ignored instead.
-                      className={`group h-7 w-7 ${syncingRfiId === rfi.id ? "cursor-wait" : ""}`}
-                      onClick={() => {
-                        if (syncingRfiId === null) handleSyncRow(rfi.id);
-                      }}
-                    >
-                      {/* Your sync1.png / sync1.gif from public/icons: the animation
-                          plays from the click until the sync request finishes. */}
-                      <AnimatedSyncGmailIcon
-                        size="md"
-                        isParentHovered={syncingRfiId === rfi.id}
-                        ariaLabel="Check for replies"
-                      />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 transition-transform hover:scale-110 active:scale-90"
-                      title={rfi.attachment ? "Download PDF" : "No attachment"}
-                      disabled={!rfi.attachment}
-                      onClick={() =>
-                        rfi.attachment && downloadAttachment(rfi.attachment.id, rfi.attachment.originalName)
-                      }
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
+                  {renderActions(rfi)}
                 </TableCell>
               </TableRow>
             ))}
