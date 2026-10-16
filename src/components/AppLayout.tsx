@@ -167,7 +167,7 @@ export const AppLayout = () => {
               className="header-title-btn"
               onClick={handleWelcomeClick}
               disabled={reloading}
-              title="Click to hard reload (clears cache & loads the latest version)"
+              title={`Welcome, ${formatDisplayName(user?.name || "User")} — click to hard reload (clears cache & loads the latest version)`}
               aria-label="Hard reload the app"
             >
               Welcome, {formatDisplayName(user?.name || "User")} 👋
@@ -489,6 +489,20 @@ export const AppLayout = () => {
             margin-left: 40px;
           }
 
+          /* Phones: let "Welcome, <name>" wrap onto two lines instead of
+             being cut off, so long names stay readable. */
+          .header-title-btn {
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            white-space: normal;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            line-height: 1.2;
+            padding: 2px 6px;
+            margin-left: -6px;
+          }
+
           .header-actions {
             gap: 4px;
           }
@@ -564,6 +578,10 @@ export const AppLayout = () => {
             margin-left: 35px;
           }
 
+          .header-title-btn {
+            font-size: 12px;
+          }
+
           .page-content {
             padding: 12px;
           }
@@ -600,6 +618,10 @@ export const AppLayout = () => {
 
           .header-title {
             margin-left: 38px;
+          }
+
+          .header-title-btn {
+            font-size: 11px;
           }
 
           .app-header .header-actions .header-icon-btn,

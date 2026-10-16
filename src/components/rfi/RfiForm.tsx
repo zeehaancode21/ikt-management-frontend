@@ -879,6 +879,20 @@ const RFI_STYLES = `
     0%   { transform: rotate(-200deg) scale(0.6); opacity: 0.3; }
     100% { transform: rotate(0) scale(1); opacity: 1; }
   }
+  /* Phones / narrow panels: stack the header — title + To field on top,
+     full-width Submit button on its own row — so nothing gets squeezed
+     into a vertical sliver ("New RFI" breaking letter by letter). */
+  @container rfi (max-width: 640px) {
+    .rfi-head { flex-wrap: wrap; row-gap: 0.625rem; }
+    .rfi-head-main { flex: 1 1 100%; min-width: 0; }
+    .rfi-form-card .rfi-send { width: 100%; min-width: 0 !important; flex: 1 1 100%; }
+    .rfi-header-to { max-width: none !important; width: 100%; }
+  }
+  @container rfi (max-width: 380px) {
+    .rfi-head-main { gap: 0.5rem; }
+    .rfi-head-main > span:first-child { height: 34px; width: 34px; }
+  }
+
   /* Narrow header: icons only, so the toggle never pushes the row wider. */
   @container rfi (max-width: 520px) {
     .rfi-scope-label { display: none; }
@@ -1996,9 +2010,9 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
         {/* ───────────── Header ─────────────
             Left: title + inline "To" address input.
             Right: Submit button — always visible. */}
-        <div className="flex shrink-0 items-center justify-between gap-3">
+        <div className="rfi-head flex shrink-0 items-center justify-between gap-3">
           <div
-            className="flex min-w-0 flex-1 cursor-default items-center gap-3"
+            className="rfi-head-main flex min-w-0 flex-1 cursor-default items-center gap-3"
             onMouseEnter={() => setIsHeaderHovered(true)}
             onMouseLeave={() => setIsHeaderHovered(false)}
           >
@@ -2014,7 +2028,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               {/* Title row: "New RFI" + the compact scope toggle (sits above the To field). */}
               <div className="flex min-w-0 items-center gap-2.5">
-                <h2 className="text-base font-bold leading-tight tracking-tight text-foreground">New RFI</h2>
+                <h2 className="shrink-0 whitespace-nowrap text-base font-bold leading-tight tracking-tight text-foreground">New RFI</h2>
                 <ScopeToggle value={teamType} onChange={handleScopeChange} disabled={isBusy} />
               </div>
 
