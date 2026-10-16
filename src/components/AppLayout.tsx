@@ -8,7 +8,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { FloatingCalculator } from "./FloatingCalculator";
 import { FloatingNotepad } from "./FloatingNotepad";
 import { HeaderDocumentLink } from "./HeaderDocumentLink";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useRfiReplyCheck } from "@/hooks/useRfiReplyCheck";
 import { hardReload } from "./HardReloadButton";
@@ -101,6 +101,14 @@ export const AppLayout = () => {
     setReloading(true);
     void hardReload();
   };
+
+  // Close the mobile drawer after navigating, and start every page at the top
+  // (the scroll container is .page-main, so the browser won't reset it for us).
+  const pageMainRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    setSidebarOpen(false);
+    pageMainRef.current?.scrollTo?.({ top: 0 });
+  }, [location.pathname]);
 
   // Check if mobile on resize
   useEffect(() => {
@@ -202,6 +210,7 @@ export const AppLayout = () => {
 
         {/* PAGE CONTENT */}
         <main
+          ref={pageMainRef}
           className={`page-main ${
             location.pathname.includes("messages") ? "messages-layout" : ""
           }`}
@@ -425,6 +434,13 @@ export const AppLayout = () => {
           word-break: break-word;
         }
 
+        /* Don't chain scroll to the page behind / trigger pull-to-refresh
+           while scrolling the main area; keep iOS momentum scrolling. */
+        .page-main {
+          overscroll-behavior: contain;
+          -webkit-overflow-scrolling: touch;
+        }
+
         /* Messages specific styles */
         .page-main.messages-layout {
           overflow: hidden;
@@ -535,7 +551,7 @@ export const AppLayout = () => {
           }
 
           .page-content {
-            padding: 16px;
+            padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
           }
 
           .page-content.messages-content {

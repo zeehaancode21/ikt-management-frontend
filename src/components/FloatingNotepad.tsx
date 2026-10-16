@@ -467,6 +467,7 @@ const STYLES = `
     min-height: 190px;
     max-width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
     resize: both;
     overflow: hidden;
     border-radius: 14px;

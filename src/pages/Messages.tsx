@@ -1503,7 +1503,7 @@ export default function Messages() {
 
         .msg-container {
           display:flex; flex-direction:column;
-          height:calc(100vh - 110px); max-height:860px; min-height:480px;
+          height:calc(100vh - 110px); height:calc(100dvh - 110px); max-height:860px; min-height:480px;
           width:100%;
           flex: 1 1 auto;
           min-width: 0;
