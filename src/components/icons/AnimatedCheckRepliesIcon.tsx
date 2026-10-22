@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { sizeMap, type IconSize } from "./AnimatedIconbase";
 
+import { logger } from "@/lib/logger";
 /**
  * Animated Check Replies Icon Component
  *
@@ -138,7 +139,7 @@ export const AnimatedCheckRepliesIcon = ({
       })
       .catch((err) => {
         // GIF missing/failed — the static PNG simply stays visible.
-        console.warn("[AnimatedCheckRepliesIcon]", err);
+        logger.warn("[AnimatedCheckRepliesIcon]", err);
       });
 
     return () => {
@@ -177,7 +178,7 @@ export const AnimatedCheckRepliesIcon = ({
           alt=""
           aria-hidden="true"
           onLoad={() => setAnimLoaded(true)}
-          onError={() => console.warn("[AnimatedCheckRepliesIcon] sync2.gif could not be decoded")}
+          onError={() => logger.warn("[AnimatedCheckRepliesIcon] sync2.gif could not be decoded")}
           style={gifStyle}
           className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-150 select-none pointer-events-none ${
             animLoaded ? "opacity-100" : "opacity-0"

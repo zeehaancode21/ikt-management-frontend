@@ -24,7 +24,10 @@ import {
   type ProjectOption,
 } from "@/lib/rfiApi";
 import type { Rfi, RfiDiscipline, RfiTeamType } from "@/types/rfi";
-import { Building, FolderGit2, LayoutDashboard } from "lucide-react";
+import { Building, FolderGit2, LayoutDashboard, Share2 } from "lucide-react";
+import { RfiShareDialog } from "@/components/rfi/RfiShareDialog";
+import type { RfiShareTarget } from "@/lib/rfiShareApi";
+import { useAuth } from "@/context/AuthContext";
 import { RfiDashboard } from "@/components/rfi/RfiDashboard";
 import { useNotifications } from "@/context/NotificationsContext";
 import { useWebSocket } from "@/context/WebSocketContext";
@@ -38,6 +41,11 @@ const RFI = () => {
     if (notificationCounts.rfi > 0) markModuleRead("rfi");
   }, [notificationCounts.rfi, markModuleRead]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
+  // "Share live link" (read-only RFI status page for the client): OWNER only,
+  // the same rule the backend enforces (RfiShareLinkController).
+  const { role } = useAuth();
+  const canShareLinks = role === "OWNER";
+  const [shareTarget, setShareTarget] = useState<RfiShareTarget | null>(null); // null = dialog closed
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [rfis, setRfis] = useState<Rfi[]>([]);
@@ -394,6 +402,26 @@ const RFI = () => {
        </div>
 
         <div className="ml-auto flex items-center gap-2">
+        {canShareLinks && selectedProjectInfo && (view === "history" || view === "dashboard") && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="rfi-sync-btn h-7 gap-1.5 text-[11px]"
+            title="Create a read-only live link so the client can follow this project's RFIs"
+            onClick={() =>
+              setShareTarget({
+                scope: "PROJECT",
+                projectId: selectedProjectInfo.id,
+                projectName: selectedProjectInfo.projectName,
+                client: selectedProjectInfo.client,
+              })
+            }
+          >
+            <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+            Share live link
+          </Button>
+        )}
         {(view === "history" || view === "dashboard") && (
           <Button
   type="button"
@@ -474,6 +502,8 @@ const RFI = () => {
           )}
         </div>
       </div>
+
+      {canShareLinks && <RfiShareDialog target={shareTarget} onClose={() => setShareTarget(null)} />}
     </div>
   );
 };

@@ -3,6 +3,7 @@ import { useEffect, useCallback, useState, useRef } from "react";
 import { messaging, requestNotificationPermission, onMessage } from "@/lib/firebase";
 import api from "@/lib/api";
 
+import { logger } from "@/lib/logger";
 export function usePushNotifications() {
   const [serviceWorkerReady, setServiceWorkerReady] = useState(false);
   // ✅ Track recent notifications to prevent duplicates
@@ -13,33 +14,32 @@ export function usePushNotifications() {
   const registerToken = useCallback(async () => {
     try {
       if (!('Notification' in window)) {
-        console.log('⚠️ This browser does not support notifications');
+        logger.log('⚠️ This browser does not support notifications');
         return;
       }
 
       if (Notification.permission === 'denied') {
-        console.log('⚠️ Notification permission is denied.');
+        logger.log('⚠️ Notification permission is denied.');
         return;
       }
 
-      console.log('📱 Requesting notification permission...');
+      logger.log('📱 Requesting notification permission...');
       const token = await requestNotificationPermission();
       
       if (!token) {
-        console.log('⚠️ No FCM token received');
+        logger.log('⚠️ No FCM token received');
         return;
       }
 
-      console.log('✅ FCM Token obtained:', token);
+      logger.log('✅ FCM token obtained');
       const response = await api.post("/api/notifications/fcm-token", { token });
-      console.log("✅ FCM token registered with backend:", response.data);
+      logger.log("✅ FCM token registered with backend");
       
     } catch (err: any) {
-      console.error("❌ Error registering FCM token:", err);
+      logger.error("❌ Error registering FCM token:", err);
       
       if (err.response) {
-        console.error("📝 Response data:", err.response.data);
-        console.error("📝 Response status:", err.response.status);
+        logger.error("📝 Response status:", err.response.status);
       }
     }
   }, []);
@@ -53,13 +53,13 @@ export function usePushNotifications() {
     
     // ✅ CRITICAL FIX: Check if this notification has already been SHOWN
     if (shownNotifications.current.has(key)) {
-      console.log('🔄 Notification already shown, skipping duplicate:', key);
+      logger.log('🔄 Notification already shown, skipping duplicate');
       return true;
     }
     
     // Check if we received this same notification recently (within DUPLICATE_WINDOW)
     if (lastTime && (now - lastTime) < DUPLICATE_WINDOW) {
-      console.log('🔄 Duplicate notification detected in time window, skipping:', key);
+      logger.log('🔄 Duplicate notification detected in time window, skipping');
       return true;
     }
     
@@ -89,12 +89,12 @@ export function usePushNotifications() {
   const showForcedNotification = useCallback(async (title: string, body: string, icon: string, payload: any) => {
     try {
       if (!('Notification' in window)) {
-        console.warn('⚠️ Notification API not supported');
+        logger.warn('⚠️ Notification API not supported');
         return false;
       }
 
       if (Notification.permission !== "granted") {
-        console.warn('⚠️ Permission not granted:', Notification.permission);
+        logger.warn('⚠️ Permission not granted:', Notification.permission);
         return false;
       }
 
@@ -103,16 +103,16 @@ export function usePushNotifications() {
       try {
         registration = await navigator.serviceWorker.ready;
       } catch (error) {
-        console.error('❌ Failed to get service worker:', error);
+        logger.error('❌ Failed to get service worker:', error);
         return false;
       }
 
       if (!registration) {
-        console.warn('⚠️ No service worker registration found');
+        logger.warn('⚠️ No service worker registration found');
         return false;
       }
 
-      console.log('📤 Showing forced notification via service worker...');
+      logger.log('📤 Showing forced notification via service worker...');
 
       const messageId = payload?.data?.messageId || payload?.messageId || Date.now().toString();
       
@@ -135,11 +135,11 @@ export function usePushNotifications() {
       // ✅ Mark as shown
       markNotificationAsShown(messageId);
       
-      console.log('✅ Forced notification shown successfully with logo');
+      logger.log('✅ Forced notification shown successfully with logo');
       return true;
 
     } catch (error) {
-      console.error('❌ Forced notification failed:', error);
+      logger.error('❌ Forced notification failed:', error);
       return false;
     }
   }, [markNotificationAsShown]);
@@ -148,16 +148,16 @@ export function usePushNotifications() {
   const showDirectNotification = useCallback((title: string, body: string, icon: string, payload: any) => {
     try {
       if (!('Notification' in window)) {
-        console.warn('⚠️ Notification API not supported');
+        logger.warn('⚠️ Notification API not supported');
         return false;
       }
 
       if (Notification.permission !== "granted") {
-        console.warn('⚠️ Permission not granted:', Notification.permission);
+        logger.warn('⚠️ Permission not granted:', Notification.permission);
         return false;
       }
 
-      console.log('📤 Showing direct notification...');
+      logger.log('📤 Showing direct notification...');
 
       const messageId = payload?.data?.messageId || payload?.messageId || Date.now().toString();
 
@@ -187,11 +187,11 @@ export function usePushNotifications() {
 
       setTimeout(() => notification.close(), 10000);
 
-      console.log('✅ Direct notification shown successfully with logo');
+      logger.log('✅ Direct notification shown successfully with logo');
       return true;
 
     } catch (error) {
-      console.error('❌ Direct notification failed:', error);
+      logger.error('❌ Direct notification failed:', error);
       return false;
     }
   }, [markNotificationAsShown]);
@@ -199,7 +199,7 @@ export function usePushNotifications() {
   // ✅ METHOD 3: HTML/CSS Custom Notification (Fallback - WITHOUT LOGO)
   const showCustomNotification = useCallback((title: string, body: string) => {
     try {
-      console.log('📤 Showing custom HTML notification...');
+      logger.log('📤 Showing custom HTML notification...');
 
       // Remove any existing custom notifications
       const existing = document.querySelector('.custom-notification-container');
@@ -359,11 +359,11 @@ export function usePushNotifications() {
         // Silent fail for audio
       }
 
-      console.log('✅ Custom HTML notification shown (fallback)');
+      logger.log('✅ Custom HTML notification shown (fallback)');
       return true;
 
     } catch (error) {
-      console.error('❌ Custom notification failed:', error);
+      logger.error('❌ Custom notification failed:', error);
       return false;
     }
   }, []);
@@ -375,11 +375,11 @@ export function usePushNotifications() {
     
     // ✅ Check for duplicate BEFORE showing
     if (messageId && isDuplicateNotification(title, body, messageId)) {
-      console.log('⚠️ Skipping duplicate notification');
+      logger.log('⚠️ Skipping duplicate notification');
       return false;
     }
 
-    console.log('🔔 Attempting to show notification...');
+    logger.log('🔔 Attempting to show notification...');
 
     // ✅ Try methods that show logo FIRST
     const methods = [
@@ -391,16 +391,16 @@ export function usePushNotifications() {
       try {
         const result = await method.fn();
         if (result) {
-          console.log(`✅ Success using: ${method.name}`);
+          logger.log(`✅ Success using: ${method.name}`);
           return true;
         }
       } catch (error) {
-        console.warn(`❌ Method ${method.name} failed:`, error);
+        logger.warn(`❌ Method ${method.name} failed:`, error);
       }
     }
 
     // ✅ Last resort: Show custom HTML (without logo)
-    console.log('📤 Using final fallback: Custom HTML notification (no logo)');
+    logger.log('📤 Using final fallback: Custom HTML notification (no logo)');
     showCustomNotification(title, body);
     
     // ✅ Mark as shown even for fallback
@@ -418,10 +418,10 @@ export function usePushNotifications() {
         if ('serviceWorker' in navigator) {
           const registration = await navigator.serviceWorker.ready;
           setServiceWorkerReady(true);
-          console.log('✅ Service worker ready:', registration);
+          logger.log('✅ Service worker ready');
         }
       } catch (error) {
-        console.error('❌ Service worker init failed:', error);
+        logger.error('❌ Service worker init failed:', error);
       }
     };
 
@@ -432,14 +432,14 @@ export function usePushNotifications() {
     registerToken();
 
     const unsubscribe = onMessage(messaging, async (payload) => {
-      console.log("📩 Foreground message received:", payload);
+      logger.log("📩 Foreground message received");
 
       const title = payload.notification?.title ?? payload.data?.title ?? "New Message";
       const body = payload.notification?.body ?? payload.data?.body ?? "";
       const icon = payload.notification?.image ?? payload.data?.image ?? "/IKT.png";
       const messageId = payload.data?.messageId || payload.messageId;
 
-      console.log('📨 Extracted notification data:', { title, body, icon, messageId });
+      logger.log('📨 Extracted notification data');
 
       // ✅ Show notification - duplicate detection happens inside showNotification
       await showNotification(title, body, icon, payload);
@@ -448,7 +448,7 @@ export function usePushNotifications() {
     return () => {
       if (unsubscribe) {
         unsubscribe();
-        console.log("📱 Push notifications unsubscribed");
+        logger.log("📱 Push notifications unsubscribed");
       }
     };
   }, [registerToken, showNotification]);

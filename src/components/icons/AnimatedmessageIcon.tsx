@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { CSSProperties, HTMLAttributes } from "react";
 import { sizeMap, type IconSize } from "./AnimatedIconbase";
 
+import { logger } from "@/lib/logger";
 interface AnimatedMessageIconProps extends HTMLAttributes<HTMLSpanElement> {
   className?: string;
   size?: IconSize;
@@ -87,7 +88,7 @@ export const AnimatedMessageIcon = ({
       })
       .catch((err) => {
         // GIF missing/failed — the static PNG simply stays visible.
-        console.warn("[AnimatedMessageIcon]", err);
+        logger.warn("[AnimatedMessageIcon]", err);
       });
 
     return () => {
@@ -132,7 +133,7 @@ export const AnimatedMessageIcon = ({
           alt=""
           aria-hidden="true"
           onLoad={() => setAnimLoaded(true)}
-          onError={() => console.warn("[AnimatedMessageIcon] message.gif could not be decoded")}
+          onError={() => logger.warn("[AnimatedMessageIcon] message.gif could not be decoded")}
           style={gifStyle}
           className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-150 ${
             animLoaded ? "opacity-100" : "opacity-0"

@@ -56,6 +56,7 @@ import {
   RfiCircleIcon,
 } from "@/lib/Rfivisuals";
 
+import { logger } from "@/lib/logger";
 // ─────────────────────────────────────────────────────────────────────
 // Types & Constants
 // ─────────────────────────────────────────────────────────────────────
@@ -1605,7 +1606,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
           setEmailBody(preview.emailBody);
         })
         .catch((err) => {
-          console.error("Failed to load default RFI email body:", getErrorMessage(err));
+          logger.error("Failed to load default RFI email body:", getErrorMessage(err));
         })
         .finally(() => {
           if (requestId === previewRequestRef.current) setIsBodyPreviewLoading(false);

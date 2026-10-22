@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { sizeMap, type IconSize } from "./AnimatedIconbase";
 
+import { logger } from "@/lib/logger";
 /**
  * Animated Messages Icon Component
  * Shows animated icon on hover with PNG static fallback
@@ -91,7 +92,7 @@ export const AnimatedMessagesIcon = ({
         setAnimUrl(url);
       })
       .catch((err) => {
-        console.warn("[AnimatedMessagesIcon]", err);
+        logger.warn("[AnimatedMessagesIcon]", err);
       });
 
     return () => {
@@ -130,7 +131,7 @@ export const AnimatedMessagesIcon = ({
           alt=""
           aria-hidden="true"
           onLoad={() => setAnimLoaded(true)}
-          onError={() => console.warn("[AnimatedMessagesIcon] messages.gif could not be decoded")}
+          onError={() => logger.warn("[AnimatedMessagesIcon] messages.gif could not be decoded")}
           style={gifStyle}
           className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-150 select-none pointer-events-none ${
             animLoaded ? "opacity-100" : "opacity-0"

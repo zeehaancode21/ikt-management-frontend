@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import './ScheduledPostsPanel.css';
 
+import { logger } from "@/lib/logger";
 // Lightweight mirror of SocialHub's category list (id + label only) — just
 // used to populate the "Category" dropdown here. The actual generation
 // still goes through the existing backend category contexts; this file
@@ -153,7 +154,7 @@ const ScheduledPostsPanel: React.FC<Props> = ({ token }) => {
       }
       setPosts(data.data || []);
     } catch (error: any) {
-      console.error('Error loading scheduled posts:', error);
+      logger.error('Error loading scheduled posts:', error);
       toast.error('❌ Failed to load scheduled posts. ' + error.message);
     } finally {
       setLoading(false);
@@ -292,7 +293,7 @@ const ScheduledPostsPanel: React.FC<Props> = ({ token }) => {
       closeForm();
       loadPosts();
     } catch (error: any) {
-      console.error('Error saving scheduled post:', error);
+      logger.error('Error saving scheduled post:', error);
       toast.error('❌ Failed to save scheduled post. ' + error.message);
     } finally {
       setSubmitting(false);

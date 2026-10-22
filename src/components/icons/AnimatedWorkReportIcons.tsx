@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
 import { sizeMap, type IconSize } from "./AnimatedIconbase";
 
+import { logger } from "@/lib/logger";
 /**
  * Work-report icons — same behaviour as AnimatedChecklistIcon (Create RFI):
  * a static PNG at rest, the animated GIF while hovered. Files live in
@@ -155,7 +156,7 @@ const getGifBlob = (src: string): Promise<Blob> => {
       })
       .catch((err) => {
         gifBlobCache.delete(src); // allow a retry on the next hover
-        console.warn(`[icon] Cannot animate: ${err.message}. Put the file in public/icons/ (served at ${src}).`);
+        logger.warn(`[icon] Cannot animate: ${err.message}. Put the file in public/icons/ (served at ${src}).`);
         throw err;
       });
     gifBlobCache.set(src, p);
@@ -285,7 +286,7 @@ const PngGifIcon = ({
         src={pngSrc}
         alt={alt}
         onError={() => {
-          console.warn(`[icon] Cannot load ${pngSrc}. Put the file in public/icons/.`);
+          logger.warn(`[icon] Cannot load ${pngSrc}. Put the file in public/icons/.`);
           setPngFailed(true);
         }}
         style={pngStyle}

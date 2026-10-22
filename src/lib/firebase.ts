@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 
+import { logger } from "@/lib/logger";
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -21,13 +22,13 @@ export async function requestNotificationPermission(): Promise<string | null> {
   try {
     // Check if browser supports notifications
     if (!("Notification" in window)) {
-      console.warn("This browser does not support notifications.");
+      logger.warn("This browser does not support notifications.");
       return null;
     }
 
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {
-      console.warn("Notification permission denied.");
+      logger.warn("Notification permission denied.");
       return null;
     }
 
@@ -41,10 +42,10 @@ export async function requestNotificationPermission(): Promise<string | null> {
       serviceWorkerRegistration: registration,
     });
 
-    console.log("FCM Token obtained:", token);
+    logger.log("FCM token obtained");
     return token;
   } catch (err) {
-    console.error("Failed to get FCM token:", err);
+    logger.error("Failed to get FCM token:", err);
     return null;
   }
 }

@@ -3,6 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Megaphone, Send, Clock, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import api from "@/lib/api";
 
+import { logger } from "@/lib/logger";
 interface AnnouncementItem {
   id: number;
   content: string;
@@ -41,9 +42,9 @@ export default function Announcements() {
   }, []);
 
   useEffect(() => {
-  console.log("Announcements MOUNTED");
+  logger.log("Announcements MOUNTED");
   fetchAnnouncements();
-  return () => console.log("Announcements UNMOUNTED");
+  return () => logger.log("Announcements UNMOUNTED");
 }, [fetchAnnouncements]);
 
   useEffect(() => {

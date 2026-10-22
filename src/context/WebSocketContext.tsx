@@ -3,6 +3,7 @@ import { Client, Message as StompMessage } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import { useAuth } from "./AuthContext";
 
+import { logger } from "@/lib/logger";
 interface WebSocketContextValue {
   connected: boolean;
   subscribe: (destination: string, callback: (message: any) => void) => () => void;
@@ -30,15 +31,15 @@ export const WebSocketProvider = ({ children }: { children: ReactNode }) => {
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
       onConnect: () => {
-        console.log("WebSocket connected");
+        logger.log("WebSocket connected");
         setConnected(true);
       },
       onDisconnect: () => {
-        console.log("WebSocket disconnected");
+        logger.log("WebSocket disconnected");
         setConnected(false);
       },
       onStompError: (frame) => {
-        console.error("STOMP error: ", frame);
+        logger.error("STOMP error", frame.headers?.message);
       },
     });
 

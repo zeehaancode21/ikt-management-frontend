@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { sizeMap, type IconSize } from "./AnimatedIconbase";
 
+import { logger } from "@/lib/logger";
 /**
  * Base animated RFI icon component factory
  */
@@ -92,7 +93,7 @@ const createAnimatedRFIIcon = (
           setAnimUrl(url);
         })
         .catch((err) => {
-          console.warn(`[${componentName}]`, err);
+          logger.warn(`[${componentName}]`, err);
         });
 
       return () => {
@@ -131,7 +132,7 @@ const createAnimatedRFIIcon = (
             alt=""
             aria-hidden="true"
             onLoad={() => setAnimLoaded(true)}
-            onError={() => console.warn(`[${componentName}] ${gifSrc} could not be decoded`)}
+            onError={() => logger.warn(`[${componentName}] ${gifSrc} could not be decoded`)}
             style={gifStyleObj}
             className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-150 select-none pointer-events-none ${
               animLoaded ? "opacity-100" : "opacity-0"

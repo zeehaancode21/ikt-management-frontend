@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties, HTMLAttributes } from "react";
 
+import { logger } from "@/lib/logger";
 interface AnimatedUploadIconProps extends HTMLAttributes<HTMLSpanElement> {
   className?: string;
   size?: "sm" | "md" | "lg";
@@ -119,7 +120,7 @@ const detectTone = (): Promise<Tone> => {
         }
         const lum = count ? sum / count : 0;
         const tone: Tone = lum < 0.35 ? "dark" : lum > 0.8 ? "light" : "mid";
-        console.debug(`[AnimatedUploadIcon] still icon tone: ${tone} (luminance ${lum.toFixed(2)})`);
+        logger.debug(`[AnimatedUploadIcon] still icon tone: ${tone} (luminance ${lum.toFixed(2)})`);
         resolve(tone);
       } catch {
         resolve("dark"); // Icons8 icons are black by default

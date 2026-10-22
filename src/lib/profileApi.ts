@@ -1,5 +1,6 @@
 import axios from 'axios';
 
+import { logger } from "@/lib/logger";
 // Use the same env var as api.ts so it works in both dev and prod
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
@@ -65,7 +66,7 @@ export const fetchProfilePicture = async (username: string): Promise<string | nu
     return null;
   } catch (error: any) {
     if (error.response?.status !== 404) {
-      console.error('Failed to fetch profile picture:', error);
+      logger.error('Failed to fetch profile picture:', error);
     }
     pictureCache.set(username, null);
     return null;

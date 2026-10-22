@@ -10,6 +10,7 @@ import {
 import { Calculator, X, GripHorizontal, Delete, Download, Laptop } from 'lucide-react';
 import { AnimatedIconBase } from '@/components/icons/AnimatedIconbase';
 
+import { logger } from "@/lib/logger";
 /* ── Error boundary ─────────────────────────────── */
 
 class CalculatorErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -19,7 +20,7 @@ class CalculatorErrorBoundary extends Component<{ children: ReactNode }, { hasEr
   }
   static getDerivedStateFromError() { return { hasError: true }; }
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('FloatingCalculator error:', error, info);
+    logger.error('FloatingCalculator error:', error.message);
   }
   render() {
     if (this.state.hasError) {

@@ -10,6 +10,7 @@ import {
   Paperclip, Image, File, Video, FileArchive, XCircle, Smile, Reply
 } from "lucide-react";
 
+import { logger } from "@/lib/logger";
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Message {
   id: number;
@@ -240,7 +241,7 @@ function FileAttachment({ attachment, isMine }: { attachment: Attachment; isMine
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Download failed:', error);
+      logger.error('Download failed:', error);
     }
   };
 
@@ -263,7 +264,7 @@ function FileAttachment({ attachment, isMine }: { attachment: Attachment; isMine
         handleDownload();
       }
     } catch (error) {
-      console.error('Preview failed:', error);
+      logger.error('Preview failed:', error);
       if (tab) tab.close();
       alert(`Couldn't open "${attachment.originalName}". Please try downloading it instead.`);
     }
@@ -814,7 +815,7 @@ export default function Messages() {
       setHasMoreInbox(!r.data.last);
 
     } catch (error: any) {
-      console.error('Error fetching inbox:', error);
+      logger.error('Error fetching inbox:', error);
       setInboxError(error?.response?.data?.message || error?.response?.data?.error || 'Failed to load messages');
     } finally {
       setInboxLoading(false);
@@ -1042,7 +1043,7 @@ export default function Messages() {
       });
       return response.data;
     } catch (error) {
-      console.error('Upload failed:', error);
+      logger.error('Upload failed:', error);
       throw error;
     }
   };
@@ -1075,7 +1076,7 @@ export default function Messages() {
         await api.post("/notifications/broadcast", { content, attachments: attachments.map(a => a.id) });
         await fetchBroadcasts();
       } catch (error) {
-        console.error('Broadcast failed:', error);
+        logger.error('Broadcast failed:', error);
         setNewMessage(content);
         setSelectedFiles(filesToUpload);
       } finally {
@@ -1114,7 +1115,7 @@ export default function Messages() {
           prev.some((m) => m.id === savedMsg.id) ? prev.map((m) => m.id === savedMsg.id ? savedMsg : m) : [...prev, savedMsg]
         );
       } catch (error) {
-        console.error('Group message failed:', error);
+        logger.error('Group message failed:', error);
         setNewMessage(content);
         setSelectedFiles(filesToUpload);
         if (replyBeingSent) setReplyingTo(replyBeingSent);
@@ -1175,7 +1176,7 @@ export default function Messages() {
         fetchInbox(0, true);
       }
     } catch (error) {
-      console.error('DM send failed:', error);
+      logger.error('DM send failed:', error);
       setConversation((prev) => prev.filter((m) => m.id !== tempId));
       setNewMessage(content);
       setSelectedFiles(filesToUpload);

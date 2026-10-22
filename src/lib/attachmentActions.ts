@@ -1,5 +1,6 @@
 import api from "@/lib/api";
 
+import { logger } from "@/lib/logger";
 // Same blob-fetch pattern already used for attachments in Messages.tsx —
 // reused here rather than a plain <a href>, since the endpoint requires
 // the Authorization header the axios instance attaches automatically.
@@ -15,7 +16,7 @@ export const downloadAttachment = async (attachmentId: number, filename: string)
     link.remove();
     window.URL.revokeObjectURL(url);
   } catch (error) {
-    console.error("Download failed:", error);
+    logger.error("Download failed:", error);
   }
 };
 
@@ -33,7 +34,7 @@ export const previewAttachment = async (attachmentId: number, filename: string) 
       downloadAttachment(attachmentId, filename);
     }
   } catch (error) {
-    console.error("Preview failed:", error);
+    logger.error("Preview failed:", error);
     if (tab) tab.close();
   }
 };

@@ -81,6 +81,7 @@ import {
   ArrowDown,
 } from "lucide-react";
 
+import { logger } from "@/lib/logger";
 /* ─── Types ─────────────────────────────────────────────── */
 
 type WorkType =
@@ -285,6 +286,26 @@ const isWeekend = (d: string) => {
   } catch {
     return false;
   }
+};
+
+// Short day name ("Mon", "Fri") + its own colour, for the small day tile in the
+// employee's report list. Keyed by Date#getDay() (0 = Sunday). Class names are
+// written out in full so Tailwind can see them.
+const DAY_TILES: { full: string; short: string; cls: string }[] = [
+  { full: "Sunday", short: "Sun", cls: "bg-slate-200 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600" },
+  { full: "Monday", short: "Mon", cls: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-900" },
+  { full: "Tuesday", short: "Tue", cls: "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-950/50 dark:text-violet-300 dark:border-violet-900" },
+  { full: "Wednesday", short: "Wed", cls: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900" },
+  { full: "Thursday", short: "Thu", cls: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-900" },
+  { full: "Friday", short: "Fri", cls: "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-900" },
+  { full: "Saturday", short: "Sat", cls: "bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-950/50 dark:text-cyan-300 dark:border-cyan-900" },
+];
+
+// dateKey is "yyyy-MM-dd". Parsed as a LOCAL date so the weekday never shifts with the timezone.
+const dayTileFor = (dateKey: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!m) return null;
+  return DAY_TILES[new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay()] ?? null;
 };
 
 // "Saturday" / "Sunday"
@@ -2002,7 +2023,7 @@ const EmployeeView = () => {
       })
       .catch((err) => {
         if (!cancelled) {
-          console.error("Failed to load clients:", err);
+          logger.error("Failed to load clients:", err);
           setClientsError(true);
           setClients([]);
           toast({ title: "Failed to load clients", description: "Please refresh the page.", variant: "destructive" });
@@ -3091,6 +3112,18 @@ const EmployeeView = () => {
                         style={{ animationDelay: `${index * 0.04}s` }}
                       >
                         <TableCell className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                          {(() => {
+                            const tile = dayTileFor(dk);
+                            return tile ? (
+                              <span
+                                title={tile.full}
+                                aria-label={tile.full}
+                                className={`mr-2 inline-flex h-5 min-w-[2.25rem] items-center justify-center rounded-md border px-1.5 text-[10px] font-bold uppercase tracking-wide ${tile.cls}`}
+                              >
+                                {tile.short}
+                              </span>
+                            ) : null;
+                          })()}
                           {fmt(dk)}
                           {weekend && (
                             <span className="weekend-badge">

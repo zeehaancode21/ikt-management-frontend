@@ -43,7 +43,9 @@ const EmployeeHub = lazy(() => import("./pages/EmployeeHub"));
 const RFI = lazy(() => import("./pages/RFI"));
 import RequireRfiAccess from "@/components/RequireRfiAccess";
 import RequireProjectsAccess from "@/components/RequireProjectsAccess";
+import { logger } from "@/lib/logger";
 const SharedView = lazy(() => import("./pages/Sharedview"));
+const RfiSharedView = lazy(() => import("./pages/RfiSharedView"));
 
 // One sidebar entry, several pages: each list below becomes a tab bar shown
 // above its pages. The page URLs (/leave, /permission, /reports,
@@ -135,7 +137,7 @@ function App() {
       window.addEventListener("load", () => {
         navigator.serviceWorker
           .register("/sw.js")
-          .catch((err) => console.error("❌ SW registration failed:", err));
+          .catch((err) => logger.error("❌ SW registration failed:", err));
       });
     }
   }, []);
@@ -152,6 +154,8 @@ function App() {
                 <Route path="/" element={<Navigate to="/login" replace />} />
                 {/* Public read-only link for clients — no login (must stay OUTSIDE RequireAuth) */}
                 <Route path="/share/:token" element={<Lazy><SharedView /></Lazy>} />
+                {/* Public read-only LIVE RFI status for clients — also no login, also OUTSIDE RequireAuth */}
+                <Route path="/share/rfi/:token" element={<Lazy><RfiSharedView /></Lazy>} />
 
                 <Route
                   element={

@@ -14,7 +14,8 @@ import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Spinner } from "@/components/Spinner";
 import { toast } from "@/hooks/use-toast";
-import { Mail, User, Users, Copy, Check, CalendarPlus, CalendarCheck, Clock } from "lucide-react";
+import { Mail, User, Users, Copy, Check, CalendarPlus, CalendarCheck, Clock, Share2 } from "lucide-react";
+import { RfiShareDialog } from "@/components/rfi/RfiShareDialog";
 import { AnimatedCheckRepliesIcon } from "@/components/icons/AnimatedCheckRepliesIcon";
 import { AnimatedEyeIcon } from "@/components/icons/AnimatedEyeIcon";
 import { downloadAttachment, previewAttachment } from "@/lib/attachmentActions";
@@ -115,7 +116,10 @@ export const RfiDetailDialog = ({
   const [checkRepliesHovered, setCheckRepliesHovered] = useState(false);
   const [copiedCc, setCopiedCc] = useState(false);
   const [copiedRecipient, setCopiedRecipient] = useState(false);
-  const { name: authName } = useAuth();
+  const { name: authName, role } = useAuth();
+  // Only the OWNER can share a single EXTERNAL RFI with the client as a live read-only link.
+  const canShareLinks = role === "OWNER";
+  const [shareOpen, setShareOpen] = useState(false);
   const [savingPriority, setSavingPriority] = useState(false);
 
   const loadAll = useCallback((silent: boolean = false) => {
@@ -258,12 +262,26 @@ export const RfiDetailDialog = ({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2 text-sm">
             {rfi ? rfi.rfiNumber : "RFI Details"}
             {rfi && <StatusBadge status={getDisplayStatus(rfi, authName)} />}
+            {rfi && canShareLinks && rfi.teamType === "EXTERNAL" && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="ml-auto mr-6 h-6 gap-1 px-2 text-[10px]"
+                title="Share a live, read-only link to this RFI with the client"
+                onClick={() => setShareOpen(true)}
+              >
+                <Share2 className="h-3 w-3" aria-hidden="true" />
+                Share
+              </Button>
+            )}
           </DialogTitle>
           <DialogDescription className="text-xs">{rfi?.subject}</DialogDescription>
         </DialogHeader>
@@ -525,5 +543,17 @@ export const RfiDetailDialog = ({
         )}
       </DialogContent>
     </Dialog>
+
+    {canShareLinks && (
+      <RfiShareDialog
+        target={
+          shareOpen && rfi
+            ? { scope: "RFI", rfiId: rfi.id, rfiNumber: rfi.rfiNumber, projectName: rfi.projectName }
+            : null
+        }
+        onClose={() => setShareOpen(false)}
+      />
+    )}
+    </>
   );
 };

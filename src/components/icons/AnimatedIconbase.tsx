@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, HTMLAttributes } from "react";
 
+import { logger } from "@/lib/logger";
 export type IconSize = "sm" | "md" | "lg" | "xl" | "2xl";
 
 export const sizeMap: Record<IconSize, string> = {
@@ -100,7 +101,7 @@ const detectBackground = (src: string): Promise<BgKind> => {
           : kinds.every((k) => k === "transparent")
           ? "transparent"
           : "other";
-        console.debug(`[AnimatedIconBase] ${src} background detected: ${kind}`);
+        logger.debug(`[AnimatedIconBase] ${src} background detected: ${kind}`);
         resolve(kind);
       } catch {
         // Could not read pixels — assume the common case (white background).
@@ -425,7 +426,7 @@ const AnimatedCanvasLayer = ({
         raf = requestAnimationFrame(tick);
         return true;
       } catch (err) {
-        console.warn("[AnimatedIconBase] ImageDecoder failed, using <img> fallback", err);
+        logger.warn("[AnimatedIconBase] ImageDecoder failed, using <img> fallback", err);
         return false;
       }
     };
@@ -598,7 +599,7 @@ export const AnimatedIconBase = ({
       })
       .catch((err) => {
         // Animated file missing/failed — the static PNG simply stays visible.
-        console.warn("[AnimatedIconBase]", err);
+        logger.warn("[AnimatedIconBase]", err);
       });
 
     return () => {

@@ -34,6 +34,7 @@ import AiImageGenerator from '@/components/AiImageGenerator';
 import ScheduledPostsPanel from '@/components/ScheduledPostsPanel';
 import { clearDraftImages, composeUploadedImage } from '@/lib/aiImageApi';
 
+import { logger } from "@/lib/logger";
 // Types
 interface TopicCategory {
   id: string;
@@ -391,7 +392,7 @@ const SocialHub: React.FC = () => {
         throw new Error(data.message || 'Failed to generate post');
       }
     } catch (error: any) {
-      console.error('Error generating post:', error);
+      logger.error('Error generating post:', error);
       toast.error('❌ Failed to generate post. ' + error.message);
     } finally {
       setIsGenerating(false);
@@ -450,7 +451,7 @@ const SocialHub: React.FC = () => {
         throw new Error(data.message || 'Failed to load more topics');
       }
     } catch (error: any) {
-      console.error('Error loading more topics:', error);
+      logger.error('Error loading more topics:', error);
       toast.error('❌ Failed to load more topics. ' + error.message);
     } finally {
       setIsLoadingMoreTopics(false);
@@ -535,7 +536,7 @@ const SocialHub: React.FC = () => {
         throw new Error(data.message || 'Failed to post to LinkedIn');
       }
     } catch (error: any) {
-      console.error('Error posting to LinkedIn:', error);
+      logger.error('Error posting to LinkedIn:', error);
       toast.error('❌ Failed to post to LinkedIn. ' + error.message);
       
       setPostHistory(prev => 
@@ -616,7 +617,7 @@ const SocialHub: React.FC = () => {
           throw new Error(data.message || 'Failed to apply the company template');
         }
       } catch (error: any) {
-        console.error('Error applying company template to uploaded image:', error);
+        logger.error('Error applying company template to uploaded image:', error);
         toast.error('❌ Could not apply the company template. ' + error.message);
       } finally {
         setIsComposingUpload(false);

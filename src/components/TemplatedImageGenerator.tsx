@@ -8,6 +8,7 @@ import {
   type GeneratedImageOption,
 } from '@/lib/aiImageApi';
 
+import { logger } from "@/lib/logger";
 interface TemplatedImageGeneratorProps {
   token: string | null | undefined;
   /** Opaque id identifying the current post draft; images generated here are scoped to it. */
@@ -102,7 +103,7 @@ const TemplatedImageGenerator: React.FC<TemplatedImageGeneratorProps> = ({
         throw new Error(data.message || 'Failed to generate images');
       }
     } catch (error: any) {
-      console.error('Error generating templated images:', error);
+      logger.error('Error generating templated images:', error);
       toast.error('❌ Failed to generate images. ' + error.message);
     } finally {
       setIsGenerating(false);
@@ -127,7 +128,7 @@ const TemplatedImageGenerator: React.FC<TemplatedImageGeneratorProps> = ({
         throw new Error(data.message || 'Failed to select image');
       }
     } catch (error: any) {
-      console.error('Error selecting templated image:', error);
+      logger.error('Error selecting templated image:', error);
       toast.error('❌ Could not use that image. ' + error.message);
     } finally {
       setIsSelecting(null);
