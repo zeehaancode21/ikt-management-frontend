@@ -210,8 +210,6 @@ const previewHours = (start: string, end: string): number | null => {
   return Math.round((minutes / 60) * 4) / 4;
 };
 
-const getToday = () => format(new Date(), "yyyy-MM-dd");
-
 // Option cards for the "Permission type" step of the Apply form.
 const PERMISSION_CHOICES: Choice[] = [
   { value: "PERSONAL", label: "Personal", icon: User, tone: "#6366f1" },
@@ -1247,7 +1245,6 @@ const EmployeeView = () => {
                   id="perm-date"
                   type="date"
                   required
-                  min={getToday()}
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                   className="date-input-mobile-safe box-border block w-full min-w-0 max-w-full"
@@ -1521,7 +1518,6 @@ const EmployeeView = () => {
                   id="re-perm-date"
                   type="date"
                   required
-                  min={getToday()}
                   value={reDate}
                   onChange={(e) => setReDate(e.target.value)}
                   className="date-input-mobile-safe box-border w-full min-w-0 max-w-full"
