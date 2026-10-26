@@ -101,13 +101,13 @@ const FX_PARTICLES = Array.from({ length: 36 }, (_, i) => {
 });
 const FX_TRAIL = [0, 1, 2, 3, 4, 5];
 
-const LABEL_CLASS = "text-[11px] font-semibold tracking-wide text-muted-foreground";
+const LABEL_CLASS = "rfi-lbl font-semibold tracking-wide text-muted-foreground";
 const FIELD_CLASS =
-  "h-10 rounded-xl rfi-bd bg-background/60 text-[13px] transition-colors focus-visible:bg-background";
+  "rfi-field rounded-xl rfi-bd bg-background/60 transition-colors focus-visible:bg-background";
 const GHOST_BTN_CLASS =
-  "flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-semibold text-muted-foreground [&>svg]:shrink-0 transition-colors hover:bg-accent/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-50";
+  "rfi-btn-sm flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md font-semibold text-muted-foreground [&>svg]:shrink-0 transition-colors hover:bg-accent/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-50";
 const OUTLINE_BTN_CLASS =
-  "flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border rfi-bd bg-background/60 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent/50 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0";
+  "rfi-btn-sm rfi-btn-outline flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border rfi-bd bg-background/60 font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent/50 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0";
 
 const SHAKE_KEYFRAMES: Keyframe[] = [
   { transform: "translateX(0)" },
@@ -126,11 +126,23 @@ const RFI_STYLES = `
   .rfi-bd:hover { border-color: var(--rfi-border-hover); }
 
   .rfi-form-card {
+    --rfi-sw: 1;
+    --rfi-s: min(var(--rfi-sw), var(--rfi-sh, 1));
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: calc(12px * var(--rfi-s));
+    border-radius: calc(16px * var(--rfi-s));
     border-width: 1.5px;
     border-color: hsl(var(--primary) / 0.45);
     animation: rfi-form-in 300ms cubic-bezier(0.16, 1, 0.3, 1) both, rfi-card-glow 4s ease-in-out 400ms infinite;
   }
   .rfi-form-card:hover { border-color: hsl(var(--primary) / 0.45); }
+  @container rfi (min-width: 640px)  { .rfi-form-card { padding: calc(16px * var(--rfi-s)); } }
+  @container rfi (min-width: 1000px) { .rfi-form-card { --rfi-sw: 1.1; } }
+  @container rfi (min-width: 1280px) { .rfi-form-card { --rfi-sw: 1.2; } }
+  @container rfi (min-width: 1600px) { .rfi-form-card { --rfi-sw: 1.35; } }
+  @container rfi (min-width: 2000px) { .rfi-form-card { --rfi-sw: 1.5; } }
+  @container rfi (min-width: 2560px) { .rfi-form-card { --rfi-sw: 1.75; } }
   @keyframes rfi-card-glow {
     0%, 100% { box-shadow: 0 0 0 4px hsl(var(--primary) / 0.05), 0 18px 40px -18px hsl(var(--primary) / 0.30); }
     50%      { box-shadow: 0 0 0 5px hsl(var(--primary) / 0.10), 0 22px 46px -16px hsl(var(--primary) / 0.50); }
@@ -164,7 +176,20 @@ const RFI_STYLES = `
     .rfi-form-card, .rfi-stagger > div > *, .rfi-drag-active { animation: none !important; }
   }
 
-  .rfi-root { container-type: inline-size; container-name: rfi; width: 100%; }
+  /* The root fills the height its parent gives it (the card then stretches), and is the
+     size container every responsive rule below measures. */
+  .rfi-root { container-type: inline-size; container-name: rfi; width: 100%; max-width: 100%; display: flex; flex-direction: column; min-height: 100%; --rfi-sh: 1; }
+
+  /* ═════════════ Screen-size scale ═════════════
+     --rfi-s multiplies every size in the form (type, controls, icons, padding).
+       --rfi-sw grows with the WIDTH of the area the form lives in (container query),
+       --rfi-sh grows with the screen HEIGHT (media query),
+     and the smaller of the two wins, so a wide-but-short window never overflows. */
+  @media (min-height: 800px)  { .rfi-root { --rfi-sh: 1.05; } }
+  @media (min-height: 900px)  { .rfi-root { --rfi-sh: 1.15; } }
+  @media (min-height: 1050px) { .rfi-root { --rfi-sh: 1.3; } }
+  @media (min-height: 1300px) { .rfi-root { --rfi-sh: 1.5; } }
+  @media (min-height: 1600px) { .rfi-root { --rfi-sh: 1.7; } }
   .rfi-scroll { scrollbar-width: thin; scrollbar-color: hsl(var(--border)) transparent; }
 
   .rfi-cols {
@@ -172,6 +197,8 @@ const RFI_STYLES = `
     grid-template-columns: minmax(0, 1fr);
     gap: 0.75rem 1.25rem;
     align-content: start;
+    flex: 1 1 auto;
+    min-width: 0;
   }
   @container rfi (max-width: 640px) {
     .rfi-subtitle { display: none; }
@@ -307,7 +334,7 @@ const RFI_STYLES = `
     gap: 0.4rem;
     min-width: 0;
   }
-  .rfi-attach-slot { display: flex; flex: 1 1 auto; min-height: 60px; }
+  .rfi-attach-slot { display: flex; flex: 1 1 auto; min-height: calc(60px * var(--rfi-s, 1)); max-height: calc(320px * var(--rfi-s, 1)); }
   .rfi-attach-slot > * { flex: 1 1 auto; min-width: 0; }
 
   @container rfi (min-width: 760px) {
@@ -383,14 +410,14 @@ const RFI_STYLES = `
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
-    min-height: 150px;
+    min-height: clamp(calc(150px * var(--rfi-s, 1)), 26vh, calc(420px * var(--rfi-s, 1)));
   }
   .rfi-body-box > * {
     flex: 1 1 auto;
     max-height: 70vh;
     overflow-y: auto;
   }
-  .rfi-body-box textarea { min-height: 150px; }
+  .rfi-body-box textarea { min-height: clamp(calc(150px * var(--rfi-s, 1)), 26vh, calc(420px * var(--rfi-s, 1))); }
 
   /* ── Send button ── */
   @keyframes rfi-breathe {
@@ -1070,6 +1097,93 @@ const RFI_STYLES = `
   }
   .rfi-sug-empty { padding: 14px 10px; font-size: 12px; color: hsl(var(--muted-foreground)); animation: rfi-sug-item-in 280ms ease both; }
 
+  /* ═════════════ Responsive scale — every size follows --rfi-s ═════════════ */
+  .rfi-root .rfi-cols { gap: calc(12px * var(--rfi-s, 1)) calc(20px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-head-ico { width: calc(40px * var(--rfi-s, 1)); height: calc(40px * var(--rfi-s, 1)); border-radius: calc(12px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-head-ico-svg { width: calc(16px * var(--rfi-s, 1)) !important; height: calc(16px * var(--rfi-s, 1)) !important; }
+  .rfi-root .rfi-title { font-size: calc(16px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-lbl { font-size: calc(11px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-xs { font-size: calc(10.5px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-sm { font-size: calc(12px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-field { height: calc(40px * var(--rfi-s, 1)); font-size: calc(13px * var(--rfi-s, 1)); padding-left: calc(12px * var(--rfi-s, 1)); padding-right: calc(12px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-body-text { font-size: calc(13px * var(--rfi-s, 1)); padding: calc(10px * var(--rfi-s, 1)) calc(14px * var(--rfi-s, 1)); line-height: 1.6; }
+
+  .rfi-root .rfi-header-to { height: calc(34px * var(--rfi-s, 1)); max-width: calc(520px * var(--rfi-s, 1)); gap: calc(8px * var(--rfi-s, 1)); padding: 0 calc(8px * var(--rfi-s, 1)) 0 calc(12px * var(--rfi-s, 1)); border-radius: calc(10px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-header-to-label { font-size: calc(10px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-header-to-input { font-size: calc(12.5px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-header-to-star { width: calc(22px * var(--rfi-s, 1)); height: calc(22px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-header-to-star svg { width: calc(14px * var(--rfi-s, 1)); height: calc(14px * var(--rfi-s, 1)); }
+
+  .rfi-root .rfi-scope { height: calc(22px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-scope-opt { font-size: calc(10.5px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-scope-opt svg { width: calc(12px * var(--rfi-s, 1)); height: calc(12px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-scope-opt[data-active="true"] .rfi-scope-label { max-width: calc(60px * var(--rfi-s, 1)); }
+
+  .rfi-root .rfi-send.rfi-send-size { height: calc(40px * var(--rfi-s, 1)); min-width: calc(160px * var(--rfi-s, 1)); padding: 0 calc(20px * var(--rfi-s, 1)); font-size: calc(14px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-send svg { width: calc(16px * var(--rfi-s, 1)); height: calc(16px * var(--rfi-s, 1)); }
+
+  .rfi-root .rfi-btn-sm { font-size: calc(11px * var(--rfi-s, 1)); padding: 0.38em 0.75em; }
+  .rfi-root .rfi-btn-outline { padding: 0.38em 0.9em; }
+  .rfi-root .rfi-btn-sm > svg { width: 1.1em; height: 1.1em; }
+
+  .rfi-root .rfi-cc-lbl { width: calc(28px * var(--rfi-s, 1)); padding-top: calc(14px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-cc-row { min-height: calc(44px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-cc-input { height: calc(28px * var(--rfi-s, 1)); font-size: calc(13px * var(--rfi-s, 1)); min-width: min(calc(140px * var(--rfi-s, 1)), 100%); }
+  .rfi-root .rfi-chip { font-size: calc(12px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-chip-text { max-width: min(calc(180px * var(--rfi-s, 1)), 55cqw); }
+  .rfi-root .rfi-chip button svg { width: calc(12px * var(--rfi-s, 1)); height: calc(12px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-cc-add svg { width: calc(14px * var(--rfi-s, 1)); height: calc(14px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-cc-pick { margin-top: calc(6px * var(--rfi-s, 1)); height: calc(32px * var(--rfi-s, 1)); padding: 0 calc(10px * var(--rfi-s, 1)); font-size: calc(11px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-cc-pick svg { width: calc(12px * var(--rfi-s, 1)); height: calc(12px * var(--rfi-s, 1)); }
+
+  .rfi-root .rfi-classify { min-height: calc(34px * var(--rfi-s, 1)); gap: calc(8px * var(--rfi-s, 1)) calc(14px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-start-num { height: calc(30px * var(--rfi-s, 1)); padding: 0 calc(10px * var(--rfi-s, 1)); gap: calc(6px * var(--rfi-s, 1)); font-size: calc(11.5px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-start-num-input { width: calc(3.2rem * var(--rfi-s, 1)); font-size: calc(11.5px * var(--rfi-s, 1)); }
+  .rfi-root .gs-trigger.rfi-disc { height: calc(30px * var(--rfi-s, 1)); font-size: calc(11.5px * var(--rfi-s, 1)); padding: 0 calc(8px * var(--rfi-s, 1)) 0 calc(5px * var(--rfi-s, 1)); }
+  .rfi-root .gs-trigger.rfi-disc .gs-val > span:first-child:not(:last-child) { zoom: var(--rfi-s, 1); }
+  .rfi-root .gs-trigger.rfi-disc .gs-chev { width: calc(12px * var(--rfi-s, 1)); height: calc(12px * var(--rfi-s, 1)); }
+
+  .rfi-root .rfi-drop-pad { padding: calc(8px * var(--rfi-s, 1)) calc(12px * var(--rfi-s, 1)); gap: calc(12px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-up-ico { width: calc(20px * var(--rfi-s, 1)) !important; height: calc(20px * var(--rfi-s, 1)) !important; }
+  .rfi-root .rfi-file-pad { padding: calc(8px * var(--rfi-s, 1)) calc(14px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-file-ico { width: calc(20px * var(--rfi-s, 1)); height: calc(20px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-file-x { width: calc(28px * var(--rfi-s, 1)); height: calc(28px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-file-x svg { width: calc(16px * var(--rfi-s, 1)); height: calc(16px * var(--rfi-s, 1)); }
+
+  /* ═════════════ Phones / narrow panels ═════════════
+     Bigger tap targets, no sideways overflow, comfortably tall body. */
+  @container rfi (max-width: 640px) {
+    .rfi-root .rfi-field { height: 44px; }
+    .rfi-root .rfi-header-to { height: 44px; }
+    .rfi-root .rfi-send.rfi-send-size { height: 46px; }
+    .rfi-root .rfi-cc-pick { height: 36px; }
+    .rfi-root .rfi-cc-row { min-height: 48px; }
+    .rfi-root .rfi-cc-lbl { padding-top: 16px; }
+    .rfi-root .rfi-btn-sm { min-height: 34px; }
+    .rfi-root .rfi-start-num, .rfi-root .gs-trigger.rfi-disc { height: 38px; }
+    .rfi-root .rfi-scope { height: 28px; }
+    .rfi-root .rfi-header-to-star { width: 30px; height: 30px; }
+    .rfi-root .rfi-body-box,
+    .rfi-root .rfi-body-box textarea { min-height: clamp(170px, 30vh, 340px); }
+    .rfi-root .rfi-attach-slot { min-height: 72px; }
+    .rfi-root .rfi-classify > * { max-width: 100%; }
+  }
+  @container rfi (max-width: 380px) {
+    .rfi-root .rfi-head-ico { width: 34px; height: 34px; }
+    .rfi-root .rfi-title { font-size: 15px; }
+  }
+
+  /* Touch screens: 16px inputs stop iOS Safari zooming the page on focus. */
+  @media (pointer: coarse) {
+    .rfi-root input:not([type="file"]):not([type="checkbox"]),
+    .rfi-root textarea { font-size: 16px !important; }
+    .rfi-root .rfi-body-text { font-size: 15px; }
+    .rfi-root .rfi-panel:hover, .rfi-root .rfi-drop:hover { transform: none; }
+  }
+
+  /* Long words / addresses can never push the form wider than the screen. */
+  .rfi-root .rfi-body-text, .rfi-root .rfi-header-to-input { overflow-wrap: anywhere; }
+
   /* CC chips settle in when an address is added */
   .rfi-chip-in { animation: rfi-chip-in 340ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
   @keyframes rfi-chip-in {
@@ -1237,7 +1351,7 @@ function SuggestContent({
       sideOffset={6}
       collisionPadding={12}
       className="rfi-suggest p-1.5"
-      style={{ width: "var(--radix-popover-trigger-width)", minWidth: 260 }}
+      style={{ width: "var(--radix-popover-trigger-width)", minWidth: "min(260px, calc(100vw - 24px))", maxWidth: "calc(100vw - 24px)" }}
       onOpenAutoFocus={(e) => e.preventDefault()}
       onCloseAutoFocus={(e) => e.preventDefault()}
       onInteractOutside={(e) => {
@@ -1985,7 +2099,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
 
       <form
         onSubmit={handleSubmit}
-        className="rfi-form-enter rfi-form-card relative flex w-full flex-col rounded-2xl border rfi-bd bg-gradient-to-b from-primary/[0.06] via-background/95 to-background/95 p-3 shadow-2xl shadow-black/10 backdrop-blur-xl sm:p-4"
+        className="rfi-form-enter rfi-form-card relative flex w-full flex-col border rfi-bd bg-gradient-to-b from-primary/[0.06] via-background/95 to-background/95 shadow-2xl shadow-black/10 backdrop-blur-xl"
       >
         {/* ───────────── Header ─────────────
             Left: title + inline "To" address input.
@@ -1996,10 +2110,10 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
             onMouseEnter={() => setIsHeaderHovered(true)}
             onMouseLeave={() => setIsHeaderHovered(false)}
           >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
+            <span className="rfi-head-ico flex shrink-0 items-center justify-center bg-primary/10 ring-1 ring-primary/15">
               <AnimatedChecklistIcon
                 size="md"
-                className="text-primary"
+                className="rfi-head-ico-svg text-primary"
                 triggerParentHover
                 isParentHovered={isHeaderHovered}
               />
@@ -2008,7 +2122,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               {/* Title row: "New RFI" + the compact scope toggle (sits above the To field). */}
               <div className="flex min-w-0 items-center gap-2.5">
-                <h2 className="shrink-0 whitespace-nowrap text-base font-bold leading-tight tracking-tight text-foreground">New RFI</h2>
+                <h2 className="rfi-title shrink-0 whitespace-nowrap font-bold leading-tight tracking-tight text-foreground">New RFI</h2>
                 <ScopeToggle value={teamType} onChange={handleScopeChange} disabled={isBusy} />
               </div>
 
@@ -2025,7 +2139,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
               >
                 <PopoverPrimitive.Anchor asChild>
                   <div
-                    className="rfi-header-to min-w-0 max-w-[520px]"
+                    className="rfi-header-to min-w-0"
                     data-scope={teamType.toLowerCase()}
                     style={isInternal ? ({ "--to-accent": INTERNAL_ACCENT } as CSSProperties) : undefined}
                   >
@@ -2094,7 +2208,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                             <Star className="h-3.5 w-3.5 text-amber-500" />
                           </button>
                         </PopoverTrigger>
-                        <PopoverContent align="end" className="w-72 p-2">
+                        <PopoverContent align="end" collisionPadding={12} className="w-72 max-w-[calc(100vw-1.5rem)] p-2">
                           {favoriteToContacts.length === 0 ? (
                             <p className="px-2 py-2.5 text-xs text-muted-foreground">
                               No favorites yet — star a Send To address in RFI Settings, or just type a new one.
@@ -2146,7 +2260,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
             disabled={isBusy}
             onPointerDown={spawnRipple}
             data-state={sendState}
-            className="rfi-send h-10 min-w-[160px] shrink-0 rounded-xl px-5 text-sm font-bold tracking-wide text-white shadow-md disabled:opacity-100"
+            className="rfi-send rfi-send-size shrink-0 rounded-xl font-bold tracking-wide text-white shadow-md disabled:opacity-100"
           >
             <span className="rfi-send-shine" aria-hidden />
 
@@ -2324,17 +2438,17 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
             <PopoverPrimitive.Anchor asChild>
             <section className="rfi-cell-cc rfi-panel rounded-xl border rfi-bd bg-background/60">
               <div className="flex items-start gap-2 px-3">
-                <Label htmlFor="rfi-cc" className={`${LABEL_CLASS} w-7 shrink-0 pt-3.5`}>
+                <Label htmlFor="rfi-cc" className={`${LABEL_CLASS} rfi-cc-lbl shrink-0`}>
                   CC
                 </Label>
-                <div className="flex min-h-11 flex-1 flex-wrap items-center gap-1.5 py-1.5">
+                <div className="rfi-cc-row flex min-w-0 flex-1 flex-wrap items-center gap-1.5 py-1.5">
                   {ccEmails.map((email) => (
                     <Badge
                       key={email}
                       variant="secondary"
-                      className="rfi-chip-in flex items-center gap-1 rounded-full py-0.5 pl-2.5 pr-1 text-xs font-medium"
+                      className="rfi-chip-in rfi-chip flex items-center gap-1 rounded-full py-0.5 pl-2.5 pr-1 font-medium"
                     >
-                      <span className="max-w-[180px] truncate">{email}</span>
+                      <span className="rfi-chip-text truncate">{email}</span>
                       <button
                         type="button"
                         disabled={isBusy}
@@ -2393,7 +2507,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                     aria-autocomplete="list"
                     aria-controls="rfi-cc-suggest-list"
                     aria-activedescendant={isCcListOpen && ccActive >= 0 ? `rfi-cc-suggest-opt-${ccActive}` : undefined}
-                    className="h-7 min-w-[140px] flex-1 border-none bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/60"
+                    className="rfi-cc-input flex-1 border-none bg-transparent outline-none placeholder:text-muted-foreground/60"
                   />
                   {ccInput.trim() && (
                     <button
@@ -2402,7 +2516,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                       onClick={() => addCcEmail(ccInput)}
                       title="Add CC address"
                       aria-label="Add CC address"
-                      className="rounded-full p-1 text-primary transition-colors hover:bg-primary/10"
+                      className="rfi-cc-add rounded-full p-1 text-primary transition-colors hover:bg-primary/10"
                     >
                       <Plus className="h-3.5 w-3.5" />
                     </button>
@@ -2415,14 +2529,14 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                       type="button"
                       disabled={isBusy}
                       title="Pick CC addresses"
-                      className="mt-1.5 flex h-8 shrink-0 items-center gap-1 rounded-full border rfi-bd bg-background px-2.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                      className="rfi-cc-pick flex shrink-0 items-center gap-1 rounded-full border rfi-bd bg-background font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
                     >
                       <Star className="h-3 w-3 text-amber-500" />
                       Pick
                       <ChevronDown className="h-3 w-3" />
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent align="end" className="w-72 p-2">
+                  <PopoverContent align="end" collisionPadding={12} className="w-72 max-w-[calc(100vw-1.5rem)] p-2">
                     <div className="mb-2 flex gap-1 rounded-md bg-muted/50 p-0.5">
                       {(["favorites", "employees"] as const).map((tab) => (
                         <button
@@ -2568,7 +2682,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                 <Label htmlFor="rfi-subject" className={LABEL_CLASS}>
                   Subject line <span className="text-destructive">*</span>
                 </Label>
-                <span className="font-mono text-[10.5px] text-muted-foreground/70">{subject.length}/200</span>
+                <span className="rfi-xs font-mono text-muted-foreground/70">{subject.length}/200</span>
               </div>
               <Input
                 id="rfi-subject"
@@ -2591,7 +2705,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                   <span className="truncate">Email body</span>
                   {isBodyPreviewLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/60" />}
                   {isBodyCustomized && !isEditingBody && (
-                    <span className="rounded-full bg-primary/10 px-2 py-px text-[10px] font-semibold text-primary">
+                    <span className="rfi-xs rounded-full bg-primary/10 px-2 py-px font-semibold text-primary">
                       Edited
                     </span>
                   )}
@@ -2620,7 +2734,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                       type="button"
                       onClick={saveBodyEdit}
                       title="Save"
-                      className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md bg-primary px-2.5 py-1 text-[11px] [&>svg]:shrink-0 font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                      className="rfi-btn-sm rfi-btn-outline flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md bg-primary [&>svg]:shrink-0 font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
                     >
                       <Check className="h-3 w-3" />
                       <span className="rfi-btn-text">Save</span>
@@ -2633,7 +2747,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                 {!isEditingBody ? (
                   <div
                     onClick={() => !isBusy && startEditingBody()}
-                    className="rfi-scroll cursor-text whitespace-pre-wrap break-words rounded-xl border rfi-bd bg-background/60 px-3.5 py-2.5 text-[13px] leading-relaxed text-foreground/80 transition-colors hover:border-primary/40 hover:bg-accent/20"
+                    className="rfi-scroll rfi-body-text cursor-text whitespace-pre-wrap break-words rounded-xl border rfi-bd bg-background/60 text-foreground/80 transition-colors hover:border-primary/40 hover:bg-accent/20"
                   >
                     {emailBody || (isBodyPreviewLoading ? "Loading default email body…" : "—")}
                   </div>
@@ -2645,7 +2759,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                     onChange={(e) => setEmailBodyDraft(e.target.value)}
                     disabled={isBusy}
                     placeholder="Email body sent along with the attachment…"
-                    className="rfi-scroll w-full resize-none rounded-xl border-primary/40 bg-background px-3.5 py-2.5 text-[13px] leading-relaxed focus-visible:ring-1 focus-visible:ring-primary/50"
+                    className="rfi-scroll rfi-body-text w-full resize-none rounded-xl border-primary/40 bg-background focus-visible:ring-1 focus-visible:ring-primary/50"
                   />
                 )}
               </div>
@@ -2680,7 +2794,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                     onMouseEnter={() => setIsUploadHovered(true)}
                     onMouseLeave={() => setIsUploadHovered(false)}
                     className={[
-                      "rfi-drop group relative flex cursor-pointer flex-row items-center justify-center gap-3 rounded-xl border border-dashed px-3 py-2 text-left",
+                      "rfi-drop rfi-drop-pad group relative flex cursor-pointer flex-row items-center justify-center rounded-xl border border-dashed text-left",
                       isBusy ? "pointer-events-none opacity-60" : "",
                       isDragging
                         ? "rfi-drag-active"
@@ -2689,26 +2803,26 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                   >
                     <AnimatedUploadIcon
                       size="md"
-                      className="shrink-0 transition-transform duration-200 group-hover:-translate-y-0.5"
+                      className="rfi-up-ico shrink-0 transition-transform duration-200 group-hover:-translate-y-0.5"
                       triggerParentHover
                       isParentHovered={isUploadHovered || isDragging}
                     />
                     <span className="flex min-w-0 flex-col">
-                      <span className="text-xs font-medium text-foreground">
+                      <span className="rfi-sm font-medium text-foreground">
                         <span className="font-semibold text-primary group-hover:underline">Click to upload</span> or drop a PDF
                       </span>
-                      <span className="text-[10.5px] text-muted-foreground/70">One file · PDF only</span>
+                      <span className="rfi-xs text-muted-foreground/70">One file · PDF only</span>
                     </span>
                   </label>
                 ) : (
-                  <div className="animate-rfi-pop flex items-center justify-between gap-2 rounded-xl border border-primary/40 bg-primary/10 px-3.5 py-2 shadow-sm">
+                  <div className="animate-rfi-pop rfi-file-pad flex w-full items-center justify-between gap-2 rounded-xl border border-primary/40 bg-primary/10 shadow-sm">
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <FileCheck className="h-5 w-5 shrink-0 text-primary" />
+                      <FileCheck className="rfi-file-ico shrink-0 text-primary" />
                       <div className="flex min-w-0 flex-col">
-                        <span className="truncate text-xs font-semibold text-foreground" title={file.name}>
+                        <span className="rfi-sm truncate font-semibold text-foreground" title={file.name}>
                           {file.name}
                         </span>
-                        <span className="text-[10.5px] text-muted-foreground">
+                        <span className="rfi-xs text-muted-foreground">
                           {(file.size / (1024 * 1024)).toFixed(2)} MB
                         </span>
                       </div>
@@ -2720,7 +2834,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                       disabled={isBusy}
                       onClick={clearFile}
                       aria-label="Remove attachment"
-                      className="h-7 w-7 shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      className="rfi-file-x shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                     >
                       <X className="h-4 w-4" />
                     </Button>
