@@ -8,5 +8,3 @@ import { SidebarAnimatedIcon, type SidebarAnimatedIconProps } from "./SidebarAni
 export const AnimatedTeamHubIcon = ({ ariaLabel = "Team Hub", ...props }: SidebarAnimatedIconProps) => (
   <SidebarAnimatedIcon {...props} ariaLabel={ariaLabel} pngSrc="/icons/team1.png" animatedSrc="/icons/team1.gif" />
 );
-
-export default AnimatedTeamHubIcon;

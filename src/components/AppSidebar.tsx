@@ -1,26 +1,5 @@
-// AppSidebar.tsx - base = first file, only icons swapped to animated (hover) icons
-// Replace your entire src/components/AppSidebar.tsx with this file
-
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import {
-  Briefcase,
-  CalendarDays,
-  FileText,
-  MessageSquare,
-  ShieldCheck,
-  FileCheck2,
-  Globe,
-  Earth,
-  ArrowUpRight,
-  Sparkles,
-  Stars,
-  Zap,
-  Link,
-  Share2,
-  Users,
-  FileQuestion,
-  type LucideIcon,
-} from "lucide-react";
+import { Earth, ArrowUpRight, Sparkles, type LucideIcon } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
 import { useRfiAccess } from "@/hooks/useRfiAccess";

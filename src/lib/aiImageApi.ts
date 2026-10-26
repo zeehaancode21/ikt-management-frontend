@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "@/lib/config";
 // aiImageApi.ts
 //
 // Thin wrapper around the /social-post/ai-image/* backend endpoints used by
@@ -6,7 +7,6 @@
 // match the existing fetch-based conventions already used throughout
 // SocialHub.tsx for the /social-post/* endpoints.
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
 export interface GeneratedImageOption {
   id: number;

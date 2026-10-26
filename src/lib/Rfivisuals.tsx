@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 import {
   Building2,
   PenTool,
@@ -11,22 +11,10 @@ import {
   Layers,
   Lock,
   Globe2,
-  FilePlus2,
-  Send,
-  Reply,
-  History as HistoryIcon,
-  FileCheck,
-  Clock3,
-  Search,
-  AlertTriangle,
-  CheckCircle2,
-  RotateCcw,
-  XCircle,
   ArrowDown,
   ArrowUp,
   ChevronsUp,
   Minus,
-  Inbox,
   type LucideIcon,
 } from "lucide-react";
 import type { RfiPriority } from "@/types/rfi";
@@ -124,73 +112,6 @@ export function getPriorityIcon(priority?: string | null): LucideIcon {
 }
 
 /* ------------------------------------------------------------------ */
-/* Status                                                               */
-/* ------------------------------------------------------------------ */
-
-const STATUS_ICON_MAP: Record<string, LucideIcon> = {
-  DRAFT: FilePlus2,
-  SUBMITTED: Send,
-  ISSUED: FileCheck,
-  AWAITING_RESPONSE: Clock3,
-  RESPONSE_RECEIVED: Reply,
-  UNDER_REVIEW: Search,
-  OUTSTANDING: AlertTriangle,
-  CLOSED: CheckCircle2,
-  REOPENED: RotateCcw,
-  CANCELLED: XCircle,
-  RESUBMITTED: RotateCcw,
-  SENT: Send,
-  RECEIVED: Inbox,
-};
-
-const STATUS_THEME_MAP: Record<string, RfiTheme> = {
-  DRAFT: { accent: "#64748b", ring: "rgba(100,116,139,0.4)", soft: "rgba(100,116,139,0.14)" },
-  SUBMITTED: { accent: "#0ea5e9", ring: "rgba(14,165,233,0.4)", soft: "rgba(14,165,233,0.14)" },
-  ISSUED: { accent: "#6366f1", ring: "rgba(99,102,241,0.4)", soft: "rgba(99,102,241,0.14)" },
-  AWAITING_RESPONSE: { accent: "#f59e0b", ring: "rgba(245,158,11,0.4)", soft: "rgba(245,158,11,0.14)" },
-  RESPONSE_RECEIVED: { accent: "#14b8a6", ring: "rgba(20,184,166,0.4)", soft: "rgba(20,184,166,0.14)" },
-  UNDER_REVIEW: { accent: "#a855f7", ring: "rgba(168,85,247,0.4)", soft: "rgba(168,85,247,0.14)" },
-  OUTSTANDING: { accent: "#f97316", ring: "rgba(249,115,22,0.4)", soft: "rgba(249,115,22,0.14)" },
-  CLOSED: { accent: "#22c55e", ring: "rgba(34,197,94,0.4)", soft: "rgba(34,197,94,0.14)" },
-  REOPENED: { accent: "#f43f5e", ring: "rgba(244,63,94,0.4)", soft: "rgba(244,63,94,0.14)" },
-  CANCELLED: { accent: "#ef4444", ring: "rgba(239,68,68,0.4)", soft: "rgba(239,68,68,0.14)" },
-  RESUBMITTED: { accent: "#3b82f6", ring: "rgba(59,130,246,0.4)", soft: "rgba(59,130,246,0.14)" },
-  SENT: { accent: "#6366f1", ring: "rgba(99,102,241,0.4)", soft: "rgba(99,102,241,0.14)" },
-  RECEIVED: { accent: "#8b5cf6", ring: "rgba(139,92,246,0.4)", soft: "rgba(139,92,246,0.14)" },
-};
-
-export const STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Draft",
-  SUBMITTED: "Submitted",
-  ISSUED: "Issued",
-  AWAITING_RESPONSE: "Awaiting Response",
-  RESPONSE_RECEIVED: "Response Received",
-  UNDER_REVIEW: "Under Review",
-  OUTSTANDING: "Outstanding",
-  CLOSED: "Closed",
-  REOPENED: "Reopened",
-  CANCELLED: "Cancelled",
-  RESUBMITTED: "Resubmitted",
-  SENT: "Sent",
-  RECEIVED: "Received",
-};
-
-export function getStatusIcon(status?: string | null): LucideIcon {
-  if (!status) return HistoryIcon;
-  return STATUS_ICON_MAP[status.toUpperCase()] ?? HistoryIcon;
-}
-
-export function getStatusTheme(status?: string | null): RfiTheme {
-  if (!status) return STATUS_THEME_MAP.DRAFT;
-  return STATUS_THEME_MAP[status.toUpperCase()] ?? STATUS_THEME_MAP.DRAFT;
-}
-
-export function getStatusLabel(status?: string | null): string {
-  if (!status) return "—";
-  return STATUS_LABELS[status.toUpperCase()] ?? status;
-}
-
-/* ------------------------------------------------------------------ */
 /* Reusable circular badge / chip components                           */
 /* ------------------------------------------------------------------ */
 
@@ -246,24 +167,3 @@ export const RfiCircleIcon = ({
     </span>
   );
 };
-
-interface IconChipProps {
-  icon: LucideIcon;
-  theme: RfiTheme;
-  label: ReactNode;
-  size?: number;
-  filled?: boolean;
-  className?: string;
-  sub?: ReactNode;
-}
-
-/** Circular icon + label, used wherever discipline/team-type/status need to read as a chip. */
-export const RfiIconChip = ({ icon, theme, label, size = 22, filled = true, className = "", sub }: IconChipProps) => (
-  <span className={["inline-flex items-center gap-1.5", className].join(" ")}>
-    <RfiCircleIcon icon={icon} theme={theme} size={size} filled={filled} />
-    <span className="flex flex-col leading-tight">
-      <span className="text-[10px] font-semibold text-foreground">{label}</span>
-      {sub && <span className="text-[9px] text-muted-foreground">{sub}</span>}
-    </span>
-  </span>
-);

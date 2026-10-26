@@ -10,7 +10,6 @@ import { AnimatedCreateRFIIcon, AnimatedRFISettingIcon, AnimatedRFIsIcon } from 
 import { AnimatedSyncGmailIcon } from "@/components/icons/AnimatedSyncGmailIconFixed";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/Spinner";
 import { RfiForm } from "@/components/rfi/RfiForm";
 import { RfiList } from "@/components/rfi/RfiList";
 import { RfiEmailSettings } from "@/components/rfi/RfiEmailSettings";

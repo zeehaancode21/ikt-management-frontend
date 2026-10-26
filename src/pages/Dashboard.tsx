@@ -33,9 +33,9 @@ import {
   syncAllRfisForProject,
   getErrorMessage as getRfiErrorMessage,
 } from "@/lib/rfiApi";
+import { API_BASE_URL as API_BASE } from "@/lib/config";
 
 // ─── API CONFIG ───────────────────────────────────────────────────────────────
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 const getToken = () => localStorage.getItem("token");
 const authHeaders = () => {
   const token = getToken();
@@ -185,35 +185,6 @@ function useDebouncedCallback(callback, delay = 500) {
       callbackRef.current(...args);
     }, delay);
   }, [delay]);
-}
-
-function useAbortController() {
-  const controllerRef = useRef(null);
-
-  const getController = useCallback(() => {
-    if (controllerRef.current) {
-      controllerRef.current.abort();
-    }
-    controllerRef.current = new AbortController();
-    return controllerRef.current;
-  }, []);
-
-  const abort = useCallback(() => {
-    if (controllerRef.current) {
-      controllerRef.current.abort();
-      controllerRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (controllerRef.current) {
-        controllerRef.current.abort();
-      }
-    };
-  }, []);
-
-  return { getController, abort };
 }
 
 // Closes the topmost modal on Escape, and (optionally) restores focus to the
@@ -1286,7 +1257,7 @@ function uniqueSheetName(rawName, usedNames) {
   return candidate;
 }
 
-function buildClientWorkbook(XLSX, clientName, projects = [], changeOrdersByProject = {}) {
+function buildClientWorkbook(XLSX, projects = [], changeOrdersByProject = {}) {
   const wb = XLSX.utils.book_new();
 
   const summaryHeader = [
@@ -1374,7 +1345,7 @@ function buildClientWorkbook(XLSX, clientName, projects = [], changeOrdersByProj
 
 async function downloadClientWorkbook(clientName, projects = [], changeOrdersByProject = {}) {
   const XLSX = await import("xlsx"); // loaded only when the user clicks download
-  const wb = buildClientWorkbook(XLSX, clientName, projects, changeOrdersByProject);
+  const wb = buildClientWorkbook(XLSX, projects, changeOrdersByProject);
   XLSX.writeFile(wb, `${safeFileName(clientName)}_all_projects.xlsx`);
 }
 
@@ -1389,28 +1360,6 @@ const scaleIn = {
   show: { opacity: 1, scale: 1 },
   exit: { opacity: 0, scale: 0.96 }
 };
-
-function parseCSVtoCOs(text) {
-  const lines = text.trim().split("\n").filter(l => l.trim());
-  if (lines.length < 2) return [];
-  const header = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_"));
-  return lines.slice(1).map(line => {
-    const vals = line.split(",").map(v => v.trim().replace(/^"|"$/g, ""));
-    const obj = {};
-    header.forEach((h, i) => { obj[h] = vals[i] || ""; });
-    return {
-      co: obj.co || obj.change_order || obj.co_number || "",
-      description: obj.description || obj.desc || "",
-      status: obj.status || "APPROVAL PENDING",
-      amount: parseFloat(obj.amount || obj.value || "0") || 0,
-      ifaDate: obj.ifa_date || obj.ifadate || "",
-      ifaPer: obj.ifa_per || obj.ifa__ || "",
-      iffDate: obj.iff_date || obj.iffdate || "",
-      iffPer: obj.iff_per || obj.iff__ || "",
-      remarks: obj.remarks || obj.notes || "",
-    };
-  }).filter(r => r.co);
-}
 
 function BtnSpinner({ dark = false }) {
   return <span className={`btn-spinner${dark ? " btn-spinner-dark" : ""}`} aria-hidden="true" />;
@@ -1472,13 +1421,6 @@ export default function Dashboard() {
 
   const [error, setError] = useState("");
 
-  const [showCoImport, setShowCoImport] = useState(false);
-  const [coDragging, setCoDragging] = useState(false);
-  const [coImportData, setCoImportData] = useState([]);
-  const [coImportError, setCoImportError] = useState("");
-  const [coImportSaving, setCoImportSaving] = useState(false);
-  const coFileRef = useRef(null);
-
   const [years, setYears] = useState([]);
   const [showAddYear, setShowAddYear] = useState(false);
   const [newYearInput, setNewYearInput] = useState("");
@@ -1501,8 +1443,6 @@ export default function Dashboard() {
   const savingCoRef = useRef(false);
   const addingCoRef = useRef(false);
   const deletingCoRef = useRef(null);
-
-  const { getController: getDeleteController, abort: abortDelete } = useAbortController();
 
   useEffect(() => {
     api.getAllProjects(true)
@@ -1591,13 +1531,6 @@ export default function Dashboard() {
     } finally {
       setRfiSyncingAll(false);
     }
-  };
-
-  const refreshProjects = async () => {
-    const data = await api.getAllProjects(false);
-    setAllProjects(data);
-    const derived = [...new Set(data.map(p => p.year).filter(Boolean))].sort((a, b) => b - a);
-    setYears(derived);
   };
 
   const showConfirm = (title, message, onConfirm, itemName = "") => {
@@ -1773,7 +1706,6 @@ export default function Dashboard() {
 
         const backupProject = selectedProject;
         const backupAll = allProjects;
-        const controller = getDeleteController();
 
         setAllProjects(prev => prev.filter(p => p.id !== selectedProject.id));
         setSelectedProject(null);
@@ -1801,7 +1733,6 @@ export default function Dashboard() {
     savingCoRef.current = true;
 
     setSavingCo(true);
-    const prevCo = changeOrders.find(c => c.id === editCoData.id);
     const originalChangeOrders = [...changeOrders];
 
     setChangeOrders(prevList => prevList.map(c =>
@@ -1884,74 +1815,6 @@ export default function Dashboard() {
       },
       coNumber || id
     );
-  };
-
-  const handleCoFile = (file) => {
-    setCoImportError("");
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    if (ext === "csv" || ext === "txt") {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const rows = parseCSVtoCOs(e.target.result);
-        if (rows.length === 0) {
-          setCoImportError("No valid rows found. Make sure CSV has headers: co, description, status, amount, ifaDate, ifaPer, iffDate, iffPer, remarks");
-          return;
-        }
-        setCoImportData(rows);
-      };
-      reader.readAsText(file);
-    } else {
-      setCoImportError("Please upload a CSV file.");
-      setCoImportData([{ co: file.name.replace(/\.[^.]+$/, ""), description: `Imported from: ${file.name}`, status: "APPROVAL PENDING", amount: 0, ifaDate: "", ifaPer: "", iffDate: "", iffPer: "", remarks: "" }]);
-    }
-  };
-
-  const handleCoDropImport = (e) => {
-    e.preventDefault();
-    setCoDragging(false);
-    const f = e.dataTransfer.files[0];
-    if (f) handleCoFile(f);
-  };
-
-  const handleCoFileChange = (e) => {
-    const f = e.target.files?.[0];
-    if (f) handleCoFile(f);
-  };
-
-  const handleImportSave = async () => {
-    if (!coImportData.length || !selectedProject) return;
-    if (coImportSaving) return;
-
-    setCoImportSaving(true);
-
-    const tempRows = coImportData.map((row, i) => ({
-      ...row,
-      id: `temp_imp_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 5)}`,
-      projectName: selectedProject.projectName,
-      _optimistic: true
-    }));
-
-    setChangeOrders(prev => [...prev, ...tempRows]);
-    const importDataBackup = [...coImportData];
-    setCoImportData([]);
-    setShowCoImport(false);
-
-    try {
-      const created = await api.createChangeOrder(selectedProject.projectName, coImportData);
-      const realRows = Array.isArray(created) ? created : [created];
-
-      setChangeOrders(prev => {
-        const withoutTemps = prev.filter(c => !tempRows.find(t => t.id === c.id));
-        return [...withoutTemps, ...realRows];
-      });
-    } catch (e) {
-      setChangeOrders(prev => prev.filter(c => !tempRows.find(t => t.id === c.id)));
-      setCoImportData(importDataBackup);
-      setShowCoImport(true);
-      setCoImportError(e.message || "Import failed");
-    } finally {
-      setCoImportSaving(false);
-    }
   };
 
   // Escape-to-close for every overlay currently on screen.
@@ -3454,7 +3317,7 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="new-ifaDate">IFA date</label>
-            <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} label="IFA date" />
+            <IfcIfaDateInput id="new-ifaDate" value={f("ifaDate")} onChange={s("ifaDate")} label="IFA date" />
           </div>
           <div className="form-group"></div> {/* empty placeholder for the third column */}
         </div>
@@ -3473,7 +3336,7 @@ function AddProjectForm({ data, setData, onSave, onCancel, saving, defaultYear, 
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="new-ifcDate">IFC date</label>
-            <IfcIfaDateInput value={f("ifcDate")} onChange={s("ifcDate")} label="IFC date" />
+            <IfcIfaDateInput id="new-ifcDate" value={f("ifcDate")} onChange={s("ifcDate")} label="IFC date" />
           </div>
         </div>
 
@@ -3534,12 +3397,12 @@ function CoEditRow({ data, setData, onSave, onCancel, saving }) {
       <div className="form-row" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
         <div className="form-group">
           <label className="form-label" htmlFor="co-new-ifa">IFA date</label>
-          <IfcIfaDateInput value={f("ifaDate")} onChange={s("ifaDate")} label="IFA date" />
+          <IfcIfaDateInput id="co-new-ifa" value={f("ifaDate")} onChange={s("ifaDate")} label="IFA date" />
         </div>
         <div className="form-group"><label className="form-label" htmlFor="co-new-ifap">IFA %</label><input id="co-new-ifap" className="form-input" placeholder="e.g. 100%" value={f("ifaPer")} onChange={e => s("ifaPer")(e.target.value)} /></div>
         <div className="form-group">
           <label className="form-label" htmlFor="co-new-iff">IFF date</label>
-          <IfcIfaDateInput value={f("iffDate")} onChange={s("iffDate")} label="IFF date" />
+          <IfcIfaDateInput id="co-new-iff" value={f("iffDate")} onChange={s("iffDate")} label="IFF date" />
         </div>
         <div className="form-group"><label className="form-label" htmlFor="co-new-iffp">IFF %</label><input id="co-new-iffp" className="form-input" placeholder="e.g. 100%" value={f("iffPer")} onChange={e => s("iffPer")(e.target.value)} /></div>
       </div>

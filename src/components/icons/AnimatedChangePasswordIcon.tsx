@@ -16,5 +16,3 @@ export const AnimatedChangePasswordIcon = ({
     animatedSrc="/icons/changepassword.gif"
   />
 );
-
-export default AnimatedChangePasswordIcon;

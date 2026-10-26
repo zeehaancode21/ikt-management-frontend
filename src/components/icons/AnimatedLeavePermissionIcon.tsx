@@ -8,5 +8,3 @@ import { SidebarAnimatedIcon, type SidebarAnimatedIconProps } from "./SidebarAni
 export const AnimatedLeavePermissionIcon = ({ ariaLabel = "Leave & Permission", ...props }: SidebarAnimatedIconProps) => (
   <SidebarAnimatedIcon {...props} ariaLabel={ariaLabel} pngSrc="/icons/leave.png" animatedSrc="/icons/leave.gif" />
 );
-
-export default AnimatedLeavePermissionIcon;

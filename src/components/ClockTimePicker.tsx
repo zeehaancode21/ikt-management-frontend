@@ -311,5 +311,3 @@ export function ClockTimePicker({
     </Popover>
   );
 }
-
-export default ClockTimePicker;

@@ -4,10 +4,14 @@ import SockJS from "sockjs-client";
 import { useAuth } from "./AuthContext";
 
 import { logger } from "@/lib/logger";
+import { API_BASE_URL } from "@/lib/config";
+
 interface WebSocketContextValue {
   connected: boolean;
-  subscribe: (destination: string, callback: (message: any) => void) => () => void;
-  sendMessage: (destination: string, body: any) => void;
+  // Message payloads are JSON from the backend; callers narrow them as needed.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  subscribe: <T = any>(destination: string, callback: (message: T) => void) => () => void;
+  sendMessage: (destination: string, body: unknown) => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextValue | undefined>(undefined);
@@ -16,14 +20,13 @@ export const WebSocketProvider = ({ children }: { children: ReactNode }) => {
   const { token, name } = useAuth();
   const clientRef = useRef<Client | null>(null);
   const [connected, setConnected] = useState(false);
-  const subscriptionsRef = useRef<Map<string, any>>(new Map());
 
   const connect = useCallback(() => {
     if (!token || !name) return;
 
     const client = new Client({
       webSocketFactory: () =>
-        new SockJS(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8080"}/ws`),
+        new SockJS(`${API_BASE_URL}/ws`),
       connectHeaders: {
         Authorization: `Bearer ${token}`,
       },
@@ -59,7 +62,8 @@ export const WebSocketProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [connect]);
 
-  const subscribe = useCallback((destination: string, callback: (message: any) => void) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const subscribe = useCallback(<T = any,>(destination: string, callback: (message: T) => void) => {
     if (!clientRef.current || !clientRef.current.connected) {
       return () => {};
     }
@@ -67,21 +71,18 @@ export const WebSocketProvider = ({ children }: { children: ReactNode }) => {
     const subscription = clientRef.current.subscribe(destination, (message: StompMessage) => {
       try {
         const body = JSON.parse(message.body);
-        callback(body);
-      } catch (e) {
-        callback(message.body);
+        callback(body as T);
+      } catch {
+        callback(message.body as unknown as T);
       }
     });
 
-    subscriptionsRef.current.set(destination, subscription);
-
     return () => {
       subscription.unsubscribe();
-      subscriptionsRef.current.delete(destination);
     };
   }, []);
 
-  const sendMessage = useCallback((destination: string, body: any) => {
+  const sendMessage = useCallback((destination: string, body: unknown) => {
     if (clientRef.current && clientRef.current.connected) {
       clientRef.current.publish({
         destination,

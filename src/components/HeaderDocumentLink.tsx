@@ -58,5 +58,3 @@ export const HeaderDocumentLink = () => {
     </Link>
   );
 };
-
-export default HeaderDocumentLink;

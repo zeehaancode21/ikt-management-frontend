@@ -5,7 +5,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend,
   PolarAngleAxis,
 } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
@@ -235,5 +234,3 @@ export const UsageAnalyticsChart = ({
     </div>
   );
 };
-
-export default UsageAnalyticsChart;

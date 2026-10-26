@@ -16,8 +16,8 @@
 
 import axios from "axios";
 import api from "./api";
+import { API_BASE_URL } from "@/lib/config";
 
-const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
 

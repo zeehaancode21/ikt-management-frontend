@@ -35,6 +35,7 @@ import ScheduledPostsPanel from '@/components/ScheduledPostsPanel';
 import { clearDraftImages, composeUploadedImage } from '@/lib/aiImageApi';
 
 import { logger } from "@/lib/logger";
+import { API_BASE_URL } from "@/lib/config";
 // Types
 interface TopicCategory {
   id: string;
@@ -90,7 +91,6 @@ const getOrCreateDraftId = (): string => {
 type ContentMode = 'ai' | 'prompted' | 'scheduled';
 
 // API Base URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
 // LinkedIn access token used directly for posting. No popup/prompt flow —
 // this is the single source of truth for the token used when publishing.
@@ -232,11 +232,10 @@ const StatusDot: React.FC<{ active: boolean; label: string }> = ({ active, label
 );
 
 const SocialHub: React.FC = () => {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   const [generatedContent, setGeneratedContent] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
   const [postHistory, setPostHistory] = useState<PostHistory[]>([]);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isPosting, setIsPosting] = useState<boolean>(false);
@@ -333,10 +332,6 @@ const SocialHub: React.FC = () => {
   // (Scheduled mode doesn't generate content here, so it has no topic.)
   const activeTopic = contentMode === 'ai' ? selectedTopic : contentMode === 'prompted' ? customPrompt.trim() : '';
 
-  // Whether the LinkedIn connection is considered "live" — i.e. an access
-  // token is configured, so posting can proceed without any extra auth step.
-  const linkedInConnected = Boolean(LINKEDIN_ACCESS_TOKEN);
-
   const generatePost = async () => {
     if (!activeTopic) {
       toast.error(contentMode === 'ai' ? 'Please select a topic first' : 'Please enter a prompt first');
@@ -349,7 +344,6 @@ const SocialHub: React.FC = () => {
     }
 
     setIsGenerating(true);
-    setLoading(true);
     setGeneratedContent('');
 
     try {
@@ -365,7 +359,6 @@ const SocialHub: React.FC = () => {
       if (response.status === 401) {
         toast.error('Session expired. Please login again.');
         setIsGenerating(false);
-        setLoading(false);
         return;
       }
 
@@ -396,7 +389,6 @@ const SocialHub: React.FC = () => {
       toast.error('❌ Failed to generate post. ' + error.message);
     } finally {
       setIsGenerating(false);
-      setLoading(false);
     }
   };
 
@@ -665,8 +657,6 @@ const SocialHub: React.FC = () => {
         >
           <Linkedin size={16} className="sh-tab-icon" aria-hidden="true" />
           LinkedIn
-          {/* <StatusDot active={linkedInConnected} label="LinkedIn" />
-          <span className="sh-tab-pill sh-tab-pill--live">Live</span> */}
         </button>
         <button
           type="button"

@@ -1,8 +1,5 @@
 import { cn } from "@/lib/utils";
 
-type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED" | "REAPPROVAL_PENDING";
-type WorkStatus = "IN_PROGRESS" | "COMPLETED" | "BLOCKED";
-
 interface Props {
   status: string;
   className?: string;
@@ -67,5 +64,3 @@ export const StatusBadge = ({ status, className }: Props) => (
     {getStatusLabel(status)}
   </span>
 );
-
-export type { LeaveStatus, WorkStatus };

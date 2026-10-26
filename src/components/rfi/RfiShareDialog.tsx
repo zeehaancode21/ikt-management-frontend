@@ -369,5 +369,3 @@ function RfiShareDialogBody({ target }: { target: RfiShareTarget }) {
     </>
   );
 }
-
-export default RfiShareDialog;

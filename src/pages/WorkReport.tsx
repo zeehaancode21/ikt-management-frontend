@@ -3284,8 +3284,6 @@ const OwnerView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [missingDatesCount, setMissingDatesCount] = useState(0);
-  const [deletingId, setDeletingId] = useState<string | number | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<Report | null>(null);
 
   const [dateFilterMode, setDateFilterMode] = useState<"single" | "range">("single");
   const [filterDate, setFilterDate] = useState<string>("all");
@@ -3329,35 +3327,6 @@ const OwnerView = () => {
     })();
     return () => { cancelled = true; };
   }, []);
-
-  const handleDelete = (r: Report) => {
-    if (deletingId) return;
-    setPendingDelete(r);
-  };
-
-  const confirmDelete = async () => {
-    const r = pendingDelete;
-    if (!r) return;
-    setPendingDelete(null);
-
-    setDeletingId(r.id);
-    const previousReports = reports;
-    setReports((prev) => prev.filter((x) => x.id !== r.id));
-
-    try {
-      await api.delete(`/reports/${r.id}`);
-      toast({ title: "Record deleted", className: "bg-emerald-500 text-white border-none text-xs", duration: 1500 });
-    } catch (err) {
-      setReports(previousReports);
-      toast({
-        title: "Delete failed",
-        description: getErrorMessage(err) || "You can only delete records you created.",
-        variant: "destructive",
-      });
-    } finally {
-      setDeletingId(null);
-    }
-  };
 
   const handleClientFilterChange = (value: string) => {
     setFilterClient(value);
@@ -4301,19 +4270,6 @@ const OwnerView = () => {
           </div>
         )}
       </section>
-
-      <ConfirmDialog
-        open={pendingDelete !== null}
-        onClose={() => setPendingDelete(null)}
-        onConfirm={confirmDelete}
-        title="Delete this record?"
-        description={
-          pendingDelete
-            ? `This will permanently delete the ${WORK_TYPE_LABELS[pendingDelete.workType as WorkType] ?? pendingDelete.workType} record (${pendingDelete.time}h, ${fmt(pendingDelete.date)}). This action cannot be undone.`
-            : ""
-        }
-        loading={deletingId !== null && pendingDelete !== null && deletingId === pendingDelete.id}
-      />
     </div>
   );
 };

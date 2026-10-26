@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 import { logger } from "@/lib/logger";
+import { API_BASE_URL } from "@/lib/config";
 // Use the same env var as api.ts so it works in both dev and prod
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 export interface ProfileForm {
   fullName: string;
@@ -98,17 +98,8 @@ export const getOwnProfile = async (): Promise<ProfileResponse> => {
   return response.data;
 };
 
-export const getProfile = async (username: string): Promise<ProfileResponse> => {
-  const response = await axios.get(`${API_BASE_URL}/profile/${username}`, getAuthHeaders());
-  return response.data;
-};
-
 export const updateOwnProfile = async (profile: ProfileForm): Promise<void> => {
   await axios.put(`${API_BASE_URL}/profile/me`, profile, getAuthHeaders());
-};
-
-export const updateProfile = async (username: string, profile: ProfileForm): Promise<void> => {
-  await axios.put(`${API_BASE_URL}/profile/${username}`, profile, getAuthHeaders());
 };
 
 export const uploadOwnPicture = async (file: File): Promise<void> => {
@@ -117,19 +108,6 @@ export const uploadOwnPicture = async (file: File): Promise<void> => {
 
   const token = localStorage.getItem('token');
   await axios.post(`${API_BASE_URL}/profile/me/picture`, formData, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'multipart/form-data',
-    }
-  });
-};
-
-export const uploadPicture = async (username: string, file: File): Promise<void> => {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const token = localStorage.getItem('token');
-  await axios.post(`${API_BASE_URL}/profile/${username}/picture`, formData, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'multipart/form-data',

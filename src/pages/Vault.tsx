@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { PageHeader } from "@/components/PageHeader";
 import { useToast } from "@/hooks/use-toast";
 import {
   vaultTwoFaStatus, vaultSetup, vaultConfirm, vaultUnlock,
@@ -10,8 +9,8 @@ import {
 } from "@/lib/vaultApi";
 import {
   ShieldCheck, Lock, Unlock, Download, Loader2,
-  KeyRound, ArrowLeft, History, FileText, CreditCard,
-  ChevronRight, File, Award, IdCard, Sparkles,
+  KeyRound, ArrowLeft, History, FileText,
+  ChevronRight, Sparkles,
   CheckCircle2, LockKeyhole, CloudDownload, Eye,
   X, Maximize2, Minimize2,
 } from "lucide-react";

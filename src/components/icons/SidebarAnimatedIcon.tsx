@@ -65,5 +65,3 @@ export const SidebarAnimatedIcon = ({
     </span>
   );
 };
-
-export default SidebarAnimatedIcon;

@@ -444,7 +444,6 @@ export function FloatingNotepad() {
   );
 }
 
-export default FloatingNotepad;
 
 /* ═════════════════════════ Styles ═════════════════════════ */
 const STYLES = `

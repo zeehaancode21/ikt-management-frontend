@@ -714,7 +714,6 @@ export function TaskList({ active }: { active: boolean }) {
   );
 }
 
-export default TaskList;
 
 /* ═════════════════════════ Styles (np-* classes come from FloatingNotepad) ═════════════════════════ */
 const STYLES = `

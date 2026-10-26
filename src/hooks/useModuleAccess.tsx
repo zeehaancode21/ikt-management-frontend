@@ -111,5 +111,3 @@ export function useProjectsAccess(): { allowed: boolean; loading: boolean; refre
   const { projects, loading, refresh } = useModuleAccess();
   return { allowed: projects, loading, refresh };
 }
-
-export default useModuleAccess;

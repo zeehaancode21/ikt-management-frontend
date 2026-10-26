@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -415,7 +415,6 @@ export const RfiStatusActions = ({ projectName, rfi, onChanged, lastActor }: Pro
         rfi.status !== "RESPONSE_RECEIVED" && !(alreadyResubmitted && iActedLast)
       : (replyReceived && !alreadyResubmitted) || resubmittedByOther);
   const showResubmit = !isClosed && (receivedByMe ? rfi.status === "RESPONSE_RECEIVED" : !replyReceived && !alreadyResubmitted);
-  const activeAction = STATUS_ACTIONS.find((a) => a.status === activePanel);
 
   // A cancelled RFI is final: no status actions at all.
   if (rfi.status === "CANCELLED") return null;

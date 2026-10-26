@@ -12,7 +12,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Spinner } from "@/components/Spinner";
 import { toast } from "@/hooks/use-toast";
 import { Mail, User, Users, Copy, Check, CalendarPlus, CalendarCheck, Clock, Share2 } from "lucide-react";
 import { RfiShareDialog } from "@/components/rfi/RfiShareDialog";
@@ -330,14 +329,13 @@ export const RfiDetailDialog = ({
                     <RfiPriorityCircles
                       value={toRfiPriority(rfi.priority)}
                       onChange={handlePriorityChange}
-                      // View-only participants and cancelled RFIs can see the priority but not change it.
-                      disabled={savingPriority || rfi.status === "CANCELLED" || !canModifyRfi(rfi, authName)}
+                      // View-only participants can see the priority but not change it.
+                      // (This block only renders for non-cancelled RFIs — see the guard above.)
+                      disabled={savingPriority || !canModifyRfi(rfi, authName)}
                       disabledReason={
                         !canModifyRfi(rfi, authName)
                           ? "You don't have access to change priority"
-                          : rfi.status === "CANCELLED"
-                            ? "Priority can't be changed on a cancelled RFI"
-                            : undefined
+                          : undefined
                       }
                     />
                   </StripCell>

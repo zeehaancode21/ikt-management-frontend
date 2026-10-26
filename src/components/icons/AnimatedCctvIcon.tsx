@@ -81,5 +81,3 @@ export const AnimatedCctvIcon = ({
     </span>
   );
 };
-
-export default AnimatedCctvIcon;

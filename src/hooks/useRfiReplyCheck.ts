@@ -76,5 +76,3 @@ export function useRfiReplyCheck(enabled: boolean) {
     };
   }, [enabled]);
 }
-
-export default useRfiReplyCheck;

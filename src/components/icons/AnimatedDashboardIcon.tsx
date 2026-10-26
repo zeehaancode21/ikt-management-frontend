@@ -8,5 +8,3 @@ import { SidebarAnimatedIcon, type SidebarAnimatedIconProps } from "./SidebarAni
 export const AnimatedDashboardIcon = ({ ariaLabel = "Dashboard", ...props }: SidebarAnimatedIconProps) => (
   <SidebarAnimatedIcon {...props} ariaLabel={ariaLabel} pngSrc="/icons/dashboard1.png" animatedSrc="/icons/dashboard1.gif" />
 );
-
-export default AnimatedDashboardIcon;

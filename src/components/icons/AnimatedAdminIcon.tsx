@@ -8,5 +8,3 @@ import { SidebarAnimatedIcon, type SidebarAnimatedIconProps } from "./SidebarAni
 export const AnimatedAdminIcon = ({ ariaLabel = "Admin Console", ...props }: SidebarAnimatedIconProps) => (
   <SidebarAnimatedIcon {...props} ariaLabel={ariaLabel} pngSrc="/icons/admin1.png" animatedSrc="/icons/admin1.gif" />
 );
-
-export default AnimatedAdminIcon;

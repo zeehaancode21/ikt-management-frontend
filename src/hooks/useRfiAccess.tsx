@@ -17,5 +17,3 @@ export function useRfiAccess(): { allowed: boolean; loading: boolean; refresh: (
   const { rfi, loading, refresh } = useModuleAccess();
   return { allowed: rfi, loading, refresh };
 }
-
-export default useRfiAccess;

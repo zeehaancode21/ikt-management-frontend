@@ -17,5 +17,3 @@ export const AnimatedLogoutIcon = ({
     animatedSrc="/icons/logout.gif"
   />
 );
-
-export default AnimatedLogoutIcon;

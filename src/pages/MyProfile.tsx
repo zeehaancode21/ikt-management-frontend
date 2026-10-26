@@ -7,13 +7,11 @@ import {
   Mail,
   AlertCircle,
   FileText,
-  CreditCard,
   Upload,
   CheckCircle2,
   Clock,
   Building2,
   Landmark,
-  ShieldCheck,
   ShieldAlert,
   PartyPopper,
   Eye,
@@ -57,14 +55,12 @@ import {
   getOwnBankDetails,
   saveOwnBankDetails,
   uploadOwnDocument,
-  viewVaultDocument,
-  downloadVaultDocument,
   DOC_TYPE_LABELS,
   DocType,
   BankDetailsForm,
   ChecklistItem,
-  VaultDocument,
 } from "@/lib/vaultApi";
+import { API_BASE_URL } from "@/lib/config";
 import { lookupIfsc, isPlausibleAccountNumber, IfscDetails } from "@/lib/ifscLookup";
 
 // ============================================================================
@@ -120,10 +116,6 @@ export default function MyProfile() {
   const [ifscDetails, setIfscDetails] = useState<IfscDetails | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-
-  // ── State: Vault Token ────────────────────────────────────────────────
-  const [vaultToken, setVaultToken] = useState<string | null>(null);
-  const [isVaultUnlocking, setIsVaultUnlocking] = useState(false);
 
   // ============================================================================
   // DATA LOADING FUNCTIONS
@@ -314,22 +306,6 @@ export default function MyProfile() {
     }
   };
 
-  // Get vault token for document operations
-  const getVaultToken = async (): Promise<string> => {
-    if (vaultToken) return vaultToken;
-    
-    // If no token, we need to unlock the vault
-    // For employees, they can view their own documents without vault token
-    // But since we're using the same API, we'll need to handle this
-    // For now, we'll use a dummy token or prompt for TOTP
-    toast({
-      title: "Vault access required",
-      description: "Please unlock the vault to view/download documents.",
-      variant: "default",
-    });
-    throw new Error("Vault token required");
-  };
-
   const handleDownload = async (docId: number, fileName: string) => {
     setDownloadingId(docId);
     try {
@@ -337,7 +313,7 @@ export default function MyProfile() {
       // The backend allows employees to view their own documents directly
       // We'll use a direct download approach
       const token = localStorage.getItem("token");
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/kyc/documents/${docId}/download`, {
+      const response = await fetch(`${API_BASE_URL}/kyc/documents/${docId}/download`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -381,7 +357,7 @@ export default function MyProfile() {
     
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/kyc/documents/${docId}/view`, {
+      const response = await fetch(`${API_BASE_URL}/kyc/documents/${docId}/view`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

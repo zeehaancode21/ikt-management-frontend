@@ -32,7 +32,7 @@ export function usePushNotifications() {
       }
 
       logger.log('✅ FCM token obtained');
-      const response = await api.post("/api/notifications/fcm-token", { token });
+      await api.post("/api/notifications/fcm-token", { token });
       logger.log("✅ FCM token registered with backend");
       
     } catch (err: any) {
@@ -416,7 +416,7 @@ export function usePushNotifications() {
     const initServiceWorker = async () => {
       try {
         if ('serviceWorker' in navigator) {
-          const registration = await navigator.serviceWorker.ready;
+          await navigator.serviceWorker.ready;
           setServiceWorkerReady(true);
           logger.log('✅ Service worker ready');
         }
@@ -437,7 +437,6 @@ export function usePushNotifications() {
       const title = payload.notification?.title ?? payload.data?.title ?? "New Message";
       const body = payload.notification?.body ?? payload.data?.body ?? "";
       const icon = payload.notification?.image ?? payload.data?.image ?? "/IKT.png";
-      const messageId = payload.data?.messageId || payload.messageId;
 
       logger.log('📨 Extracted notification data');
 

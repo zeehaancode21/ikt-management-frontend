@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   Lock,
 } from 'lucide-react';
+import { API_BASE_URL as API } from "@/lib/config";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -214,7 +215,6 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 
-const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 const getAuthToken = () => localStorage.getItem('token');
 
 const getCurrentUser = () => {

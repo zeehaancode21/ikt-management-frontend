@@ -8,5 +8,3 @@ import { SidebarAnimatedIcon, type SidebarAnimatedIconProps } from "./SidebarAni
 export const AnimatedWorkAttendanceIcon = ({ ariaLabel = "Work & Attendance", ...props }: SidebarAnimatedIconProps) => (
   <SidebarAnimatedIcon {...props} ariaLabel={ariaLabel} pngSrc="/icons/workattendance.png" animatedSrc="/icons/workattendance.gif" />
 );
-
-export default AnimatedWorkAttendanceIcon;

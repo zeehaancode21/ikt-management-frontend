@@ -395,5 +395,3 @@ export function GlassSelect<T extends string>({
     </Popover>
   );
 }
-
-export default GlassSelect;

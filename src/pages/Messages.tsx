@@ -6,7 +6,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { useNotifications } from "@/context/NotificationsContext";
 import {
   Send, Search, Users, Megaphone, Hash, ArrowLeft,
-  Plus, Settings, Trash2, UserPlus, BarChart2, X, Check,
+  Plus, Settings, Trash2, BarChart2, X, Check,
   Paperclip, Image, File, Video, FileArchive, XCircle, Smile, Reply
 } from "lucide-react";
 
@@ -182,25 +182,6 @@ function longDateLabel(raw: string) {
   const d = parseUTC(raw);
   if (isNaN(d.getTime())) return "";
   return d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
-}
-
-// ─── Avatar helper ────────────────────────────────────────────────────────────
-const AVATAR_COLORS = [
-  "#6366f1", "#8b5cf6", "#ec4899", "#f59e0b",
-  "#10b981", "#3b82f6", "#06b6d4", "#ef4444",
-];
-function getAvatar(username: string) {
-  return {
-    bg: AVATAR_COLORS[username.charCodeAt(0) % AVATAR_COLORS.length],
-    initials: username[0].toUpperCase(),
-  };
-}
-function getRoleColor(r: string) {
-  if (r === "OWNER") return "#8b5cf6";
-  if (r === "LEAD") return "#3b82f6";
-  if (r === "ADMIN") return "#06b6d4";
-  if (r === "MANAGER") return "#10b981";
-  return "#64748b";
 }
 
 // ─── File Attachment Component ────────────────────────────────────────────────
@@ -694,14 +675,12 @@ export default function Messages() {
 
   // Pagination states - Inbox
   const [inboxPage, setInboxPage] = useState(0);
-  const [inboxTotalPages, setInboxTotalPages] = useState(0);
   const [inboxTotalElements, setInboxTotalElements] = useState(0);
   const [inboxLoading, setInboxLoading] = useState(false);
   const [hasMoreInbox, setHasMoreInbox] = useState(true);
 
   // Pagination states - Conversation
   const [convPage, setConvPage] = useState(0);
-  const [convTotalPages, setConvTotalPages] = useState(0);
   const [convLoading, setConvLoading] = useState(false);
   const [hasMoreConv, setHasMoreConv] = useState(true);
   const [convTotalElements, setConvTotalElements] = useState(0);
@@ -810,7 +789,6 @@ export default function Messages() {
       });
 
       setInboxPage(page);
-      setInboxTotalPages(r.data.totalPages);
       setInboxTotalElements(r.data.totalElements);
       setHasMoreInbox(!r.data.last);
 
@@ -961,7 +939,6 @@ export default function Messages() {
 
       setConversation(prev => reset ? newMessages : [...prev, ...newMessages]);
       setConvPage(page);
-      setConvTotalPages(r.data.totalPages);
       setHasMoreConv(!r.data.last);
       setConvTotalElements(r.data.totalElements);
 
@@ -2135,7 +2112,6 @@ export default function Messages() {
               const lastMsg = inboxMap[u.username];
               const isSelected = chatTarget?.type === "user" && chatTarget.username === u.username;
               const isUnread = lastMsg && lastMsg.receiverUsername === name && !lastMsg.readByReceiver;
-              const rc = getRoleColor(u.role);
               return (
                 <div
                   key={u.id}

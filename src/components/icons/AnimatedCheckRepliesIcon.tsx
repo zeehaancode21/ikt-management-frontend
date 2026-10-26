@@ -189,5 +189,3 @@ export const AnimatedCheckRepliesIcon = ({
     </span>
   );
 };
-
-export default AnimatedCheckRepliesIcon;

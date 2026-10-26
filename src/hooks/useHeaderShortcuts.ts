@@ -39,5 +39,3 @@ export function useHeaderShortcuts() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [navigate]);
 }
-
-export default useHeaderShortcuts;

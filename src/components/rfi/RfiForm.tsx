@@ -104,8 +104,6 @@ const FX_TRAIL = [0, 1, 2, 3, 4, 5];
 const LABEL_CLASS = "text-[11px] font-semibold tracking-wide text-muted-foreground";
 const FIELD_CLASS =
   "h-10 rounded-xl rfi-bd bg-background/60 text-[13px] transition-colors focus-visible:bg-background";
-const BARE_INPUT_CLASS =
-  "h-9 flex-1 border-0 bg-transparent px-0 text-[13px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0";
 const GHOST_BTN_CLASS =
   "flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-semibold text-muted-foreground [&>svg]:shrink-0 transition-colors hover:bg-accent/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-50";
 const OUTLINE_BTN_CLASS =
@@ -337,6 +335,33 @@ const RFI_STYLES = `
   }
   .rfi-classify-item { display: contents; }
   .rfi-classify-label { display: none; }
+
+  .rfi-start-num {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 10px;
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background));
+    font-size: 11.5px;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.7), 0 4px 10px -6px hsl(var(--foreground) / 0.3);
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .rfi-start-num:focus-within { border-color: hsl(var(--primary) / 0.6); }
+  .rfi-start-num-label { color: hsl(var(--muted-foreground)); font-weight: 500; white-space: nowrap; }
+  .rfi-start-num-input {
+    width: 3.2rem;
+    background: transparent;
+    border: 0;
+    outline: 0;
+    font-weight: 600;
+    font-size: 11.5px;
+    color: inherit;
+  }
+  .rfi-start-num-input::placeholder { color: hsl(var(--muted-foreground) / 0.6); font-weight: 500; }
+  .rfi-start-num-input:disabled { opacity: 0.6; cursor: not-allowed; }
 
   .gs-trigger.rfi-disc {
     height: 30px;
@@ -1344,6 +1369,14 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   const [teamType, setTeamType] = useState<RfiTeamType>("EXTERNAL");
   const [priority, setPriority] = useState<RfiPriority>(DEFAULT_RFI_PRIORITY);
   const [subject, setSubject] = useState("");
+  // Optional: only offered while the project has no RFIs yet. Blank = automatic (RFI#001).
+  const [startingNumber, setStartingNumber] = useState("");
+  const [projectHasRfis, setProjectHasRfis] = useState(true); // assume true until the preview says otherwise
+  const [nextRfiNumberLabel, setNextRfiNumberLabel] = useState("");
+  const parsedStartingNumber = (() => {
+    const n = parseInt(startingNumber, 10);
+    return Number.isFinite(n) && n >= 1 && n <= 99999 ? n : undefined;
+  })();
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   // The To field has two independent values — one per scope — so flipping the
@@ -1599,7 +1632,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     bodyPreviewTimerRef.current = setTimeout(() => {
       const requestId = ++previewRequestRef.current;
       setIsBodyPreviewLoading(true);
-      previewRfiEmail(projectName, subject)
+      previewRfiEmail(projectName, subject, parsedStartingNumber)
         .then((preview) => {
           if (requestId !== previewRequestRef.current) return;
           bodyLoadedRef.current = true;
@@ -1616,8 +1649,30 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     return () => {
       if (bodyPreviewTimerRef.current) clearTimeout(bodyPreviewTimerRef.current);
     };
-  }, [projectName, subject, isBodyCustomized, isEditingBody]);
+  }, [projectName, subject, parsedStartingNumber, isBodyCustomized, isEditingBody]);
 
+  // Tracks whether this project already has RFIs (decides if the "starting number"
+  // field is shown) and which number the next RFI will get. Runs even when the
+  // email body has been hand-edited, which the effect above skips.
+  useEffect(() => {
+    if (!projectName) return;
+    let cancelled = false;
+    previewRfiEmail(projectName, "", parsedStartingNumber)
+      .then((preview) => {
+        if (cancelled) return;
+        setProjectHasRfis(preview.hasExistingRfis);
+        setNextRfiNumberLabel(preview.rfiNumber);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [projectName, parsedStartingNumber]);
+
+  // A different project means a different numbering situation — drop any typed value.
+  useEffect(() => {
+    setStartingNumber("");
+  }, [projectName]);
   useEffect(() => {
     setIsUploadHovered(false);
   }, [file]);
@@ -1658,7 +1713,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     if (!projectName) return;
     const requestId = ++previewRequestRef.current;
     setIsBodyPreviewLoading(true);
-    previewRfiEmail(projectName, subject)
+    previewRfiEmail(projectName, subject, parsedStartingNumber)
       .then((preview) => {
         if (requestId === previewRequestRef.current) setEmailBody(preview.emailBody);
       })
@@ -1796,6 +1851,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     setTeamType("EXTERNAL");
     setPriority(DEFAULT_RFI_PRIORITY);
     setSubject("");
+    setStartingNumber("");
     setFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setEmailBody("");
@@ -1848,6 +1904,9 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     if (!projectName) return failValidation("Select a project first");
     if (!discipline) return failValidation("Discipline is required");
     if (!subject.trim()) return failValidation("Subject is required");
+    if (!projectHasRfis && startingNumber.trim() && parsedStartingNumber === undefined) {
+      return failValidation("Starting RFI number must be a whole number between 1 and 99999");
+    }
     if (!file) return failValidation("A PDF attachment is required");
     if (!recipientEmail.trim()) return failValidation("Recipient email is required");
     if (isInternal && !officeContacts.some((c) => c.email.toLowerCase() === recipientEmail.trim().toLowerCase())) {
@@ -1885,6 +1944,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
         senderName: senderName ? formatDisplayName(senderName) : undefined,
         recipientEmail: recipientEmail.trim(),
         ccEmails: ccEmailsToSend,
+        startingNumber: !projectHasRfis ? parsedStartingNumber : undefined,
       });
       toast({
         title: `${created.rfiNumber} sent successfully!`,
@@ -1892,6 +1952,9 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
         className: "bg-emerald-600 text-white border-none shadow-xl",
       });
       setSendState("success");
+      // The first RFI now exists, so the "Start RFI #" option no longer applies to this project.
+      setProjectHasRfis(true);
+      setStartingNumber("");
       loadAllContacts(); // the backend just recorded these addresses — keep the typeahead current
       if (successTimerRef.current) clearTimeout(successTimerRef.current);
       successTimerRef.current = setTimeout(() => {
@@ -2473,6 +2536,30 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                 onChange={setPriority}
                 disabled={isBusy}
               />
+              {!projectHasRfis && (
+                <label
+                  className="rfi-start-num"
+                  title={
+                    nextRfiNumberLabel
+                      ? `First RFI for this project will be ${nextRfiNumberLabel}. Leave blank to start at 1.`
+                      : "Optional: number to start this project's RFIs from. Leave blank to start at 1."
+                  }
+                >
+                  <span className="rfi-start-num-label">Start RFI #</span>
+                  <input
+                    id="rfi-starting-number"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={5}
+                    value={startingNumber}
+                    onChange={(e) => setStartingNumber(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                    placeholder="1"
+                    aria-label="Starting RFI number (optional)"
+                    disabled={isBusy}
+                    className="rfi-start-num-input"
+                  />
+                </label>
+              )}
             </section>
 
             {/* Subject */}

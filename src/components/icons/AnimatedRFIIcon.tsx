@@ -8,5 +8,3 @@ import { SidebarAnimatedIcon, type SidebarAnimatedIconProps } from "./SidebarAni
 export const AnimatedRFIIcon = ({ ariaLabel = "RFI", ...props }: SidebarAnimatedIconProps) => (
   <SidebarAnimatedIcon {...props} ariaLabel={ariaLabel} pngSrc="/icons/rfi.png" animatedSrc="/icons/rfi.gif" />
 );
-
-export default AnimatedRFIIcon;

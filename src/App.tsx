@@ -1,4 +1,3 @@
-// src/App.tsx  — REPLACE YOUR EXISTING App.tsx WITH THIS
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";  

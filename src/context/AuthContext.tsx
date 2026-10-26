@@ -1,10 +1,9 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import axios from "axios";
+import api from "@/lib/api";
 
 // ✅ Role must match exactly what the backend sends in the login response
 export type Role = "OWNER" | "USER" | "ADMIN" | "MANAGER" | "LEAD";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
 interface AuthState {
   token: string | null;
@@ -70,12 +69,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const refreshRoleName = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!localStorage.getItem("token")) return;
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/profile/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const { data } = await api.get("/profile/me");
       const nextRoleName: string | null = data?.roleName || null;
       if (nextRoleName) {
         localStorage.setItem("roleName", nextRoleName);

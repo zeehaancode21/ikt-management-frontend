@@ -20,10 +20,10 @@
 import axios from "axios";
 import api from "./api";
 import { ShareApiError, copyToClipboard, formatDateTime, formatRelative } from "./shareApi";
+import { API_BASE_URL } from "@/lib/config";
 
 export { ShareApiError, copyToClipboard, formatDateTime, formatRelative };
 
-const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
 const NETWORK_MESSAGE = "Couldn't reach the server. Please check your connection and try again.";
 

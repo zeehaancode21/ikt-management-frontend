@@ -66,6 +66,11 @@ export interface CreateRfiInput {
    * RfiServiceImpl#createAndSendRfi).
    */
   ccEmails?: string[];
+  /**
+   * Optional. Only used when the project has no RFIs yet: the first RFI gets
+   * this number instead of 1. Omit to keep the automatic numbering.
+   */
+  startingNumber?: number;
 }
 
 export const createRfi = (projectName: string, input: CreateRfiInput) => {
@@ -84,6 +89,9 @@ export const createRfi = (projectName: string, input: CreateRfiInput) => {
   const cleanedCc = (input.ccEmails ?? []).map((c) => c.trim()).filter(Boolean);
   if (cleanedCc.length > 0) {
     form.append("ccEmails", cleanedCc.join(","));
+  }
+  if (input.startingNumber && input.startingNumber > 0) {
+    form.append("startingNumber", String(input.startingNumber));
   }
 
   return api
@@ -104,15 +112,23 @@ export const createRfi = (projectName: string, input: CreateRfiInput) => {
 export interface RfiEmailPreview {
   generatedEmailSubject: string;
   emailBody: string;
+  /** Number that would be assigned right now, e.g. "RFI#001". */
+  rfiNumber: string;
+  /** True when the project already has RFIs (starting number option doesn't apply). */
+  hasExistingRfis: boolean;
 }
 
-export const previewRfiEmail = (projectName: string, subject: string) =>
-  api
+export const previewRfiEmail = (projectName: string, subject: string, startingNumber?: number) => {
+  const params: Record<string, string | number> = {};
+  if (subject.trim()) params.subject = subject.trim();
+  if (startingNumber && startingNumber > 0) params.startingNumber = startingNumber;
+  return api
     .get<{ success: boolean; data: RfiEmailPreview }>(
       `/api/project-status/${encodeURIComponent(projectName)}/rfis/email-preview`,
-      { params: subject.trim() ? { subject: subject.trim() } : {} }
+      { params }
     )
     .then((r) => r.data.data);
+};
 
 export interface ProjectOption {
   id: number;

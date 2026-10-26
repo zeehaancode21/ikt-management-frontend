@@ -5,9 +5,8 @@ import {
   useCallback,
   Component,
   type ReactNode,
-  type ErrorInfo,
 } from 'react';
-import { Calculator, X, GripHorizontal, Delete, Download, Laptop } from 'lucide-react';
+import { X, GripHorizontal, Delete, Download, Laptop } from 'lucide-react';
 import { AnimatedIconBase } from '@/components/icons/AnimatedIconbase';
 
 import { logger } from "@/lib/logger";
@@ -19,7 +18,7 @@ class CalculatorErrorBoundary extends Component<{ children: ReactNode }, { hasEr
     this.state = { hasError: false };
   }
   static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  componentDidCatch(error: Error) {
     logger.error('FloatingCalculator error:', error.message);
   }
   render() {

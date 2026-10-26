@@ -13,7 +13,6 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useRfiReplyCheck } from "@/hooks/useRfiReplyCheck";
 import { hardReload } from "./HardReloadButton";
 import { useHeaderShortcuts } from "@/hooks/useHeaderShortcuts";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // ─── Display name formatter ────────────────────────────────────────────────
 const displayNameCache = new Map<string, string>();

@@ -69,20 +69,6 @@ const createAnimatedEmployeeHubIcon = (
 // Create Employee Hub Animated Icons
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const AnimatedEmployeeHubIcon = createAnimatedEmployeeHubIcon(
-  "/icons/employeehub.png",
-  "/icons/employeehub.gif",
-  "AnimatedEmployeeHubIcon",
-  "Employee Hub"
-);
-
-export const AnimatedDashboard1Icon = createAnimatedEmployeeHubIcon(
-  "/icons/dashboard1.png",
-  "/icons/dashboard1.gif",
-  "AnimatedDashboard1Icon",
-  "Dashboard"
-);
-
 export const AnimatedReportIcon = createAnimatedEmployeeHubIcon(
   "/icons/report.png",
   "/icons/report.gif",
@@ -110,12 +96,3 @@ export const AnimatedWeekendIcon = createAnimatedEmployeeHubIcon(
   "AnimatedWeekendIcon",
   "Weekend Entries"
 );
-
-export default {
-  AnimatedEmployeeHubIcon,
-  AnimatedDashboard1Icon,
-  AnimatedReportIcon,
-  AnimatedLeavePortalIcon,
-  AnimatedLeaveIcon,
-  AnimatedWeekendIcon,
-};

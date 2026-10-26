@@ -37,9 +37,6 @@ export interface BankDetailsForm {
 
 export const getOwnKycStatus = () => api.get<KycStatus>("/kyc/status/me").then((r) => r.data);
 
-export const getKycStatusFor = (username: string) =>
-  api.get<KycStatus>(`/kyc/status/${username}`).then((r) => r.data);
-
 export const getOverview = () => api.get<KycStatus[]>("/kyc/overview").then((r) => r.data);
 
 export const uploadOwnDocument = (docType: DocType, file: File) => {
@@ -50,49 +47,10 @@ export const uploadOwnDocument = (docType: DocType, file: File) => {
   });
 };
 
-export const uploadDocumentFor = (username: string, docType: DocType, file: File) => {
-  const form = new FormData();
-  form.append("file", file);
-  return api.post(`/kyc/documents/${username}/${docType}`, form, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
-};
-
 export const saveOwnBankDetails = (data: BankDetailsForm) => api.post("/kyc/bank-details", data);
-
-export const saveBankDetailsFor = (username: string, data: BankDetailsForm) =>
-  api.post(`/kyc/bank-details/${username}`, data);
 
 export const getOwnBankDetails = () =>
   api.get<BankDetailsForm>("/kyc/bank-details/me").then((r) => r.data);
-
-// ---------- Employee Document View/Download (their OWN documents) ----------
-
-export const viewOwnDocument = (docId: number) =>
-  api
-    .get(`/kyc/documents/${docId}/view`, {
-      responseType: "blob",
-    })
-    .then((r) => ({
-      blob: r.data as Blob,
-      contentType: r.headers["content-type"] as string | undefined,
-    }));
-
-export const downloadOwnDocument = (docId: number, fileName: string) =>
-  api
-    .get(`/kyc/documents/${docId}/download`, {
-      responseType: "blob",
-    })
-    .then((r) => {
-      const url = window.URL.createObjectURL(new Blob([r.data]));
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    });
 
 // ---------- Owner vault (TOTP-gated) ----------
 

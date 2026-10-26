@@ -172,9 +172,3 @@ export const AnimatedRFISettingIcon = createAnimatedRFIIcon(
   "AnimatedRFISettingIcon",
   "RFI Settings"
 );
-
-export default {
-  AnimatedCreateRFIIcon,
-  AnimatedRFIsIcon,
-  AnimatedRFISettingIcon,
-};

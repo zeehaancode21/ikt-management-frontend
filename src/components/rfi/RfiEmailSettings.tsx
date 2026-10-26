@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/Spinner";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -14,7 +13,7 @@ import {
   type EmployeeOption,
 } from "@/lib/rfiApi";
 import type { RfiEmailAddressType, RfiEmailContact } from "@/types/rfi";
-import { Mail, Send, Plus, Star, Trash2, Settings as SettingsIcon, Users } from "lucide-react";
+import { Send, Plus, Star, Trash2, Settings as SettingsIcon, Users } from "lucide-react";
 
 // ── RFI Settings ────────────────────────────────────────────────────────
 // Sits before the "Create RFI" / "RFI's" toggle on the RFI page.
@@ -415,5 +414,3 @@ export const RfiEmailSettings = () => {
     </div>
   );
 };
-
-export default RfiEmailSettings;

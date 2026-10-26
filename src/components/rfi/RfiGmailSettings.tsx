@@ -21,7 +21,7 @@ import {
   saveRfiGmailSettings,
   validateRfiGmailToken,
 } from "@/lib/rfiApi";
-import { type RfiGmailSettings } from "@/types/rfi";
+import { type RfiGmailSettings as RfiGmailSettingsData } from "@/types/rfi";
 import { CheckCircle2, KeyRound, Loader2, Mail, ShieldAlert, Trash2, Lock, Hash } from "lucide-react";
 
 // ── RFI Gmail Settings ─────────────────────────────────────────────────
@@ -46,7 +46,7 @@ export const RfiGmailSettings = () => {
   const [validating, setValidating] = useState(false);
   const [clearing, setClearing] = useState(false);
 
-  const [settings, setSettings] = useState<RfiGmailSettings | null>(null);
+  const [settings, setSettings] = useState<RfiGmailSettingsData | null>(null);
   const [gmailEmail, setGmailEmail] = useState("");
   const [gmailClientId, setGmailClientId] = useState("");
   const [gmailClientSecret, setGmailClientSecret] = useState("");
@@ -428,5 +428,3 @@ export const RfiGmailSettings = () => {
     </section>
   );
 };
-
-export default RfiGmailSettings;

@@ -19,6 +19,7 @@ import {
 import './ScheduledPostsPanel.css';
 
 import { logger } from "@/lib/logger";
+import { API_BASE_URL } from "@/lib/config";
 // Lightweight mirror of SocialHub's category list (id + label only) — just
 // used to populate the "Category" dropdown here. The actual generation
 // still goes through the existing backend category contexts; this file
@@ -72,7 +73,6 @@ interface ApiEnvelope<T> {
   data?: T;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 const STATUS_META: Record<ScheduledStatus, { label: string; icon: React.ReactNode; className: string }> = {
   PENDING: { label: 'Pending', icon: <Clock size={14} aria-hidden="true" />, className: 'sp-status-pending' },
