@@ -219,6 +219,19 @@ export const syncRfiGmail = (projectName: string, id: number) =>
     )
     .then((r) => r.data.data);
 
+// "Look for new replies right now" for the logged-in user's own sent RFIs. Same endpoint the
+// background hook polls, but force=true skips the server's 30-second throttle so the Refresh
+// button really checks. Never throws: a failed check must not stop the list from reloading.
+export const checkRepliesNow = () =>
+  api
+    .post<{ success: boolean; data: { waiting: number; imported: number } }>(
+      "/api/rfi-replies/check",
+      null,
+      { params: { force: true } }
+    )
+    .then((r) => r.data?.data ?? { waiting: 0, imported: 0 })
+    .catch(() => ({ waiting: 0, imported: 0 }));
+
 // Syncs every RFI for the project in one call — used by the "Sync Gmail"
 // action on the RFI History view.
 export const syncAllRfisForProject = (projectName: string) =>

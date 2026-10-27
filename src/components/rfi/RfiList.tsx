@@ -38,6 +38,9 @@ interface Props {
   // Called after a status change or Gmail sync inside the detail dialog so
   // the parent can reload the list from the server.
   onRefresh: () => void;
+  // Called with the fresh RFI after the row-level sync button, so the parent's shared list
+  // (and the Dashboard) is updated too — not only this table's local copy.
+  onRfiSynced?: (rfi: Rfi) => void;
 }
 
 // Shared header-cell styling: small, bold, uppercase, and — critically —
@@ -150,7 +153,7 @@ const handleRowPointerMove = (e: ReactPointerEvent<HTMLTableSectionElement>) => 
   row.style.setProperty("--mx", `${e.clientX - r.left}px`);
 };
 
-export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh }: Props) => {
+export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh, onRfiSynced }: Props) => {
   const { name: authName } = useAuth();
   const [selectedRfiId, setSelectedRfiId] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -268,6 +271,7 @@ export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh 
         if (result.updatedRfi) {
           const updated = result.updatedRfi;
           setRowUpdates((prev) => ({ ...prev, [rfiId]: updated }));
+          onRfiSynced?.(updated);
         }
       } else {
         // Real failures still tell the user, otherwise a broken sync looks like "no replies".

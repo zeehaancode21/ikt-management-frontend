@@ -149,6 +149,19 @@ export const RfiDetailDialog = ({
     }
   }, [open, loadAll]);
 
+  // A reply can be imported while this popup is open (the background check, or a websocket
+  // push). Reload quietly so the status and timeline update without closing/reopening it.
+  useEffect(() => {
+    if (!open) return;
+    const h = () => loadAll(true);
+    window.addEventListener("rfi-replies-imported", h);
+    window.addEventListener("rfi-ws-update", h);
+    return () => {
+      window.removeEventListener("rfi-replies-imported", h);
+      window.removeEventListener("rfi-ws-update", h);
+    };
+  }, [open, loadAll]);
+
   // Monitor dark mode changes
   useEffect(() => {
     setIsDarkMode(document.documentElement.classList.contains("dark"));
@@ -176,7 +189,9 @@ export const RfiDetailDialog = ({
           className: "bg-emerald-600 text-white border-none shadow-xl",
         });
         if (result.updatedRfi) setRfi(result.updatedRfi);
-        loadAll();
+        // Silent: a non-silent reload flips `loading` and blanks the whole popup to
+        // "Loading..." (losing scroll position) just to add a new message to the timeline.
+        loadAll(true);
         onRfiUpdated();
       } else {
         toast({

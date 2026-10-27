@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Select,
   SelectContent,
@@ -20,6 +20,7 @@ import {
   getRfis,
   getErrorMessage,
   syncAllRfisForProject,
+  checkRepliesNow,
   type ProjectOption,
 } from "@/lib/rfiApi";
 import type { Rfi, RfiDiscipline, RfiTeamType } from "@/types/rfi";
@@ -97,18 +98,58 @@ const RFI = () => {
   };
 
   // silent = refresh in the background (no loading skeleton), so an open RFI popup stays open.
-  const loadRfis = useCallback((silent: boolean = false) => {
-    if (!selectedProject) return;
-    if (!silent) setLoadingRfis(true);
-    getRfis(selectedProject, teamType, discipline)
-      .then(setRfis)
-      .catch((err) =>
-        toast({ title: "Failed to load RFIs", description: getErrorMessage(err), variant: "destructive" })
-      )
-      .finally(() => {
-        if (!silent) setLoadingRfis(false);
-      });
-  }, [selectedProject, teamType, discipline]);
+  // Every call gets a ticket number and only the NEWEST call may write its result. Without
+  // this, a slow request started earlier (e.g. the 1.5s-debounced websocket reload) could
+  // land AFTER a newer one and put the OLD status back on screen.
+  const loadSeq = useRef(0);
+  const loadRfis = useCallback(
+    (silent: boolean = false): Promise<void> => {
+      if (!selectedProject) return Promise.resolve();
+      const seq = ++loadSeq.current;
+      if (!silent) setLoadingRfis(true);
+      return getRfis(selectedProject, teamType, discipline)
+        .then((list) => {
+          if (seq === loadSeq.current) setRfis(list);
+        })
+        .catch((err) =>
+          toast({ title: "Failed to load RFIs", description: getErrorMessage(err), variant: "destructive" })
+        )
+        .finally(() => {
+          if (!silent && seq === loadSeq.current) setLoadingRfis(false);
+        });
+    },
+    [selectedProject, teamType, discipline]
+  );
+
+  // The Refresh button (dashboard). It used to call loadRfis(true) — a SILENT reload — and the
+  // button's spinner/disabled state follows `loading`, which a silent reload never sets, so it
+  // never rotated and gave no feedback. It also only re-read the database, so a reply that had
+  // not been imported yet never showed up. Now: ask the server to look for new replies right
+  // now (not throttled), then reload, with the spinner visible for the whole time.
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshingRef = useRef(false);
+  const handleRefresh = useCallback(async () => {
+    if (refreshingRef.current || !selectedProject) return;
+    refreshingRef.current = true;
+    setRefreshing(true);
+    const startedAt = Date.now();
+    try {
+      await checkRepliesNow(); // best effort — never blocks the reload
+      await loadRfis(true);
+    } finally {
+      // keep the spinner up long enough to be seen even when the server answers instantly
+      const left = 600 - (Date.now() - startedAt);
+      if (left > 0) await new Promise((r) => setTimeout(r, left));
+      refreshingRef.current = false;
+      setRefreshing(false);
+    }
+  }, [selectedProject, loadRfis]);
+
+  // One row was synced from the list's row button: swap just that RFI into the shared list,
+  // so the Dashboard, the filters and the next silent reload all agree with the row.
+  const handleRfiSynced = useCallback((updated: Rfi) => {
+    setRfis((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+  }, []);
 
   useEffect(() => {
     loadRfis();
@@ -124,7 +165,11 @@ const RFI = () => {
     const unsubscribe = subscribe("/user/queue/notifications", (n) => {
       if (n?.type !== "RFI_UPDATE") return;
       if (t) clearTimeout(t);
-      t = setTimeout(() => loadRfis(true), 1500);
+      t = setTimeout(() => {
+        void loadRfis(true);
+        // tell an open RFI popup too, so its status + timeline refresh in place
+        window.dispatchEvent(new Event("rfi-ws-update"));
+      }, 1500);
     });
     return () => {
       if (t) clearTimeout(t);
@@ -150,7 +195,7 @@ const RFI = () => {
         description: newMessages > 0 ? `${newMessages} new message(s) imported.` : "No new replies.",
         className: "bg-emerald-600 text-white border-none shadow-xl",
       });
-      loadRfis();
+      await loadRfis(true);
     } catch (err) {
       toast({ title: "Sync failed", description: getErrorMessage(err), variant: "destructive" });
     } finally {
@@ -487,15 +532,15 @@ const RFI = () => {
                 client={selectedClient}
                 projectName={selectedProject}
                 rfis={rfis}
-                loading={loadingRfis}
-                onRefresh={() => loadRfis(true)}
+                loading={loadingRfis || refreshing}
+                onRefresh={handleRefresh}
                 onViewAll={() => setView("history")}
               />
             </div>
           ) : (
             <div className="rfi-history-card">
               <div className="rfi-history-inner">
-              <RfiList projectName={selectedProject} rfis={rfis} loading={loadingRfis} onRefresh={() => loadRfis(true)} />
+              <RfiList projectName={selectedProject} rfis={rfis} loading={loadingRfis} onRefresh={() => loadRfis(true)} onRfiSynced={handleRfiSynced} />
               </div>
             </div>
           )}
