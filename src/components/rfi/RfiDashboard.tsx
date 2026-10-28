@@ -195,6 +195,16 @@ const CSS = `
   .rfd-row:hover .rfd-go { translate: 3px 0; }
   .rfd-bar { transition: width 700ms cubic-bezier(0.22, 1, 0.36, 1); }
   .rfd-col { transition: height 700ms cubic-bezier(0.22, 1, 0.36, 1); }
+  /* ---- fluid layout: adapts to the screen, numbers always sit in a row ---- */
+  .rfd-tiles { display: grid; gap: .75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (min-width: 640px) and (max-width: 1023px) { .rfd-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (min-width: 1024px) and (max-width: 1279px) { .rfd-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 1280px) { .rfd-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; } }
+  .rfd-cards { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 1280px) { .rfd-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .rfd-layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 1024px) { .rfd-layout { grid-template-columns: clamp(220px, 16vw, 300px) minmax(0, 1fr); align-items: start; } }
+  .rfd-num { font-size: clamp(1.75rem, 1.2rem + 0.9vw, 2.6rem); }
   .rfd-nav { scrollbar-width: none; }
   .rfd-nav::-webkit-scrollbar { display: none; }
   .rfd-root button:focus-visible, .rfd-root [role="button"]:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
@@ -437,12 +447,12 @@ export const RfiDashboard = ({ client, projectName, scope, onScopeChange, rfis, 
   }
   if (loading && rfis.length === 0) {
     return (
-      <div className="rfd-root mx-auto w-full max-w-7xl space-y-4 p-3" aria-busy="true">
+      <div className="rfd-root mx-auto w-full max-w-[1920px] space-y-4 p-3" aria-busy="true">
         <style>{CSS}</style>
         <span className="sr-only">Loading RFIs…</span>
         <div className="flex justify-end">{scopeSwitch}</div>
         <div className="rfd-skel h-20" />
-        <div className="grid gap-4 lg:grid-cols-[250px_minmax(0,1fr)]">
+        <div className="rfd-layout">
           <div className="rfd-skel h-72" />
           <div className="space-y-4"><div className="rfd-skel h-28" /><div className="rfd-skel h-64" /></div>
         </div>
@@ -498,14 +508,14 @@ export const RfiDashboard = ({ client, projectName, scope, onScopeChange, rfis, 
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="rfd-tiles">
         <Tile index={0} icon={FileText} label="All RFIs" hint={isAll ? "In all projects" : "In this project"} value={rfis.length} color="#6366f1" spark={d.monthList.map((m) => m.created)} onClick={() => go("all")} />
         <Tile index={1} icon={Hourglass} label="Waiting for reply" hint="No answer yet" value={d.waiting.length} color="#f59e0b" share={pct(d.waiting.length)} onClick={() => go("waiting")} />
         <Tile index={2} icon={Reply} label="Reply received" hint="Ready to review" value={d.replied.length} color="#14b8a6" share={pct(d.replied.length)} onClick={() => go("replies")} />
         <Tile index={3} icon={CheckCircle2} label="Closed" hint="Finished" value={d.closed.length} color="#10b981" share={pct(d.closed.length)} onClick={() => go("closed")} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="rfd-cards">
         <Card title="Needs attention" hint="Most urgent RFIs still waiting for a reply" action={d.needsAttention.length > 5 ? { label: "See all", onClick: () => go("waiting") } : undefined}>
           {d.attentionTop.length === 0 ? <Empty text="Nothing needs attention 🎉" /> : <ul className="space-y-2">{d.attentionTop.map((r) => <RfiRow key={r.id} rfi={r} now={d.now} authName={authName} onOpen={openRfi} compact showProject={isAll} />)}</ul>}
         </Card>
@@ -514,16 +524,16 @@ export const RfiDashboard = ({ client, projectName, scope, onScopeChange, rfis, 
         </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="rfd-cards">
         <Card title="Where every RFI stands" hint="Click a slice or a line to see those RFIs">
-          <div className="flex flex-col items-center gap-4 sm:flex-row">
+          <div className="flex flex-wrap items-center justify-center gap-4">
             <Donut
               segments={d.statusRows.map(([status, n]) => ({ key: status, label: getStatusLabel(status), value: n, color: STATUS_COLORS[status] ?? "#94a3b8" }))}
               total={rfis.length}
               mounted={mounted}
               onPick={(status) => go("all", { status })}
             />
-            <ul className="min-w-0 flex-1 space-y-0.5 self-stretch">
+            <ul className="min-w-[220px] flex-1 space-y-0.5">
               {d.statusRows.map(([status, n]) => (
                 <BarRow key={status} label={getStatusLabel(status)} count={n} max={d.statusRows[0][1]} color={STATUS_COLORS[status] ?? "#94a3b8"} mounted={mounted} onClick={() => go("all", { status })} />
               ))}
@@ -691,7 +701,7 @@ export const RfiDashboard = ({ client, projectName, scope, onScopeChange, rfis, 
   };
 
   const renderBreakdown = () => (
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div className="rfd-cards">
       {isAll && (
         <Card title="By project" hint="Click a line to see that project's RFIs">
           {d.byProject.length === 0 ? <Empty /> : splitRows(d.byProject, (k) => k, () => "#0ea5e9", (k) => ({ project: k }))}
@@ -704,7 +714,7 @@ export const RfiDashboard = ({ client, projectName, scope, onScopeChange, rfis, 
         {splitRows(d.byPriority, (k) => `${PRIORITY[k as RfiPriority].label} priority`, (k) => PRIORITY[k as RfiPriority].color, (k) => ({ priority: k as RfiPriority }))}
       </Card>
       <Card title="By team" hint="Internal team or external parties">
-        <ul className="grid gap-3 sm:grid-cols-2">
+        <ul className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]">
           {d.byTeam.map((t) => (
             <li key={t.key} className="rounded-xl border border-border bg-background/60 p-4">
               <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -725,7 +735,7 @@ export const RfiDashboard = ({ client, projectName, scope, onScopeChange, rfis, 
     const total = (k: "created" | "replies") => d.monthList.reduce((a, m) => a + m[k], 0);
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div className="rfd-tiles">
           <Stat label="Reply rate" value={`${d.responseRate}%`} help="Of sent RFIs that got a reply" />
           <Stat label="Average reply time" value={formatDuration(d.avgResponseHours)} help="From sending to first reply" />
           <Stat label="Longest wait" value={d.waiting.length ? plural(d.oldestWaiting, "day") : "—"} help="Oldest RFI still waiting" />
@@ -777,7 +787,7 @@ export const RfiDashboard = ({ client, projectName, scope, onScopeChange, rfis, 
      PAGE
   ========================================================= */
   return (
-    <div className="rfd-root mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 pb-10 pt-2" data-rfi-dashboard>
+    <div className="rfd-root mx-auto flex w-full max-w-[1920px] flex-col gap-4 px-3 pb-10 pt-2" data-rfi-dashboard>
       <style>{CSS}</style>
 
       {/* ══ HEADER ══ */}
@@ -807,7 +817,7 @@ export const RfiDashboard = ({ client, projectName, scope, onScopeChange, rfis, 
         </div>
       </header>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[250px_minmax(0,1fr)]">
+      <div className="rfd-layout">
         {/* ══ SUB-SECTION MENU ══ */}
         <nav className="rfd-in rfd-nav -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:sticky lg:top-2 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:p-2 lg:shadow-sm" role="tablist" aria-label="Dashboard sections" aria-orientation="vertical">
           {MENU.map((m) => {
@@ -891,11 +901,11 @@ function Tile({
       <span className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg, ${color}, ${color}00)` }} />
       <span className="rfd-ico flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white shadow-md" style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}><Icon className="h-6 w-6" /></span>
       <span className="min-w-0 flex-1">
-        <span className="block text-3xl font-extrabold leading-none tabular-nums text-foreground">{shown}</span>
+        <span className="rfd-num block font-extrabold leading-none tabular-nums text-foreground">{shown}</span>
         <span className="mt-1 block truncate text-sm font-semibold text-foreground">{label}</span>
         <span className="block truncate text-xs text-muted-foreground">{share !== undefined ? `${share}% · ${hint}` : hint}</span>
       </span>
-      {spark && <Spark values={spark} color={color} />}
+      {spark && <span className="pointer-events-none absolute right-3 top-3 opacity-80"><Spark values={spark} color={color} /></span>}
       {share !== undefined && (
         <span className="absolute inset-x-0 bottom-0 h-1 bg-muted">
           <span className="rfd-grow block h-full rounded-r-full" style={{ width: `${share}%`, background: color }} />
