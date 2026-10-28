@@ -44,6 +44,25 @@ export const getRfis = (
     .then((r) => r.data.data);
 };
 
+/**
+ * RFIs of EVERY project in one request (newest first). Only the RFI portal's
+ * dashboard ("All projects") uses this; everything else stays per project.
+ */
+export const getAllRfis = (
+  teamType?: RfiTeamType | "ALL",
+  discipline?: RfiDiscipline | "ALL",
+  priority?: RfiPriority | "ALL"
+) => {
+  const params: Record<string, string> = {};
+  if (teamType && teamType !== "ALL") params.teamType = teamType;
+  if (discipline && discipline !== "ALL") params.discipline = discipline;
+  if (priority && priority !== "ALL") params.priority = priority;
+
+  return api
+    .get<{ success: boolean; data: Rfi[] }>("/api/rfis/all", { params })
+    .then((r) => r.data.data);
+};
+
 export interface CreateRfiInput {
   discipline: RfiDiscipline;
   teamType: RfiTeamType;

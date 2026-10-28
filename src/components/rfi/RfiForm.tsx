@@ -41,6 +41,7 @@ import {
   getErrorMessage,
   getFavoriteRfiEmailContacts,
   getRfiEmailContacts,
+  getRfiGmailSettings,
   previewRfiEmail,
   type EmployeeOption,
 } from "@/lib/rfiApi";
@@ -1502,6 +1503,9 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   const setRecipientEmail = (value: string) =>
     isInternal ? setInternalRecipient(value) : setExternalRecipient(value);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  // The Gmail account RFIs are sent FROM (RFI Settings). Like the sender's own email,
+  // it can never be a To or CC address.
+  const [gmailFromEmail, setGmailFromEmail] = useState("");
 
   // ── Email Body State ────────────────────────────────────────────────
   const [emailBody, setEmailBody] = useState("");
@@ -1580,6 +1584,18 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
 
   const isBusy = sendState === "sending" || sendState === "success";
 
+  // From addresses (never allowed in To / CC) and the current To address (never allowed in CC).
+  const fromSet = useMemo(() => {
+    const set = new Set<string>();
+    const mine = currentEmployee?.email?.trim().toLowerCase();
+    if (mine) set.add(mine);
+    const gmail = gmailFromEmail.trim().toLowerCase();
+    if (gmail) set.add(gmail);
+    return set;
+  }, [currentEmployee, gmailFromEmail]);
+  const toLc = recipientEmail.trim().toLowerCase();
+  const isFromAddress = (email: string) => fromSet.has(email.trim().toLowerCase());
+
   // One de-duplicated pool of every known address: office employees first (they
   // keep their name), then every saved To/CC contact, favorites, and whatever
   // this project last used.
@@ -1616,9 +1632,9 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   const officeContacts = useMemo(
     () =>
       emailPool
-        .filter((p) => p.source === "employee")
+        .filter((p) => p.source === "employee" && !fromSet.has(p.email.toLowerCase()))
         .sort((a, b) => (a.name ?? a.email).localeCompare(b.name ?? b.email)),
-    [emailPool]
+    [emailPool, fromSet]
   );
 
   // Internal: the input already holds a picked colleague → show the whole list again.
@@ -1632,14 +1648,26 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
       return rankSuggestions(officeContacts, internalPicked ? "" : internalRecipient, Infinity);
     }
     if (!externalRecipient.trim()) return [];
-    return dropExactOnly(rankSuggestions(emailPool, externalRecipient, 8), externalRecipient);
-  }, [isInternal, officeContacts, internalPicked, internalRecipient, externalRecipient, emailPool]);
+    return dropExactOnly(rankSuggestions(emailPool, externalRecipient, 8, fromSet), externalRecipient);
+  }, [isInternal, officeContacts, internalPicked, internalRecipient, externalRecipient, emailPool, fromSet]);
 
   const ccSuggestions = useMemo<EmailSuggestion[]>(() => {
     if (!ccInput.trim()) return [];
-    const taken = new Set(ccEmails.map((c) => c.toLowerCase()));
+    // Already in CC, the From address(es) and the To address are never offered.
+    const taken = new Set([...ccEmails.map((c) => c.toLowerCase()), ...Array.from(fromSet)]);
+    if (toLc) taken.add(toLc);
     return dropExactOnly(rankSuggestions(emailPool, ccInput, 8, taken), ccInput);
-  }, [ccInput, ccEmails, emailPool]);
+  }, [ccInput, ccEmails, emailPool, fromSet, toLc]);
+
+  // Picker lists without the From address(es); the CC lists also hide whoever is in To.
+  const toFavoritesVisible = useMemo(
+    () => favoriteToContacts.filter((c) => !fromSet.has(c.email.trim().toLowerCase())),
+    [favoriteToContacts, fromSet]
+  );
+  const ccFavoritesVisible = useMemo(
+    () => favoriteCcContacts.filter((c) => !fromSet.has(c.email.trim().toLowerCase()) && c.email.trim().toLowerCase() !== toLc),
+    [favoriteCcContacts, fromSet, toLc]
+  );
 
   const toHighlightQuery = isInternal ? (internalPicked ? "" : internalRecipient) : externalRecipient;
   const isToListOpen = isToSuggestOpen && (isInternal || toSuggestions.length > 0);
@@ -1696,6 +1724,25 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
         })
       );
   }, []);
+
+  useEffect(() => {
+    getRfiGmailSettings()
+      .then((settings) => setGmailFromEmail(settings?.gmailEmail?.trim() ?? ""))
+      .catch(() => undefined);
+  }, []);
+
+  // An address is either To or CC, never both, and the From address is never a recipient:
+  // whatever lands in CC (typed, pasted, picked, or remembered from the last RFI) is
+  // cleaned right away.
+  useEffect(() => {
+    setCcEmails((prev) => {
+      const next = prev.filter((c) => {
+        const lc = c.trim().toLowerCase();
+        return !fromSet.has(lc) && lc !== toLc;
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [ccEmails, fromSet, toLc]);
 
   useEffect(() => {
     getFavoriteRfiEmailContacts("TO")
@@ -1840,6 +1887,16 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   const addCcEmail = (raw: string) => {
     const trimmed = raw.trim();
     if (!trimmed) return;
+    if (isFromAddress(trimmed)) {
+      toast({ title: "That's your From address", description: "Your own address can't be added to CC.", variant: "destructive" });
+      setCcInput("");
+      return;
+    }
+    if (trimmed.toLowerCase() === toLc) {
+      toast({ title: "Already in To", description: "An address can be in To or CC, not both.", variant: "destructive" });
+      setCcInput("");
+      return;
+    }
     setCcEmails((prev) => (prev.some((c) => c.toLowerCase() === trimmed.toLowerCase()) ? prev : [...prev, trimmed]));
     setCcInput("");
   };
@@ -2030,6 +2087,10 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
       return failValidation("Your account isn't linked to an employee email — contact an admin");
     }
 
+    if (isFromAddress(recipientEmail)) {
+      return failValidation("Your own (From) address can't be used as the To address");
+    }
+
     const senderEmail = currentEmployee.email;
     const senderName = currentEmployee.username;
     const finalEmailBody = isEditingBody ? emailBodyDraft : emailBody;
@@ -2040,6 +2101,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
         [...ccEmails, ...(pendingCc ? [pendingCc] : [])]
           .map((c) => c.trim())
           .filter(Boolean)
+          .filter((c) => !isFromAddress(c) && c.toLowerCase() !== toLc)
           .map((c) => [c.toLowerCase(), c] as const)
       ).values()
     );
@@ -2209,13 +2271,13 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                           </button>
                         </PopoverTrigger>
                         <PopoverContent align="end" collisionPadding={12} className="w-72 max-w-[calc(100vw-1.5rem)] p-2">
-                          {favoriteToContacts.length === 0 ? (
+                          {toFavoritesVisible.length === 0 ? (
                             <p className="px-2 py-2.5 text-xs text-muted-foreground">
                               No favorites yet — star a Send To address in RFI Settings, or just type a new one.
                             </p>
                           ) : (
                             <ul className="rfi-scroll max-h-56 space-y-0.5 overflow-y-auto">
-                              {favoriteToContacts.map((c) => (
+                              {toFavoritesVisible.map((c) => (
                                 <li key={c.email}>
                                   <button
                                     type="button"
@@ -2558,7 +2620,8 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                     {ccPickerTab === "employees" ? (
                       (() => {
                         const employeesWithEmail = employees.filter(
-                          (emp): emp is EmployeeOption & { email: string } => !!emp.email
+                          (emp): emp is EmployeeOption & { email: string } =>
+                            !!emp.email && !isFromAddress(emp.email) && emp.email.trim().toLowerCase() !== toLc
                         );
                         if (employeesWithEmail.length === 0) {
                           return <p className="px-2 py-2.5 text-xs text-muted-foreground">No employees found.</p>;
@@ -2588,13 +2651,13 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                           </ul>
                         );
                       })()
-                    ) : favoriteCcContacts.length === 0 ? (
+                    ) : ccFavoritesVisible.length === 0 ? (
                       <p className="px-2 py-2.5 text-xs text-muted-foreground">
                         No favorites yet — star an employee's CC address in RFI Settings.
                       </p>
                     ) : (
                       <ul className="rfi-scroll max-h-56 space-y-0.5 overflow-y-auto">
-                        {favoriteCcContacts.map((c) => {
+                        {ccFavoritesVisible.map((c) => {
                           const checked = ccEmails.some((e) => e.toLowerCase() === c.email.toLowerCase());
                           return (
                             <li key={c.email}>

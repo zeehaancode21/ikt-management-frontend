@@ -1,132 +1,161 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { format } from "date-fns";
 import {
-  Activity,
   AlertTriangle,
+  ArrowRight,
+  BarChart3,
   CheckCircle2,
-  Clock3,
+  ChevronRight,
+  Download,
+  ExternalLink,
   FileText,
-  Flame,
   Hourglass,
   Inbox,
   Layers,
-  Maximize2,
-  ArrowDown,
-  ArrowUp,
-  Download,
-  ExternalLink,
-  Eye,
+  LayoutDashboard,
+  ListChecks,
+  Loader2,
+  PieChart,
   RefreshCw,
   Reply,
   Search,
-  Users,
   X,
-  Zap,
 } from "lucide-react";
 import { StatusBadge, getStatusLabel } from "@/components/StatusBadge";
-import { DisciplineTag, PriorityTag } from "@/components/rfi/RfiTags";
 import { RfiDetailDialog } from "@/components/rfi/RfiDetailDialog";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getDisplayStatus } from "@/lib/rfiPermissions";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import { toRfiPriority, type Rfi, type RfiPriority } from "@/types/rfi";
 
 /* =========================================================
-   RFI DASHBOARD
-   Built ONLY from the RFIs the page has already loaded for the
-   selected client / project — it makes no API calls of its own,
-   so it adds no extra load on the server.
+   RFI DASHBOARD — with sub-sections
+
+   The main dashboard has a menu (left side on a computer,
+   a scrolling bar on a phone). Each menu item is a sub-section
+   that answers ONE simple question:
+
+     Overview            → "How are we doing?"
+     Waiting for reply   → "Which RFIs are still waiting?"
+     Replies to review   → "Which answers came back?"
+     Closed              → "What is finished?"
+     Breakdown           → "How are RFIs split up?"
+     Trends              → "How is activity changing?"
+     All RFIs            → "Let me search everything"
+
+   Two options at the top:
+     This project  → the project picked at the top of the page
+     All projects  → RFIs of every project together (RFI portal only)
+
+   Built only from the RFIs the page already loaded —
+   it makes no extra requests to the server.
 ========================================================= */
+
+export type DashScope = "project" | "all";
 
 interface Props {
   client: string | null;
   projectName: string | null;
+  /** "project" = the selected project, "all" = every project together. */
+  scope: DashScope;
+  onScopeChange: (scope: DashScope) => void;
   rfis: Rfi[];
   loading: boolean;
   onRefresh: () => void;
-  /** Optional: jump to the full RFI list view. */
+  /** Optional: jump to the full RFI history page. */
   onViewAll?: () => void;
 }
 
-/* ---------- palette (matches StatusBadge / RfiTags colours) ---------- */
+/* ---------- settings in plain words ---------- */
+
+const DAY = 86_400_000;
+const PAGE_SIZE = 20;
+
+const WAITING = new Set(["SUBMITTED", "ISSUED", "SENT", "AWAITING_RESPONSE", "OUTSTANDING", "RESUBMITTED", "REOPENED"]);
+const REPLIED = new Set(["RESPONSE_RECEIVED", "UNDER_REVIEW"]);
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: "#64748b",
-  SUBMITTED: "#06b6d4",
-  ISSUED: "#6366f1",
-  SENT: "#0ea5e9",
-  AWAITING_RESPONSE: "#f59e0b",
-  RESPONSE_RECEIVED: "#14b8a6",
-  UNDER_REVIEW: "#a855f7",
-  OUTSTANDING: "#f97316",
-  CLOSED: "#10b981",
-  REOPENED: "#ec4899",
-  CANCELLED: "#f43f5e",
-  RESUBMITTED: "#d946ef",
+  DRAFT: "#64748b", SUBMITTED: "#06b6d4", ISSUED: "#6366f1", SENT: "#0ea5e9", AWAITING_RESPONSE: "#f59e0b",
+  RESPONSE_RECEIVED: "#14b8a6", UNDER_REVIEW: "#a855f7", OUTSTANDING: "#f97316", CLOSED: "#10b981",
+  REOPENED: "#ec4899", CANCELLED: "#f43f5e", RESUBMITTED: "#d946ef",
 };
 
-const DISCIPLINE_META: Record<string, { label: string; color: string }> = {
-  STRUCTURAL: { label: "Structural", color: "#6366f1" },
-  ELECTRICAL: { label: "Electrical", color: "#f59e0b" },
-  PLUMBING: { label: "Plumbing", color: "#3b82f6" },
-  CIVIL: { label: "Civil", color: "#10b981" },
-  ARCHITECTURAL: { label: "Architectural", color: "#d946ef" },
+const DISCIPLINE_LABEL: Record<string, string> = {
+  STRUCTURAL: "Structural", ELECTRICAL: "Electrical", PLUMBING: "Plumbing", CIVIL: "Civil", ARCHITECTURAL: "Architectural",
 };
 
-const PRIORITY_META: Record<RfiPriority, { label: string; color: string; weight: number }> = {
+const PRIORITY: Record<RfiPriority, { label: string; color: string; weight: number }> = {
   URGENT: { label: "Urgent", color: "#ef4444", weight: 4 },
   HIGH: { label: "High", color: "#f97316", weight: 3 },
   MEDIUM: { label: "Medium", color: "#3b82f6", weight: 2 },
   LOW: { label: "Low", color: "#10b981", weight: 1 },
 };
 
-// Status groups used by the KPI cards.
-const AWAITING = new Set(["SUBMITTED", "ISSUED", "SENT", "AWAITING_RESPONSE", "OUTSTANDING", "RESUBMITTED", "REOPENED"]);
-const RESPONDED = new Set(["RESPONSE_RECEIVED", "UNDER_REVIEW"]);
+// How long an RFI has been waiting
+const AGE_BANDS = [
+  { key: "recent", label: "Up to 7 days", note: "On track", min: 0, max: 7, color: "#10b981" },
+  { key: "old", label: "8 – 14 days", note: "Getting old", min: 8, max: 14, color: "#f59e0b" },
+  { key: "late", label: "15+ days", note: "Overdue", min: 15, max: Infinity, color: "#ef4444" },
+] as const;
+type AgeKey = (typeof AGE_BANDS)[number]["key"];
 
-const DAY = 86_400_000;
+type SectionId = "overview" | "waiting" | "replies" | "closed" | "breakdown" | "trends" | "all";
+type SortKey = "priority" | "newest" | "oldest";
 
-/* ---------- small helpers ---------- */
+interface Filters {
+  q: string;
+  priority: RfiPriority | null;
+  discipline: string | null;
+  status: string | null;
+  age: AgeKey | null;
+  project: string | null;
+}
+const NO_FILTERS: Filters = { q: "", priority: null, discipline: null, status: null, age: null, project: null };
+
+/* ---------- helpers ---------- */
 
 const parseDate = (v?: string | null): Date | null => {
   if (!v) return null;
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? null : d;
 };
+const ageOf = (r: Rfi, now: number) => {
+  const c = parseDate(r.createdAt);
+  return c ? Math.max(0, Math.floor((now - c.getTime()) / DAY)) : 0;
+};
+const disciplineLabel = (d: string) => DISCIPLINE_LABEL[d] ?? (d ? d.charAt(0) + d.slice(1).toLowerCase() : "—");
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const lastTouched = (r: Rfi) => Math.max(parseDate(r.createdAt)?.getTime() ?? 0, parseDate(r.responseReceivedAt)?.getTime() ?? 0);
+const prio = (r: Rfi) => PRIORITY[toRfiPriority(r.priority)];
 
-const formatDuration = (hours: number | null): string => {
+const formatDuration = (hours: number | null) => {
   if (hours === null) return "—";
-  if (hours < 1) return "< 1 h";
-  if (hours < 48) return `${hours.toFixed(1)} h`;
-  return `${(hours / 24).toFixed(1)} d`;
+  if (hours < 1) return "Under 1 hour";
+  if (hours < 48) return `${hours.toFixed(1)} hours`;
+  return `${(hours / 24).toFixed(1)} days`;
 };
 
-const prefersReducedMotion = () =>
-  typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-
-/** Eased count-up from 0 to `target`. */
-function useCountUp(target: number, duration = 900) {
-  const [val, setVal] = useState(0);
+function useCountUp(target: number) {
+  const [val, setVal] = useState(target);
   useEffect(() => {
-    if (prefersReducedMotion()) {
+    if (typeof window === "undefined" || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       setVal(target);
       return;
     }
     let raf = 0;
     const start = performance.now();
     const tick = (t: number) => {
-      const p = Math.min((t - start) / duration, 1);
+      const p = Math.min((t - start) / 700, 1);
       setVal(target * (1 - Math.pow(1 - p, 3)));
       if (p < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-  return val;
+  }, [target]);
+  return Math.round(val);
 }
 
-/** Flips to true one frame after mount so CSS transitions (bars, donut) animate in. */
 function useMounted() {
   const [m, setM] = useState(false);
   useEffect(() => {
@@ -136,1234 +165,689 @@ function useMounted() {
   return m;
 }
 
-/* ---------- styles (scoped, visual only) ---------- */
+const clickable = (fn: () => void) => ({
+  role: "button" as const,
+  tabIndex: 0,
+  onClick: fn,
+  onKeyDown: (e: ReactKeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      fn();
+    }
+  },
+});
 
-const DASH_CSS = `
-  @keyframes rfd-rise { from { opacity: 0; translate: 0 12px; } to { opacity: 1; translate: 0 0; } }
-  .rfd-rise { animation: rfd-rise 480ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+/* ---------- styles (scoped to this dashboard) ---------- */
 
-  /* ---- layout: natural flow, the page scrolls — nothing is squeezed or stacked on top of anything ---- */
-  .rfd-root { display: flex; flex-direction: column; gap: 1rem; padding: 0.25rem 0.25rem 2rem; }
-  .rfd-panels { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); align-items: stretch; }
-  @media (min-width: 1024px) { .rfd-panels[data-cols="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
-  .rfd-card {
-    position: relative; overflow: hidden;
-    transition: translate .25s ease, box-shadow .25s ease, border-color .25s ease;
-  }
-  .rfd-card::before {
-    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s ease;
-    background: radial-gradient(320px circle at var(--mx, 50%) var(--my, 0%), hsl(var(--primary) / 0.08), transparent 65%);
-  }
-  .rfd-card:hover::before { opacity: 1; }
-  .rfd-card:hover { box-shadow: 0 12px 28px -18px hsl(var(--primary) / 0.5); border-color: hsl(var(--primary) / 0.35); }
-
-  .rfd-kpi { cursor: pointer; }
-  .rfd-kpi:hover { translate: 0 -2px; }
-  .rfd-kpi:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
-  .rfd-kpi[data-sel="true"] { border-color: hsl(var(--primary)); box-shadow: 0 0 0 2px hsl(var(--primary) / 0.35); }
-  .rfd-kpi-icon { transition: rotate .35s ease, scale .35s ease; }
-  .rfd-kpi:hover .rfd-kpi-icon { rotate: -8deg; scale: 1.1; }
-
-  .rfd-bar { transform-origin: left; transform: scaleX(0); transition: transform 800ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .rfd-bar[data-on="true"] { transform: scaleX(1); }
-  .rfd-col { transform-origin: bottom; transform-box: fill-box; transform: scaleY(0); transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .rfd-col[data-on="true"] { transform: scaleY(1); }
-
-  .rfd-seg { transition: stroke-dasharray 1000ms cubic-bezier(0.22, 1, 0.36, 1), stroke-width .25s ease, opacity .25s ease; cursor: pointer; }
-  .rfd-seg:hover, .rfd-seg[data-active="true"] { stroke-width: 6.2; }
-  .rfd-donut[data-dim="true"] .rfd-seg:not([data-active="true"]) { opacity: 0.28; }
-
-  .rfd-scroll { overflow-y: auto; scrollbar-width: thin; }
-  .rfd-hit { cursor: pointer; transition: background-color .2s ease, opacity .2s ease, box-shadow .2s ease; border-radius: 0.6rem; }
-  .rfd-hit:hover { background-color: hsl(var(--primary) / 0.07); }
-  .rfd-hit:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 1px; }
-  .rfd-hit[data-sel="true"] { background-color: hsl(var(--primary) / 0.12); box-shadow: inset 3px 0 0 hsl(var(--primary)); }
-
-  .rfd-row { cursor: pointer; transition: background-color .2s ease, box-shadow .2s ease, border-color .2s ease; }
-  .rfd-row:hover, .rfd-row:focus-visible { background-color: hsl(var(--primary) / 0.06); border-color: hsl(var(--primary) / 0.4); outline: none; }
-
-  .rfd-live { position: relative; display: inline-flex; width: 8px; height: 8px; border-radius: 9999px; background: #22c55e; }
-  .rfd-live::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: inherit; animation: rfd-ping 1.7s ease-out infinite; }
-  @keyframes rfd-ping { 0% { transform: scale(1); opacity: .8; } 100% { transform: scale(3.2); opacity: 0; } }
-
-  .rfd-hero { position: relative; overflow: hidden; isolation: isolate;
-    background: linear-gradient(120deg, #4f46e5, #7c3aed, #0ea5e9, #7c3aed, #4f46e5); background-size: 300% 100%;
-    animation: rfd-grad 14s ease-in-out infinite, rfd-rise 500ms cubic-bezier(0.22,1,0.36,1) backwards; }
-  @keyframes rfd-grad { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
-  .rfd-orb { position: absolute; border-radius: 9999px; filter: blur(30px); opacity: .45; z-index: -1; animation: rfd-float 9s ease-in-out infinite; pointer-events: none; }
-  @keyframes rfd-float { 0%,100% { translate: 0 0; } 50% { translate: 22px 16px; } }
-
-  .rfd-spin { animation: rfd-spin 0.9s linear infinite; }
+const CSS = `
+  @keyframes rfd-in { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
+  @keyframes rfd-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
   @keyframes rfd-spin { to { rotate: 360deg; } }
-
+  .rfd-in { animation: rfd-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .rfd-spin { animation: rfd-spin 0.9s linear infinite; }
+  .rfd-skel { border-radius: 1rem; animation: rfd-shimmer 1.4s linear infinite; background-size: 800px 100%;
+    background-image: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--muted-foreground) / 0.12) 37%, hsl(var(--muted)) 63%); }
+  .rfd-lift { transition: translate .2s ease, box-shadow .2s ease, border-color .2s ease; }
+  .rfd-lift:hover { translate: 0 -2px; box-shadow: 0 12px 26px -18px hsl(var(--foreground) / .5); }
+  .rfd-row { transition: background-color .2s ease, border-color .2s ease; }
+  .rfd-row:hover, .rfd-row:focus-visible { background-color: hsl(var(--primary) / .05); border-color: hsl(var(--primary) / .4); outline: none; }
+  .rfd-row .rfd-go { transition: translate .2s ease; }
+  .rfd-row:hover .rfd-go { translate: 3px 0; }
+  .rfd-bar { transition: width 700ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .rfd-col { transition: height 700ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .rfd-nav { scrollbar-width: none; }
+  .rfd-nav::-webkit-scrollbar { display: none; }
+  .rfd-root button:focus-visible, .rfd-root [role="button"]:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
+  @keyframes rfd-blob { 0%, 100% { translate: 0 0; scale: 1; } 50% { translate: 22px -14px; scale: 1.18; } }
+  @keyframes rfd-pulse { 0% { box-shadow: 0 0 0 0 currentColor; } 70%, 100% { box-shadow: 0 0 0 7px transparent; } }
+  @keyframes rfd-alert { 0%, 100% { box-shadow: 0 0 0 0 hsl(38 92% 50% / 0); } 50% { box-shadow: 0 0 0 6px hsl(38 92% 50% / .18); } }
+  @keyframes rfd-pop { 0% { scale: .5; opacity: 0; } 60% { scale: 1.18; } 100% { scale: 1; opacity: 1; } }
+  @keyframes rfd-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+  @keyframes rfd-grow { from { scale: 0 1; } to { scale: 1 1; } }
+  .rfd-hero { background: linear-gradient(120deg, hsl(var(--primary) / .12), hsl(var(--card)) 48%, hsl(var(--primary) / .07)); }
+  .rfd-blob { position: absolute; border-radius: 9999px; filter: blur(36px); pointer-events: none; animation: rfd-blob 9s ease-in-out infinite; }
+  .rfd-alert { animation: rfd-alert 2.4s ease-in-out infinite; }
+  .rfd-pulse { animation: rfd-pulse 1.8s ease-out infinite; }
+  .rfd-pop { animation: rfd-pop 480ms cubic-bezier(.34, 1.56, .64, 1) both; }
+  .rfd-spark { stroke-dasharray: 1; animation: rfd-draw 1.1s ease-out both; }
+  .rfd-grow { transform-origin: left; animation: rfd-grow 900ms cubic-bezier(.22, 1, .36, 1) both; }
+  .rfd-seg { transition: stroke-dasharray 900ms cubic-bezier(.22, 1, .36, 1), opacity .2s ease, stroke-width .2s ease; }
+  .rfd-stack { transition: flex-grow 800ms cubic-bezier(.22, 1, .36, 1), filter .2s ease; }
+  .rfd-tile .rfd-ico { transition: rotate .3s ease, scale .3s ease; }
+  .rfd-tile:hover .rfd-ico { rotate: -8deg; scale: 1.1; }
   @media (prefers-reduced-motion: reduce) {
-    .rfd-rise, .rfd-hero, .rfd-orb, .rfd-live::after { animation: none !important; }
-    .rfd-bar, .rfd-col, .rfd-seg, .rfd-card, .rfd-row, .rfd-kpi-icon { transition: none !important; }
-    .rfd-bar, .rfd-col { transform: none; }
+    .rfd-in, .rfd-skel, .rfd-blob, .rfd-alert, .rfd-pulse, .rfd-pop, .rfd-spark, .rfd-grow { animation: none !important; }
+    .rfd-spark { stroke-dasharray: none; }
+    .rfd-lift, .rfd-row, .rfd-bar, .rfd-col, .rfd-row .rfd-go, .rfd-seg, .rfd-stack, .rfd-tile .rfd-ico { transition: none !important; }
   }
 `;
 
-const trackGlow = (e: ReactPointerEvent<HTMLElement>) => {
-  const r = e.currentTarget.getBoundingClientRect();
-  e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
-  e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
-};
+const selectCls =
+  "h-10 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
 
 /* =========================================================
-   FILTERS — every chart / card is clickable and narrows the rest
+   MAIN COMPONENT
 ========================================================= */
 
-type PanelId = "status" | "activity" | "discipline" | "priority" | "waiting" | "list";
-type KpiGroup = "open" | "awaiting" | "responded" | "closed";
-type RangeKey = "all" | "30" | "90" | "365";
-
-interface Filters {
-  group: KpiGroup | null;
-  status: string | null;
-  discipline: string | null;
-  priority: RfiPriority | null;
-  team: "INTERNAL" | "EXTERNAL" | null;
-  month: string | null; // "yyyy-m"
-  bucket: number | null; // index into AGE_BUCKETS
-  minAge: number | null; // waiting at least N days (quick filter)
-  urgent: boolean; // High + Urgent only (quick filter)
-  q: string;
-  range: RangeKey;
-}
-
-const NO_FILTERS: Filters = { group: null, status: null, discipline: null, priority: null, team: null, month: null, bucket: null, minAge: null, urgent: false, q: "", range: "all" };
-type FilterKey = "status" | "discipline" | "priority" | "team" | "month" | "bucket" | "q" | "range";
-
-const AGE_BUCKETS = [
-  { label: "0–2 days", min: 0, max: 2, color: "#10b981" },
-  { label: "3–7 days", min: 3, max: 7, color: "#84cc16" },
-  { label: "8–14 days", min: 8, max: 14, color: "#f59e0b" },
-  { label: "15–30 days", min: 15, max: 30, color: "#f97316" },
-  { label: "30+ days", min: 31, max: Infinity, color: "#ef4444" },
-];
-
-const GROUP_LABEL: Record<KpiGroup, string> = { open: "Open", awaiting: "Awaiting reply", responded: "Response received", closed: "Closed" };
-const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "30", label: "30d" },
-  { key: "90", label: "90d" },
-  { key: "365", label: "1y" },
-];
-
-const ageOf = (r: Rfi, now: number) => {
-  const c = parseDate(r.createdAt);
-  return c ? Math.max(0, Math.floor((now - c.getTime()) / DAY)) : 0;
-};
-
-const inGroup = (status: string, g: KpiGroup) => {
-  switch (g) {
-    case "open": return status !== "CLOSED" && status !== "CANCELLED" && status !== "DRAFT";
-    case "awaiting": return AWAITING.has(status);
-    case "responded": return RESPONDED.has(status);
-    case "closed": return status === "CLOSED";
-  }
-};
-
-/** Does `r` satisfy every active filter except the ones in `skip`? (lets each chart show its own options) */
-function matches(r: Rfi, f: Filters, skip: FilterKey[], now: number): boolean {
-  if (!skip.includes("status")) {
-    if (f.status && r.status !== f.status) return false;
-    if (f.group && !inGroup(r.status, f.group)) return false;
-  }
-  if (!skip.includes("discipline") && f.discipline && r.discipline !== f.discipline) return false;
-  if (!skip.includes("priority") && f.priority && toRfiPriority(r.priority) !== f.priority) return false;
-  if (!skip.includes("team") && f.team && r.teamType !== f.team) return false;
-  if (!skip.includes("month") && f.month) {
-    const c = parseDate(r.createdAt);
-    if (!c || `${c.getFullYear()}-${c.getMonth()}` !== f.month) return false;
-  }
-  if (!skip.includes("bucket") && f.minAge !== null) {
-    if (!AWAITING.has(r.status) || ageOf(r, now) < f.minAge) return false;
-  }
-  if (!skip.includes("priority") && f.urgent) {
-    const pr = toRfiPriority(r.priority);
-    if (pr !== "URGENT" && pr !== "HIGH") return false;
-  }
-  if (!skip.includes("bucket") && f.bucket !== null) {
-    if (!AWAITING.has(r.status)) return false;
-    const a = ageOf(r, now);
-    const b = AGE_BUCKETS[f.bucket];
-    if (a < b.min || a > b.max) return false;
-  }
-  if (!skip.includes("range") && f.range !== "all") {
-    const c = parseDate(r.createdAt);
-    if (!c || now - c.getTime() > Number(f.range) * DAY) return false;
-  }
-  if (!skip.includes("q") && f.q.trim()) {
-    const q = f.q.trim().toLowerCase();
-    if (!`${r.rfiNumber} ${r.subject ?? ""}`.toLowerCase().includes(q)) return false;
-  }
-  return true;
-}
-
-/* =========================================================
-   COMPONENT
-========================================================= */
-
-export const RfiDashboard = ({ client, projectName, rfis, loading, onRefresh, onViewAll }: Props) => {
+export const RfiDashboard = ({ client, projectName, scope, onScopeChange, rfis, loading, onRefresh, onViewAll }: Props) => {
+  const isAll = scope === "all";
   const { name: authName } = useAuth();
-  const [viewOpen, setViewOpen] = useState(false);
+  const { toast } = useToast();
   const mounted = useMounted();
+  const firstName = (authName ?? "").trim().split(/\s+/)[0];
+  const hour = new Date().getHours();
+  const greet = `${hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"}${firstName ? `, ${firstName}` : ""}`;
 
+  const [section, setSection] = useState<SectionId>("overview");
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
-  const [hoverStatus, setHoverStatus] = useState<string | null>(null);
-  const [hoverMonth, setHoverMonth] = useState<number | null>(null);
-  const [monthSpan, setMonthSpan] = useState<6 | 12>(6);
-  const [view, setView] = useState<"overview" | "breakdown" | "waiting" | "rfis">("overview");
-  const [listSort, setListSort] = useState<"priority" | "newest" | "oldest">("priority");
-  const [viewSort, setViewSort] = useState<{ key: string; dir: 1 | -1 }>({ key: "created", dir: -1 });
-  const searchRef = useRef<HTMLInputElement>(null);
-  const [openRfiId, setOpenRfiId] = useState<number | null>(null);
+  const [sort, setSort] = useState<SortKey>("priority");
+  const [visible, setVisible] = useState(PAGE_SIZE);
+  const [months, setMonths] = useState<6 | 12>(6);
+  const [downloading, setDownloading] = useState(false);
+  const [openId, setOpenId] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [expanded, setExpanded] = useState<PanelId | null>(null);
-
-  // "Updated hh:mm" — refreshed whenever a new list arrives.
   const [updatedAt, setUpdatedAt] = useState<Date>(() => new Date());
-  useEffect(() => {
-    setUpdatedAt(new Date());
-  }, [rfis]);
 
-  // Press "/" anywhere to jump to the search box.
+  useEffect(() => setUpdatedAt(new Date()), [rfis]);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      const typing = !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
-      if (e.key === "/" && !typing && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault();
-        searchRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  // New project => start with a clean slate.
-  useEffect(() => {
+    setSection("overview");
     setFilters(NO_FILTERS);
-  }, [projectName]);
+  }, [projectName, scope]);
+  useEffect(() => setVisible(PAGE_SIZE), [filters, sort, section]);
 
-  /** Click-to-toggle helpers. Group and status are mutually exclusive. */
-  const toggle = <K extends keyof Filters>(key: K, value: Filters[K]) =>
-    setFilters((f) => ({ ...f, ...(key === "status" ? { group: null } : {}), ...(key === "group" ? { status: null } : {}), [key]: f[key] === value ? (NO_FILTERS[key]) : value }));
-  const clearAll = () => setFilters(NO_FILTERS);
-
-  /* ---------- everything below is derived from `rfis` + `filters` ---------- */
-
-  const stats = useMemo(() => {
-    const now = Date.now();
-    const f = filters;
-    const pick = (skip: FilterKey[]) => rfis.filter((r) => matches(r, f, skip, now));
-
-    const scope = pick(["status"]); // KPIs + donut: every filter except status
-    const forDiscipline = pick(["discipline"]);
-    const forPriority = pick(["priority"]);
-    const forTeam = pick(["team"]);
-    const forMonth = pick(["month"]);
-    const forBucket = pick(["bucket"]);
-    const visible = pick([]); // fully filtered
-
-    /* KPIs */
-    let closed = 0, draft = 0, cancelled = 0, awaiting = 0, responded = 0, urgentOpen = 0, everResponded = 0;
-    let respSum = 0, respCount = 0;
-    for (const r of scope) {
-      const pr = toRfiPriority(r.priority);
-      const isClosed = r.status === "CLOSED";
-      const isCancelled = r.status === "CANCELLED";
-      const isDraft = r.status === "DRAFT";
-      if (isClosed) closed += 1;
-      if (isCancelled) cancelled += 1;
-      if (isDraft) draft += 1;
-      if (AWAITING.has(r.status)) awaiting += 1;
-      if (RESPONDED.has(r.status)) responded += 1;
-      if (!isClosed && !isCancelled && !isDraft && (pr === "URGENT" || pr === "HIGH")) urgentOpen += 1;
-      const created = parseDate(r.createdAt);
-      const resp = parseDate(r.responseReceivedAt);
-      if (resp || RESPONDED.has(r.status) || isClosed) everResponded += 1;
-      if (created && resp && resp.getTime() >= created.getTime()) {
-        respSum += (resp.getTime() - created.getTime()) / 3_600_000;
-        respCount += 1;
-      }
-    }
-    const total = scope.length;
-    const open = total - closed - cancelled - draft;
-    const issued = total - draft - cancelled;
-    const responseRate = issued > 0 ? Math.round((everResponded / issued) * 100) : 0;
-    const avgResponseHours = respCount > 0 ? respSum / respCount : null;
-
-    /* status donut */
-    const byStatus: Record<string, number> = {};
-    for (const r of scope) byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
-    const slices = Object.entries(byStatus)
-      .map(([status, count]) => ({ status, count, color: STATUS_COLORS[status] ?? "#94a3b8" }))
-      .sort((a, b) => b.count - a.count);
-
-    /* discipline / priority / team (each ignores its own filter so you can switch) */
-    const byDiscipline: Record<string, number> = {};
-    for (const r of forDiscipline) byDiscipline[r.discipline] = (byDiscipline[r.discipline] ?? 0) + 1;
-    const byPriority: Record<RfiPriority, number> = { URGENT: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
-    for (const r of forPriority) byPriority[toRfiPriority(r.priority)] += 1;
-    const byTeam = { INTERNAL: 0, EXTERNAL: 0 };
-    for (const r of forTeam) {
-      if (r.teamType === "INTERNAL") byTeam.INTERNAL += 1;
-      else if (r.teamType === "EXTERNAL") byTeam.EXTERNAL += 1;
-    }
-
-    /* activity by month */
-    const months = Array.from({ length: monthSpan }, (_, i) => {
-      const d = new Date();
-      d.setDate(1);
-      d.setHours(0, 0, 0, 0);
-      d.setMonth(d.getMonth() - (monthSpan - 1 - i));
-      return { key: `${d.getFullYear()}-${d.getMonth()}`, label: format(d, "MMM"), full: format(d, "MMM yyyy"), created: 0, responded: 0 };
-    });
-    const monthIdx = new Map(months.map((m, i) => [m.key, i]));
-    for (const r of forMonth) {
-      const c = parseDate(r.createdAt);
-      if (c) {
-        const i = monthIdx.get(`${c.getFullYear()}-${c.getMonth()}`);
-        if (i !== undefined) months[i].created += 1;
-      }
-      const p = parseDate(r.responseReceivedAt);
-      if (p) {
-        const i = monthIdx.get(`${p.getFullYear()}-${p.getMonth()}`);
-        if (i !== undefined) months[i].responded += 1;
-      }
-    }
-
-    /* aging of RFIs still waiting */
-    const buckets = AGE_BUCKETS.map((b) => ({ ...b, count: 0 }));
-    let pendingCount = 0;
-    for (const r of forBucket) {
-      if (!AWAITING.has(r.status)) continue;
-      pendingCount += 1;
-      const a = ageOf(r, now);
-      const b = buckets.find((x) => a >= x.min && a <= x.max);
-      if (b) b.count += 1;
-    }
-
-    /* lists (fully filtered) */
-    const pending = visible.filter((r) => AWAITING.has(r.status));
-    const needsAttention = [...pending]
-      .sort((a, b) => {
-        const w = PRIORITY_META[toRfiPriority(b.priority)].weight - PRIORITY_META[toRfiPriority(a.priority)].weight;
-        return w !== 0 ? w : ageOf(b, now) - ageOf(a, now);
-      })
-      .map((r) => ({ rfi: r, age: ageOf(r, now) }));
-    const lastTouched = (r: Rfi) => Math.max(parseDate(r.createdAt)?.getTime() ?? 0, parseDate(r.responseReceivedAt)?.getTime() ?? 0);
-    const recent = [...visible].sort((a, b) => lastTouched(b) - lastTouched(a));
-
-    return {
-      total, open, awaiting, responded, closed, draft, cancelled, urgentOpen, responseRate, avgResponseHours,
-      slices, months, buckets, needsAttention, recent, byDiscipline, byPriority, byTeam, pendingCount, visibleCount: visible.length,
-    };
-  }, [rfis, filters, monthSpan]);
-
+  const set = (patch: Partial<Filters>) => setFilters((f) => ({ ...f, ...patch }));
+  /** Jump to a sub-section, optionally with filters already applied. */
+  const go = (id: SectionId, patch: Partial<Filters> = {}) => {
+    setFilters({ ...NO_FILTERS, ...patch });
+    setSection(id);
+    if (typeof window !== "undefined") window.scrollTo?.({ top: 0, behavior: "smooth" });
+  };
   const openRfi = (id: number) => {
-    setOpenRfiId(id);
+    setOpenId(id);
     setDialogOpen(true);
   };
 
-  /** Live counts for the quick-filter chips (whole project, ignoring current filters). */
-  const presetCounts = useMemo(() => {
+  /* ---------- all numbers, calculated once ---------- */
+  const d = useMemo(() => {
     const now = Date.now();
-    let urgentOpen = 0, overdue = 0, toReview = 0, fresh = 0;
+    const waiting = rfis.filter((r) => WAITING.has(r.status));
+    const replied = rfis.filter((r) => REPLIED.has(r.status));
+    const closed = rfis.filter((r) => r.status === "CLOSED");
+
+    const needsAttention = waiting.filter((r) => {
+      const p = toRfiPriority(r.priority);
+      return p === "URGENT" || p === "HIGH" || ageOf(r, now) >= 15;
+    });
+    const byWeight = (a: Rfi, b: Rfi) => {
+      const w = prio(b).weight - prio(a).weight;
+      return w !== 0 ? w : ageOf(b, now) - ageOf(a, now);
+    };
+
+    const bands = AGE_BANDS.map((b) => ({ ...b, count: waiting.filter((r) => { const a = ageOf(r, now); return a >= b.min && a <= b.max; }).length }));
+
+    // Split helper: how many waiting / replied / closed inside a group of RFIs
+    const split = (list: Rfi[]) => ({
+      total: list.length,
+      waiting: list.filter((r) => WAITING.has(r.status)).length,
+      replied: list.filter((r) => REPLIED.has(r.status)).length,
+      closed: list.filter((r) => r.status === "CLOSED").length,
+    });
+    const group = (keyOf: (r: Rfi) => string) => {
+      const m = new Map<string, Rfi[]>();
+      rfis.forEach((r) => { const k = keyOf(r); if (k) m.set(k, [...(m.get(k) ?? []), r]); });
+      return [...m.entries()].map(([key, list]) => ({ key, ...split(list) })).sort((a, b) => b.total - a.total);
+    };
+
+    // Status counts for the overview bars
+    const statusMap = new Map<string, number>();
+    rfis.forEach((r) => statusMap.set(r.status, (statusMap.get(r.status) ?? 0) + 1));
+
+    // Response speed
+    let respSum = 0, respN = 0, everReplied = 0;
+    const issued = rfis.filter((r) => r.status !== "DRAFT" && r.status !== "CANCELLED").length;
     for (const r of rfis) {
-      const pr = toRfiPriority(r.priority);
-      if (inGroup(r.status, "open") && (pr === "URGENT" || pr === "HIGH")) urgentOpen += 1;
-      if (AWAITING.has(r.status) && ageOf(r, now) >= 15) overdue += 1;
-      if (RESPONDED.has(r.status)) toReview += 1;
-      const c = parseDate(r.createdAt);
-      if (c && now - c.getTime() <= 30 * DAY) fresh += 1;
+      const c = parseDate(r.createdAt), p = parseDate(r.responseReceivedAt);
+      if (p || REPLIED.has(r.status) || r.status === "CLOSED") everReplied += 1;
+      if (c && p && p.getTime() >= c.getTime()) { respSum += (p.getTime() - c.getTime()) / 3_600_000; respN += 1; }
     }
-    return { urgentOpen, overdue, toReview, fresh };
-  }, [rfis]);
+    const oldestWaiting = waiting.reduce((m, r) => Math.max(m, ageOf(r, now)), 0);
 
-  /** Makes any non-button element behave like one (Enter / Space). */
-  const press = (fn: () => void) => ({
-    role: "button" as const,
-    tabIndex: 0,
-    onClick: fn,
-    onKeyDown: (e: ReactKeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        fn();
+    // Month-by-month activity
+    const monthList = Array.from({ length: months }, (_, i) => {
+      const dt = new Date();
+      dt.setDate(1); dt.setHours(0, 0, 0, 0);
+      dt.setMonth(dt.getMonth() - (months - 1 - i));
+      return { key: `${dt.getFullYear()}-${dt.getMonth()}`, label: format(dt, "MMM"), full: format(dt, "MMMM yyyy"), created: 0, replies: 0 };
+    });
+    const idx = new Map(monthList.map((m, i) => [m.key, i]));
+    for (const r of rfis) {
+      const c = parseDate(r.createdAt), p = parseDate(r.responseReceivedAt);
+      if (c) { const i = idx.get(`${c.getFullYear()}-${c.getMonth()}`); if (i !== undefined) monthList[i].created += 1; }
+      if (p) { const i = idx.get(`${p.getFullYear()}-${p.getMonth()}`); if (i !== undefined) monthList[i].replies += 1; }
+    }
+
+    return {
+      now, waiting, replied, closed, needsAttention,
+      attentionTop: [...needsAttention].sort(byWeight).slice(0, 5),
+      latestReplies: [...replied].sort((a, b) => lastTouched(b) - lastTouched(a)).slice(0, 5),
+      bands,
+      statusRows: [...statusMap.entries()].sort((a, b) => b[1] - a[1]),
+      byProject: group((r) => r.projectName),
+      byDiscipline: group((r) => r.discipline),
+      byPriority: (Object.keys(PRIORITY) as RfiPriority[]).map((p) => ({ key: p, ...split(rfis.filter((r) => toRfiPriority(r.priority) === p)) })),
+      byTeam: (["INTERNAL", "EXTERNAL"] as const).map((t) => ({ key: t, ...split(rfis.filter((r) => r.teamType === t)) })),
+      responseRate: issued > 0 ? Math.round((everReplied / issued) * 100) : 0,
+      avgResponseHours: respN > 0 ? respSum / respN : null,
+      oldestWaiting,
+      monthList,
+    };
+  }, [rfis, months]);
+
+  /* ---------- the list used by Waiting / Replies / Closed / All ---------- */
+  const isListSection = section === "waiting" || section === "replies" || section === "closed" || section === "all";
+  const listRows = useMemo(() => {
+    const base = section === "waiting" ? d.waiting : section === "replies" ? d.replied : section === "closed" ? d.closed : rfis;
+    const q = filters.q.trim().toLowerCase();
+    const rows = base.filter((r) => {
+      if (q && !`${r.rfiNumber} ${r.subject ?? ""} ${isAll ? r.projectName ?? "" : ""}`.toLowerCase().includes(q)) return false;
+      if (filters.project && r.projectName !== filters.project) return false;
+      if (filters.priority && toRfiPriority(r.priority) !== filters.priority) return false;
+      if (filters.discipline && r.discipline !== filters.discipline) return false;
+      if (filters.status && r.status !== filters.status) return false;
+      if (filters.age) {
+        const band = AGE_BANDS.find((b) => b.key === filters.age)!;
+        const a = ageOf(r, d.now);
+        if (a < band.min || a > band.max) return false;
       }
-    },
-  });
+      return true;
+    });
+    return rows.sort((a, b) => {
+      if (sort === "newest") return lastTouched(b) - lastTouched(a);
+      if (sort === "oldest") return (parseDate(a.createdAt)?.getTime() ?? 0) - (parseDate(b.createdAt)?.getTime() ?? 0);
+      const w = prio(b).weight - prio(a).weight;
+      return w !== 0 ? w : ageOf(b, d.now) - ageOf(a, d.now);
+    });
+  }, [rfis, d, section, filters, sort, isAll]);
 
-  /* ---------- empty / loading states ---------- */
+  const hasFilters = !!(filters.q.trim() || filters.priority || filters.discipline || filters.status || filters.age || filters.project);
+  const projectNames = useMemo(() => [...new Set(rfis.map((r) => r.projectName).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })), [rfis]);
+  const disciplines = useMemo(() => [...new Set(rfis.map((r) => r.discipline).filter(Boolean))].sort(), [rfis]);
+  const allStatuses = useMemo(() => [...new Set(rfis.map((r) => r.status))].sort(), [rfis]);
 
-  if (!projectName) {
-    return <p className="py-10 text-center text-sm text-muted-foreground">Select a client and project to see its RFI dashboard.</p>;
+  /* ---------- Excel download ---------- */
+  const handleDownload = async () => {
+    const rows = isListSection ? listRows : rfis;
+    if (downloading || rows.length === 0) return;
+    setDownloading(true);
+    try {
+      const XLSX = await import("xlsx");
+      const fmt = (v?: string | null) => { const dt = parseDate(v); return dt ? format(dt, "dd MMM yyyy HH:mm") : ""; };
+      const header = ["Project", "RFI #", "Subject", "Discipline", "Priority", "Status", "Sent by", "To", "CC", "Created", "Reply received", "Days open", "Response notes"];
+      const body = rows.map((r) => [
+        r.projectName ?? "",
+        r.rfiNumber, r.subject ?? "", disciplineLabel(r.discipline), prio(r).label, getStatusLabel(r.status),
+        r.sentBy ?? r.senderName ?? "", r.recipientEmail ?? "", r.ccEmails ?? "", fmt(r.createdAt), fmt(r.responseReceivedAt),
+        ageOf(r, d.now), r.responseNotes ?? "",
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
+      ws["!cols"] = header.map((h, i) => ({ wch: i === 0 ? 28 : i === 2 ? 42 : Math.max(12, h.length + 2) }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "RFIs");
+      const safe = (isAll ? "all_projects" : projectName || "project").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "_") || "project";
+      XLSX.writeFile(wb, `${safe}_rfis.xlsx`);
+      toast({ title: "Excel file downloaded", description: `${plural(rows.length, "RFI")} saved.` });
+    } catch {
+      toast({ title: "Download failed", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  /* ---------- the two options at the top: This project | All projects ---------- */
+  const scopeSwitch = (
+    <div className="flex rounded-xl border border-border bg-muted p-0.5" role="group" aria-label="Dashboard scope">
+      {([
+        { id: "project", label: "This project", icon: FileText },
+        { id: "all", label: "All projects", icon: Layers },
+      ] as const).map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          aria-pressed={scope === o.id}
+          onClick={() => onScopeChange(o.id)}
+          className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3.5 text-sm font-semibold transition active:scale-95 ${scope === o.id ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          <o.icon className="h-4 w-4" /> {o.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  /* ---------- states: no project / loading / empty ---------- */
+  if (!isAll && !projectName) {
+    return (
+      <div className="rfd-in flex flex-col items-center gap-3 py-20 text-center">
+        <style>{CSS}</style>
+        {scopeSwitch}
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary"><FileText className="h-8 w-8" /></div>
+        <p className="text-lg font-bold text-foreground">Choose a project to begin</p>
+        <p className="max-w-sm text-sm text-muted-foreground">Select a client and a project at the top of the page. Its RFIs will appear here.</p>
+      </div>
+    );
   }
   if (loading && rfis.length === 0) {
     return (
-      <div className="space-y-3 p-1">
-        <div className="h-16 animate-pulse rounded-2xl bg-muted/60" />
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-16 animate-pulse rounded-2xl bg-muted/50" />
-          ))}
+      <div className="rfd-root mx-auto w-full max-w-7xl space-y-4 p-3" aria-busy="true">
+        <style>{CSS}</style>
+        <span className="sr-only">Loading RFIs…</span>
+        <div className="flex justify-end">{scopeSwitch}</div>
+        <div className="rfd-skel h-20" />
+        <div className="grid gap-4 lg:grid-cols-[250px_minmax(0,1fr)]">
+          <div className="rfd-skel h-72" />
+          <div className="space-y-4"><div className="rfd-skel h-28" /><div className="rfd-skel h-64" /></div>
         </div>
-        <div className="h-56 animate-pulse rounded-2xl bg-muted/40" />
       </div>
     );
   }
   if (rfis.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 py-14 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <Inbox className="h-7 w-7" />
-        </div>
-        <p className="text-sm font-bold text-foreground">No RFIs for this project yet</p>
-        <p className="max-w-xs text-xs text-muted-foreground">Create your first RFI and this dashboard will fill up automatically.</p>
+      <div className="rfd-in flex flex-col items-center gap-3 py-20 text-center">
+        <style>{CSS}</style>
+        {scopeSwitch}
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Inbox className="h-8 w-8" /></div>
+        <p className="text-lg font-bold text-foreground">{isAll ? "No RFIs in any project yet" : "No RFIs in this project yet"}</p>
+        <p className="max-w-sm text-sm text-muted-foreground">When an RFI is created, you will see it here along with its progress.</p>
       </div>
     );
   }
 
-  /* ---------- donut geometry (circumference = 100) ---------- */
-  let offset = 0;
-  const donut = stats.slices.map((s) => {
-    const pct = stats.total > 0 ? (s.count / stats.total) * 100 : 0;
-    const seg = { ...s, pct, offset };
-    offset += pct;
-    return seg;
-  });
-  const shownStatus = hoverStatus ?? filters.status;
-  const activeSlice = donut.find((d) => d.status === shownStatus) ?? null;
+  /* ---------- the sub-section menu ---------- */
+  const MENU: { id: SectionId; label: string; help: string; icon: typeof FileText; count?: number; tone?: string }[] = [
+    { id: "overview", label: "Overview", help: "The big picture", icon: LayoutDashboard },
+    { id: "waiting", label: "Waiting for reply", help: "Sent, no answer yet", icon: Hourglass, count: d.waiting.length, tone: "#f59e0b" },
+    { id: "replies", label: "Replies to review", help: "Answers that came back", icon: Reply, count: d.replied.length, tone: "#14b8a6" },
+    { id: "closed", label: "Closed", help: "Finished RFIs", icon: CheckCircle2, count: d.closed.length, tone: "#10b981" },
+    { id: "breakdown", label: "Breakdown", help: "By discipline, priority, team", icon: PieChart },
+    { id: "trends", label: "Trends", help: "Month by month", icon: BarChart3 },
+    { id: "all", label: "All RFIs", help: "Search everything", icon: ListChecks, count: rfis.length },
+  ];
+  const current = MENU.find((m) => m.id === section)!;
 
-  const maxMonth = Math.max(1, ...stats.months.map((m) => Math.max(m.created, m.responded)));
-  const maxDiscipline = Math.max(1, ...Object.values(stats.byDiscipline));
-  const maxPriority = Math.max(1, ...Object.values(stats.byPriority));
-  const maxBucket = Math.max(1, ...stats.buckets.map((b) => b.count));
-  const teamTotal = Math.max(1, stats.byTeam.INTERNAL + stats.byTeam.EXTERNAL);
+  /* =========================================================
+     SUB-SECTION CONTENT
+  ========================================================= */
 
-  // Active-filter chips
-  const chips: { label: string; clear: () => void }[] = [];
-  if (filters.group) chips.push({ label: GROUP_LABEL[filters.group], clear: () => setFilters((f) => ({ ...f, group: null })) });
-  if (filters.status) chips.push({ label: getStatusLabel(filters.status), clear: () => setFilters((f) => ({ ...f, status: null })) });
-  if (filters.discipline) chips.push({ label: DISCIPLINE_META[filters.discipline]?.label ?? filters.discipline, clear: () => setFilters((f) => ({ ...f, discipline: null })) });
-  if (filters.priority) chips.push({ label: `${PRIORITY_META[filters.priority].label} priority`, clear: () => setFilters((f) => ({ ...f, priority: null })) });
-  if (filters.team) chips.push({ label: filters.team === "INTERNAL" ? "Internal" : "External", clear: () => setFilters((f) => ({ ...f, team: null })) });
-  if (filters.month) {
-    const m = stats.months.find((x) => x.key === filters.month);
-    chips.push({ label: m ? m.full : "Month", clear: () => setFilters((f) => ({ ...f, month: null })) });
-  }
-  if (filters.urgent) chips.push({ label: "High & urgent", clear: () => setFilters((f) => ({ ...f, urgent: false })) });
-  if (filters.minAge !== null) chips.push({ label: `Waiting ${filters.minAge}+ days`, clear: () => setFilters((f) => ({ ...f, minAge: null })) });
-  if (filters.bucket !== null) chips.push({ label: `Waiting ${AGE_BUCKETS[filters.bucket].label}`, clear: () => setFilters((f) => ({ ...f, bucket: null })) });
-  if (filters.q.trim()) chips.push({ label: `“${filters.q.trim()}”`, clear: () => setFilters((f) => ({ ...f, q: "" })) });
-  if (filters.range !== "all") chips.push({ label: `Last ${filters.range === "365" ? "year" : `${filters.range} days`}`, clear: () => setFilters((f) => ({ ...f, range: "all" })) });
-  const filtered = chips.length > 0;
+  const pct = (n: number) => (rfis.length ? Math.round((n / rfis.length) * 100) : 0);
 
-  /** Excel export of exactly what the dashboard is currently showing (respects filters). */
-  const handleDownload = async () => {
-    const rows = stats.recent;
-    if (rows.length === 0) return;
-    const XLSX = await import("xlsx"); // loaded only when the user clicks download
-    const fmt = (v?: string | null) => {
-      const d = parseDate(v);
-      return d ? format(d, "dd MMM yyyy HH:mm") : "";
-    };
-    const now = Date.now();
-    const header = ["RFI #", "Subject", "Discipline", "Team", "Priority", "Status", "Sent by", "To", "CC", "Created", "Reply received", "Days open", "Response notes"];
-    const body = rows.map((r) => [
-      r.rfiNumber, r.subject ?? "", DISCIPLINE_META[r.discipline]?.label ?? r.discipline, r.teamType === "INTERNAL" ? "Internal" : "External",
-      PRIORITY_META[toRfiPriority(r.priority)].label, getStatusLabel(r.status), r.sentBy ?? r.senderName ?? "", r.recipientEmail ?? "", r.ccEmails ?? "",
-      fmt(r.createdAt), fmt(r.responseReceivedAt), ageOf(r, now), r.responseNotes ?? "",
-    ]);
-    const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
-    ws["!cols"] = header.map((h, i) => ({ wch: i === 1 ? 42 : Math.max(12, h.length + 2) }));
+  const renderOverview = () => (
+    <div className="space-y-4">
+      {d.needsAttention.length > 0 ? (
+        <div className="rfd-alert flex flex-wrap items-center gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-5 py-3">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="min-w-0 flex-1 text-sm text-foreground">
+            <strong>{plural(d.needsAttention.length, "RFI")}</strong> {d.needsAttention.length === 1 ? "needs" : "need"} your attention — urgent, or waiting more than 2 weeks.
+          </p>
+          <button type="button" onClick={() => go("waiting")} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-amber-500 px-3.5 text-sm font-semibold text-white transition hover:bg-amber-600 active:scale-95">
+            Show them <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-5 py-3">
+          <CheckCircle2 className="rfd-pop h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <p className="text-sm text-foreground"><strong>All good.</strong> Nothing urgent or overdue right now.</p>
+        </div>
+      )}
 
-    const count = (fn: (r: Rfi) => string) => {
-      const m = new Map<string, number>();
-      rows.forEach((r) => m.set(fn(r), (m.get(fn(r)) ?? 0) + 1));
-      return [...m.entries()].sort((a, b) => b[1] - a[1]);
-    };
-    const summary: (string | number)[][] = [
-      ["Project", projectName ?? ""], ["Client", client ?? ""], ["Exported", format(new Date(), "dd MMM yyyy HH:mm")],
-      ["RFIs in this export", rows.length], ["Filters", chips.length ? chips.map((c) => c.label).join(", ") : "None"], [],
-      ["By status", "Count"], ...count((r) => getStatusLabel(r.status)),
-      [], ["By discipline", "Count"], ...count((r) => DISCIPLINE_META[r.discipline]?.label ?? r.discipline),
-      [], ["By priority", "Count"], ...count((r) => PRIORITY_META[toRfiPriority(r.priority)].label),
-    ];
-    const wsSum = XLSX.utils.aoa_to_sheet(summary);
-    wsSum["!cols"] = [{ wch: 26 }, { wch: 40 }];
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <Tile index={0} icon={FileText} label="All RFIs" hint={isAll ? "In all projects" : "In this project"} value={rfis.length} color="#6366f1" spark={d.monthList.map((m) => m.created)} onClick={() => go("all")} />
+        <Tile index={1} icon={Hourglass} label="Waiting for reply" hint="No answer yet" value={d.waiting.length} color="#f59e0b" share={pct(d.waiting.length)} onClick={() => go("waiting")} />
+        <Tile index={2} icon={Reply} label="Reply received" hint="Ready to review" value={d.replied.length} color="#14b8a6" share={pct(d.replied.length)} onClick={() => go("replies")} />
+        <Tile index={3} icon={CheckCircle2} label="Closed" hint="Finished" value={d.closed.length} color="#10b981" share={pct(d.closed.length)} onClick={() => go("closed")} />
+      </div>
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "RFIs");
-    XLSX.utils.book_append_sheet(wb, wsSum, "Summary");
-    const safe = (projectName || "project").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "_") || "project";
-    XLSX.writeFile(wb, `${safe}_rfis.xlsx`);
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card title="Needs attention" hint="Most urgent RFIs still waiting for a reply" action={d.needsAttention.length > 5 ? { label: "See all", onClick: () => go("waiting") } : undefined}>
+          {d.attentionTop.length === 0 ? <Empty text="Nothing needs attention 🎉" /> : <ul className="space-y-2">{d.attentionTop.map((r) => <RfiRow key={r.id} rfi={r} now={d.now} authName={authName} onOpen={openRfi} compact showProject={isAll} />)}</ul>}
+        </Card>
+        <Card title="Latest replies" hint="Recent answers waiting for your review" action={d.replied.length > 5 ? { label: "See all", onClick: () => go("replies") } : undefined}>
+          {d.latestReplies.length === 0 ? <Empty text="No replies to review" /> : <ul className="space-y-2">{d.latestReplies.map((r) => <RfiRow key={r.id} rfi={r} now={d.now} authName={authName} onOpen={openRfi} compact showProject={isAll} />)}</ul>}
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card title="Where every RFI stands" hint="Click a slice or a line to see those RFIs">
+          <div className="flex flex-col items-center gap-4 sm:flex-row">
+            <Donut
+              segments={d.statusRows.map(([status, n]) => ({ key: status, label: getStatusLabel(status), value: n, color: STATUS_COLORS[status] ?? "#94a3b8" }))}
+              total={rfis.length}
+              mounted={mounted}
+              onPick={(status) => go("all", { status })}
+            />
+            <ul className="min-w-0 flex-1 space-y-0.5 self-stretch">
+              {d.statusRows.map(([status, n]) => (
+                <BarRow key={status} label={getStatusLabel(status)} count={n} max={d.statusRows[0][1]} color={STATUS_COLORS[status] ?? "#94a3b8"} mounted={mounted} onClick={() => go("all", { status })} />
+              ))}
+            </ul>
+          </div>
+        </Card>
+
+        <Card title="How long they have waited" hint="RFIs still waiting, by age. Click a part to see them">
+          {d.waiting.length === 0 ? (
+            <Empty text="Nothing is waiting for a reply" />
+          ) : (
+            <div className="space-y-4">
+              <div className="flex h-4 w-full overflow-hidden rounded-full bg-muted">
+                {d.bands.map((b) => b.count > 0 && (
+                  <button key={b.key} type="button" onClick={() => go("waiting", { age: b.key })} title={`${b.label}: ${b.count}`} aria-label={`${b.label}: ${b.count}`}
+                    className="rfd-stack h-full hover:brightness-110" style={{ flexGrow: mounted ? b.count : 0, flexBasis: 0, background: b.color }} />
+                ))}
+              </div>
+              <ul className="space-y-1">
+                {d.bands.map((b) => (
+                  <li key={b.key}>
+                    <button type="button" onClick={() => go("waiting", { age: b.key })} className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition hover:bg-muted/60">
+                      <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: b.color }} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-foreground">{b.label}</span>
+                        <span className="block text-xs text-muted-foreground">{b.note}</span>
+                      </span>
+                      <span className="text-xl font-extrabold tabular-nums text-foreground">{b.count}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">Longest wait: <strong className="text-foreground">{plural(d.oldestWaiting, "day")}</strong></p>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {isAll && d.byProject.length > 1 && (
+        <Card title="Busiest projects" hint="Where most RFIs are. Click a project to see its RFIs">
+          <ul className="grid gap-x-6 gap-y-1 md:grid-cols-2">
+            {d.byProject.slice(0, 8).map((pr) => (
+              <BarRow key={pr.key} label={pr.key} count={pr.total} max={d.byProject[0].total} color="#0ea5e9" mounted={mounted} onClick={() => go("all", { project: pr.key })} />
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
+  );
+
+  const renderList = () => {
+    const shown = listRows.slice(0, visible);
+    const bandCount = (key: AgeKey) => d.bands.find((b) => b.key === key)?.count ?? 0;
+    return (
+      <div className="space-y-4">
+        {/* waiting-only: how long have they been waiting? */}
+        {section === "waiting" && (
+          <div className="grid gap-3 sm:grid-cols-3">
+            {AGE_BANDS.map((b) => {
+              const active = filters.age === b.key;
+              return (
+                <button key={b.key} type="button" aria-pressed={active} onClick={() => set({ age: active ? null : b.key })}
+                  className={`rfd-lift flex items-center gap-3 rounded-2xl border bg-card p-3.5 text-left shadow-sm ${active ? "border-primary ring-2 ring-primary/25" : "border-border"}`}>
+                  <span className="h-10 w-1.5 shrink-0 rounded-full" style={{ background: b.color }} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-2xl font-extrabold leading-none tabular-nums text-foreground">{bandCount(b.key)}</span>
+                    <span className="mt-1 block text-sm font-semibold text-foreground">{b.label}</span>
+                    <span className="block text-xs text-muted-foreground">{b.note}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* find & filter */}
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-3 shadow-sm">
+          <label className="relative min-w-[220px] flex-1">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input value={filters.q} onChange={(e) => set({ q: e.target.value })} placeholder="Search by RFI number or subject…" aria-label="Search RFIs"
+              className="h-10 w-full rounded-lg border border-border bg-background pl-10 pr-9 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20" />
+            {filters.q && (
+              <button type="button" onClick={() => set({ q: "" })} aria-label="Clear search" className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+            )}
+          </label>
+          {isAll && (
+            <select aria-label="Project" value={filters.project ?? ""} onChange={(e) => set({ project: e.target.value || null })} className={`${selectCls} max-w-[240px]`}>
+              <option value="">Any project</option>
+              {projectNames.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          )}
+          {section === "all" && (
+            <select aria-label="Status" value={filters.status ?? ""} onChange={(e) => set({ status: e.target.value || null })} className={selectCls}>
+              <option value="">Any status</option>
+              {allStatuses.map((s) => <option key={s} value={s}>{getStatusLabel(s)}</option>)}
+            </select>
+          )}
+          <select aria-label="Priority" value={filters.priority ?? ""} onChange={(e) => set({ priority: (e.target.value || null) as RfiPriority | null })} className={selectCls}>
+            <option value="">Any priority</option>
+            {(Object.keys(PRIORITY) as RfiPriority[]).map((p) => <option key={p} value={p}>{PRIORITY[p].label}</option>)}
+          </select>
+          <select aria-label="Discipline" value={filters.discipline ?? ""} onChange={(e) => set({ discipline: e.target.value || null })} className={selectCls}>
+            <option value="">Any discipline</option>
+            {disciplines.map((x) => <option key={x} value={x}>{disciplineLabel(x)}</option>)}
+          </select>
+          <select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className={selectCls}>
+            <option value="priority">Most urgent first</option>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+          {hasFilters && (
+            <button type="button" onClick={() => setFilters(NO_FILTERS)} className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-border px-3.5 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground active:scale-95">
+              <X className="h-4 w-4" /> Clear
+            </button>
+          )}
+        </div>
+
+        {/* results */}
+        <Card title={`${plural(listRows.length, "RFI")}`} hint={hasFilters ? "Matching your filters · click an RFI to open it" : "Click an RFI to open it"}
+          action={onViewAll ? { label: "Full history", onClick: onViewAll, external: true } : undefined}>
+          {listRows.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-12 text-center">
+              <Search className="h-9 w-9 text-muted-foreground/60" />
+              <p className="text-sm font-semibold text-foreground">{hasFilters ? "No RFIs match your filters" : "Nothing here yet"}</p>
+              {hasFilters && <button type="button" onClick={() => setFilters(NO_FILTERS)} className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 active:scale-95">Clear filters</button>}
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {shown.map((r, i) => <RfiRow key={r.id} rfi={r} now={d.now} authName={authName} onOpen={openRfi} delay={Math.min(i, 10) * 25} showProject={isAll} />)}
+            </ul>
+          )}
+          {listRows.length > shown.length && (
+            <div className="mt-4 flex flex-col items-center gap-1">
+              <button type="button" onClick={() => setVisible((v) => v + PAGE_SIZE)} className="inline-flex h-10 items-center rounded-lg border border-border px-5 text-sm font-semibold text-foreground transition hover:bg-muted active:scale-95">
+                Show {Math.min(PAGE_SIZE, listRows.length - shown.length)} more
+              </button>
+              <p className="text-xs text-muted-foreground">Showing {shown.length} of {listRows.length}</p>
+            </div>
+          )}
+        </Card>
+      </div>
+    );
   };
 
+  const splitRows = (rows: { key: string; total: number; waiting: number; replied: number; closed: number }[], label: (k: string) => string, color: (k: string) => string, patch: (k: string) => Partial<Filters>) => {
+    const max = Math.max(1, ...rows.map((r) => r.total));
+    return (
+      <ul className="space-y-1">
+        {rows.map((r) => (
+          <li key={r.key}>
+            <button type="button" onClick={() => go("all", patch(r.key))} title={`See the ${label(r.key)} RFIs`} className="group w-full rounded-lg px-2.5 py-2.5 text-left transition hover:bg-muted/60">
+              <span className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+                <span className="truncate font-semibold text-foreground">{label(r.key)}</span>
+                <span className="flex items-center gap-2"><span className="font-bold tabular-nums text-foreground">{r.total}</span><ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition group-hover:opacity-100" /></span>
+              </span>
+              <span className="block h-2.5 overflow-hidden rounded-full bg-muted">
+                <span className="rfd-bar block h-full rounded-full" style={{ width: mounted ? `${(r.total / max) * 100}%` : "0%", background: color(r.key) }} />
+              </span>
+              <span className="mt-1.5 block text-xs text-muted-foreground">{r.waiting} waiting · {r.replied} replied · {r.closed} closed</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    );
+  };
 
-  const nowTs = Date.now();
-  const isWaiting = view === "waiting";
+  const renderBreakdown = () => (
+    <div className="grid gap-4 xl:grid-cols-2">
+      {isAll && (
+        <Card title="By project" hint="Click a line to see that project's RFIs">
+          {d.byProject.length === 0 ? <Empty /> : splitRows(d.byProject, (k) => k, () => "#0ea5e9", (k) => ({ project: k }))}
+        </Card>
+      )}
+      <Card title="By discipline" hint="Click a line to see those RFIs">
+        {d.byDiscipline.length === 0 ? <Empty /> : splitRows(d.byDiscipline, disciplineLabel, () => "#6366f1", (k) => ({ discipline: k }))}
+      </Card>
+      <Card title="By priority" hint="Click a line to see those RFIs">
+        {splitRows(d.byPriority, (k) => `${PRIORITY[k as RfiPriority].label} priority`, (k) => PRIORITY[k as RfiPriority].color, (k) => ({ priority: k as RfiPriority }))}
+      </Card>
+      <Card title="By team" hint="Internal team or external parties">
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {d.byTeam.map((t) => (
+            <li key={t.key} className="rounded-xl border border-border bg-background/60 p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.key === "INTERNAL" ? "#14b8a6" : "#f97316" }} />
+                {t.key === "INTERNAL" ? "Internal" : "External"}
+              </p>
+              <p className="mt-1 text-3xl font-extrabold tabular-nums text-foreground">{t.total}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t.waiting} waiting · {t.replied} replied · {t.closed} closed</p>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
 
-  // "Waiting" lists only RFIs still awaiting a reply; "RFIs" lists everything that matches.
-  const listRows = (() => {
-    const base = isWaiting ? stats.needsAttention.map((x) => x.rfi) : stats.recent;
-    const created = (r: Rfi) => parseDate(r.createdAt)?.getTime() ?? 0;
-    const touched = (r: Rfi) => Math.max(created(r), parseDate(r.responseReceivedAt)?.getTime() ?? 0);
-    const sorted = [...base].sort((a, b) => {
-      if (listSort === "newest") return touched(b) - touched(a);
-      if (listSort === "oldest") return created(a) - created(b);
-      const w = PRIORITY_META[toRfiPriority(b.priority)].weight - PRIORITY_META[toRfiPriority(a.priority)].weight;
-      return w !== 0 ? w : ageOf(b, nowTs) - ageOf(a, nowTs);
-    });
-    return sorted.map((rfi) => ({ rfi, age: ageOf(rfi, nowTs) }));
-  })();
-  const listLimit = 80;
+  const renderTrends = () => {
+    const max = Math.max(1, ...d.monthList.map((m) => Math.max(m.created, m.replies)));
+    const total = (k: "created" | "replies") => d.monthList.reduce((a, m) => a + m[k], 0);
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <Stat label="Reply rate" value={`${d.responseRate}%`} help="Of sent RFIs that got a reply" />
+          <Stat label="Average reply time" value={formatDuration(d.avgResponseHours)} help="From sending to first reply" />
+          <Stat label="Longest wait" value={d.waiting.length ? plural(d.oldestWaiting, "day") : "—"} help="Oldest RFI still waiting" />
+          <Stat label="Waiting now" value={String(d.waiting.length)} help="RFIs without a reply" />
+        </div>
+        <Card title="RFIs created and replies received" hint={`${total("created")} created · ${total("replies")} replies in the last ${months} months`}
+          right={
+            <div className="flex rounded-lg bg-muted p-0.5" role="group" aria-label="Months shown">
+              {([6, 12] as const).map((n) => (
+                <button key={n} type="button" aria-pressed={months === n} onClick={() => setMonths(n)} className={`h-8 rounded-md px-3 text-sm font-semibold transition ${months === n ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{n} months</button>
+              ))}
+            </div>
+          }>
+          <div className="mb-3 flex items-center gap-4 text-xs font-medium text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-indigo-500" /> Created</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-emerald-500" /> Replies received</span>
+          </div>
+          <div className="flex h-64 items-end gap-1.5 border-b border-border sm:gap-3" role="img" aria-label="Monthly RFIs created and replies received">
+            {d.monthList.map((m, mi) => (
+              <div key={m.key} className="flex h-full min-w-0 flex-1 items-end justify-center gap-1" title={`${m.full}: ${m.created} created, ${m.replies} replies`}>
+                {([{ v: m.created, c: "#6366f1" }, { v: m.replies, c: "#10b981" }]).map((b, i) => (
+                  <div key={i} className="flex h-full w-full max-w-[34px] flex-col items-center justify-end">
+                    <span className="mb-1 text-xs font-bold tabular-nums text-foreground">{b.v > 0 ? b.v : ""}</span>
+                    <div className="rfd-col w-full rounded-t-md" style={{ height: mounted ? `${(b.v / max) * 80}%` : "0%", minHeight: b.v > 0 && mounted ? 4 : 0, background: `linear-gradient(180deg, ${b.c}, ${b.c}99)`, transitionDelay: `${mi * 70 + i * 35}ms` }} />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-1.5 sm:gap-3">
+            {d.monthList.map((m) => <span key={m.key} className="min-w-0 flex-1 truncate text-center text-xs font-semibold text-muted-foreground">{m.label}</span>)}
+          </div>
+        </Card>
+      </div>
+    );
+  };
 
-  // Sorted rows for the View table.
-  const viewRows = (() => {
-    const t = (v?: string | null) => parseDate(v)?.getTime() ?? 0;
-    const key: Record<string, (r: Rfi) => string | number> = {
-      num: (r) => r.rfiNumber, subject: (r) => (r.subject ?? "").toLowerCase(), disc: (r) => r.discipline,
-      prio: (r) => PRIORITY_META[toRfiPriority(r.priority)].weight, status: (r) => getStatusLabel(r.status),
-      created: (r) => t(r.createdAt), replied: (r) => t(r.responseReceivedAt), age: (r) => t(r.createdAt) * -1,
-    };
-    const f = key[viewSort.key] ?? key.created;
-    return [...stats.recent].sort((a, b) => {
-      const x = f(a), y = f(b);
-      const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true });
-      return c * viewSort.dir;
-    });
-  })();
-
-  /** Open the "View" table, optionally after applying a filter (used by the KPI tiles). */
-  const viewWith = (patch: Partial<Filters> | null) => {
-    if (patch) setFilters((f) => ({ ...f, status: null, group: null, ...patch }));
-    setViewOpen(true);
+  const intro: Record<SectionId, string> = {
+    overview: isAll ? "A quick look at how RFIs are doing across all projects." : "A quick look at how this project's RFIs are doing.",
+    waiting: "RFIs that were sent and are still waiting for an answer. The longest-waiting ones are at the top.",
+    replies: "Answers have come back for these RFIs. Open one to read the reply and close it.",
+    closed: "RFIs that are finished.",
+    breakdown: "See how RFIs are split by discipline, priority and team.",
+    trends: "See how many RFIs were created and answered each month.",
+    all: isAll ? "Every RFI from every project. Use the search and filters to find one." : "Every RFI in this project. Use the search and filters to find one.",
   };
 
   /* =========================================================
-     PANEL BODIES — rendered both inline and in the "Expand" dialog.
-     `big` = the roomy version shown in the dialog.
+     PAGE
   ========================================================= */
+  return (
+    <div className="rfd-root mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 pb-10 pt-2" data-rfi-dashboard>
+      <style>{CSS}</style>
 
-  const renderStatus = (big: boolean) => {
-    const focus = activeSlice;
-    return (
-      <div className="flex flex-1 flex-col gap-3">
-        {/* control row — mirrors the month toggle on Activity */}
-        <div className="flex justify-end" data-nopanel>
-          <div className="flex rounded-full bg-muted p-0.5" role="group" aria-label="Status scope">
-            {([
-              { k: null, label: "All" },
-              { k: "open", label: "Open" },
-              { k: "closed", label: "Closed" },
-            ] as const).map((o) => (
-              <button key={o.label} type="button" onClick={() => setFilters((f) => ({ ...f, status: null, group: o.k }))} aria-pressed={filters.group === o.k}
-                className={`h-8 rounded-full px-3.5 text-xs font-bold transition ${filters.group === o.k ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground"}`}>
-                {o.label}
-              </button>
-            ))}
-          </div>
+      {/* ══ HEADER ══ */}
+      <header className="rfd-in rfd-hero relative flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-2xl border border-border px-5 py-4 shadow-sm">
+        <span className="rfd-blob -left-8 -top-10 h-32 w-32 bg-primary/20" aria-hidden="true" />
+        <span className="rfd-blob -bottom-12 right-24 h-28 w-28 bg-emerald-500/15" style={{ animationDelay: "-4s" }} aria-hidden="true" />
+        <div className="relative z-10 flex min-w-0 items-center gap-4">
+          <Ring percent={d.responseRate} mounted={mounted} />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-muted-foreground">{greet}{!isAll && client ? ` · ${client}` : ""}</p>
+          <h2 className="break-words text-xl font-extrabold tracking-tight text-foreground sm:text-2xl">{isAll ? "All projects" : projectName}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            RFI dashboard{isAll ? ` · ${plural(projectNames.length, "project")}` : ""} · updated {format(updatedAt, "hh:mm a")} · {d.responseRate}% replied
+          </p>
         </div>
-
-        {/* summary strip — same three boxes as Activity */}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="min-w-0 rounded-xl bg-muted/60 px-3 py-2.5">
-            <p className="truncate text-xs font-bold uppercase tracking-wider text-muted-foreground">{focus ? getStatusLabel(focus.status) : "All statuses"}</p>
-            <p className="truncate text-xs text-muted-foreground">{focus ? `${Math.round(focus.pct)}% of RFIs` : "Period total"}</p>
-          </div>
-          <div className="min-w-0 rounded-xl bg-indigo-500/10 px-3 py-2.5">
-            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-600"><span className="h-2.5 w-2.5 rounded-sm bg-indigo-500" /> {focus ? "Count" : "Open"}</p>
-            <p className="text-2xl font-extrabold leading-tight tabular-nums text-foreground">{focus ? focus.count : stats.open}</p>
-          </div>
-          <div className="min-w-0 rounded-xl bg-emerald-500/10 px-3 py-2.5">
-            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-600"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" /> {focus ? "Of total" : "Closed"}</p>
-            <p className="text-2xl font-extrabold leading-tight tabular-nums text-foreground">{focus ? stats.total : stats.closed}</p>
-          </div>
         </div>
-
-        {/* visual — fills the same space as the Activity chart */}
-        <div className={`flex flex-1 flex-col items-center justify-center gap-5 sm:flex-row ${big ? "min-h-[400px] md:gap-10" : "min-h-[260px]"}`}>
-          <div className={`relative shrink-0 ${big ? "h-64 w-64" : "h-44 w-44"}`}>
-            <svg viewBox="0 0 42 42" className="rfd-donut h-full w-full -rotate-90" data-dim={shownStatus ? "true" : "false"} role="img" aria-label="RFIs by status">
-              <circle cx="21" cy="21" r="15.9155" fill="none" stroke="hsl(var(--muted))" strokeWidth="5" />
-              {donut.map((d) => (
-                <circle
-                  key={d.status}
-                  className="rfd-seg"
-                  data-active={shownStatus === d.status ? "true" : "false"}
-                  cx="21"
-                  cy="21"
-                  r="15.9155"
-                  fill="none"
-                  stroke={d.color}
-                  strokeWidth="5"
-                  strokeDasharray={mounted ? `${Math.max(d.pct - 0.6, 0.1)} ${100 - Math.max(d.pct - 0.6, 0.1)}` : "0 100"}
-                  strokeDashoffset={-d.offset}
-                  onMouseEnter={() => setHoverStatus(d.status)}
-                  onMouseLeave={() => setHoverStatus(null)}
-                  onClick={() => toggle("status", d.status)}
-                >
-                  <title>{`${getStatusLabel(d.status)}: ${d.count}`}</title>
-                </circle>
-              ))}
-            </svg>
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-              <span className={`${big ? "text-5xl" : "text-4xl"} font-extrabold tabular-nums text-foreground`}>{activeSlice ? activeSlice.count : stats.total}</span>
-              <span className="max-w-[90px] text-xs font-semibold uppercase leading-tight tracking-wider text-muted-foreground">
-                {activeSlice ? getStatusLabel(activeSlice.status) : "Total RFIs"}
-              </span>
-            </div>
-          </div>
-          <ul className="w-full min-w-0 flex-1 space-y-1">
-            {donut.length === 0 && <li className="py-6 text-center text-sm text-muted-foreground">No matching RFIs</li>}
-            {donut.map((d) => (
-              <li
-                key={d.status}
-                {...press(() => toggle("status", d.status))}
-                data-sel={filters.status === d.status}
-                aria-pressed={filters.status === d.status}
-                className={`rfd-hit flex items-center gap-2.5 px-2.5 ${big ? "py-2.5" : "py-1.5"} text-sm`}
-                style={{ opacity: shownStatus && shownStatus !== d.status ? 0.5 : 1 }}
-                onMouseEnter={() => setHoverStatus(d.status)}
-                onMouseLeave={() => setHoverStatus(null)}
-              >
-                <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: d.color }} />
-                <span className="min-w-0 flex-1 truncate font-medium text-foreground">{getStatusLabel(d.status)}</span>
-                <span className="font-bold tabular-nums text-foreground">{d.count}</span>
-                <span className="w-10 text-right tabular-nums text-muted-foreground">{Math.round(d.pct)}%</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <p className="text-center text-xs text-muted-foreground">Hover a slice for details · click to filter the dashboard</p>
-      </div>
-    );
-  };
-
-  const renderBars = (
-    rows: { key: string; label: string; count: number; color: string; dot?: boolean }[],
-    max: number,
-    selected: string | number | null,
-    onPick: (key: string) => void,
-    big: boolean,
-    empty = "No matching RFIs",
-  ) => (
-    <ul className="space-y-1.5">
-      {rows.length === 0 && <li className="py-6 text-center text-sm text-muted-foreground">{empty}</li>}
-      {rows.map((r, i) => (
-        <li
-          key={r.key}
-          title={`${r.label}: ${r.count}`}
-          {...press(() => onPick(r.key))}
-          data-sel={String(selected) === r.key}
-          aria-pressed={String(selected) === r.key}
-          className={`rfd-hit px-2.5 ${big ? "py-3" : "py-2"}`}
-          style={{ opacity: selected !== null && String(selected) !== r.key ? 0.5 : 1 }}
-        >
-          <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
-            <span className="flex min-w-0 items-center gap-2 font-semibold text-foreground">
-              {r.dot && <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: r.color }} />}
-              <span className="truncate">{r.label}</span>
-            </span>
-            <span className="font-bold tabular-nums text-foreground">{r.count}</span>
-          </div>
-          <div className={`${big ? "h-4" : "h-3"} overflow-hidden rounded-full bg-muted`}>
-            <div className="rfd-bar h-full rounded-full" data-on={mounted} style={{ width: `${(r.count / max) * 100}%`, background: `linear-gradient(90deg, ${r.color}, ${r.color}bb)`, transitionDelay: `${i * 80}ms` }} />
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-
-  const renderDiscipline = (big: boolean) =>
-    renderBars(
-      Object.entries(stats.byDiscipline)
-        .sort((a, b) => b[1] - a[1])
-        .map(([key, count]) => ({ key, label: DISCIPLINE_META[key]?.label ?? key, count, color: DISCIPLINE_META[key]?.color ?? "#94a3b8" })),
-      maxDiscipline, filters.discipline, (k) => toggle("discipline", k), big,
-    );
-
-  const renderPriority = (big: boolean) => (
-    <div className="space-y-4">
-      {renderBars(
-        (Object.keys(PRIORITY_META) as RfiPriority[]).map((p) => ({ key: p, label: PRIORITY_META[p].label, count: stats.byPriority[p], color: PRIORITY_META[p].color, dot: true })),
-        maxPriority, filters.priority, (k) => toggle("priority", k as RfiPriority), big,
-      )}
-      <div className="border-t border-border/60 pt-3">
-        <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          <span className="flex items-center gap-1.5"><Users className="h-4 w-4" /> Team scope</span>
-          <span className="tabular-nums">{stats.byTeam.INTERNAL} internal / {stats.byTeam.EXTERNAL} external</span>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {(["INTERNAL", "EXTERNAL"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => toggle("team", t)}
-              aria-pressed={filters.team === t}
-              className={`flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition ${filters.team === t ? "border-primary bg-primary/10 text-foreground" : "border-border/70 text-muted-foreground hover:bg-muted/60"}`}
-              style={{ opacity: filters.team && filters.team !== t ? 0.55 : 1 }}
-            >
-              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: t === "INTERNAL" ? "#14b8a6" : "#f97316" }} />
-              {t === "INTERNAL" ? "Internal" : "External"} · {stats.byTeam[t]}
-              <span className="text-xs opacity-70">{Math.round((stats.byTeam[t] / teamTotal) * 100)}%</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderWaiting = (big: boolean) =>
-    stats.pendingCount === 0 && filters.bucket === null ? (
-      <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
-        <CheckCircle2 className="h-10 w-10 text-emerald-500" />
-        <p className="text-sm font-semibold text-foreground">All caught up — nothing is waiting on a reply</p>
-      </div>
-    ) : (
-      renderBars(
-        stats.buckets.map((b, i) => ({ key: String(i), label: b.label, count: b.count, color: b.color })),
-        maxBucket, filters.bucket, (k) => toggle("bucket", Number(k)), big,
-      )
-    );
-
-  const renderActivity = (big: boolean) => {
-    const focus = hoverMonth !== null ? stats.months[hoverMonth] : filters.month ? stats.months.find((m) => m.key === filters.month) ?? null : null;
-    const created = focus ? focus.created : stats.months.reduce((a, m) => a + m.created, 0);
-    const replied = focus ? focus.responded : stats.months.reduce((a, m) => a + m.responded, 0);
-    const niceMax = maxMonth <= 4 ? 4 : Math.ceil(maxMonth / 4) * 4;
-    const ticks = [4, 3, 2, 1, 0].map((k) => Math.round((niceMax * k) / 4));
-    const dense = stats.months.length > 6;
-    return (
-      <div className="flex flex-1 flex-col gap-3">
-        <div className="flex justify-end" data-nopanel>
-          <div className="flex rounded-full bg-muted p-0.5" role="group" aria-label="Months shown">
-            {([6, 12] as const).map((n) => (
-              <button key={n} type="button" onClick={() => setMonthSpan(n)} className={`h-8 rounded-full px-3.5 text-xs font-bold transition ${monthSpan === n ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground"}`}>
-                Last {n} months
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          <div className="min-w-0 rounded-xl bg-muted/60 px-3 py-2.5">
-            <p className="truncate text-xs font-bold uppercase tracking-wider text-muted-foreground">{focus ? focus.full : `Last ${monthSpan} months`}</p>
-            <p className="truncate text-xs text-muted-foreground">{focus ? "Selected month" : "Period total"}</p>
-          </div>
-          <div className="min-w-0 rounded-xl bg-indigo-500/10 px-3 py-2.5">
-            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-600"><span className="h-2.5 w-2.5 rounded-sm bg-indigo-500" /> Created</p>
-            <p className="text-2xl font-extrabold leading-tight tabular-nums text-foreground">{created}</p>
-          </div>
-          <div className="min-w-0 rounded-xl bg-emerald-500/10 px-3 py-2.5">
-            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-600"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" /> Replies</p>
-            <p className="text-2xl font-extrabold leading-tight tabular-nums text-foreground">{replied}</p>
-          </div>
-        </div>
-
-        <div className={`flex flex-1 gap-2 ${big ? "min-h-[400px]" : "min-h-[260px]"}`} role="img" aria-label="RFIs created and replies received per month">
-          <div className="flex w-7 shrink-0 flex-col justify-between pb-7 pt-5 text-right text-xs font-semibold tabular-nums text-muted-foreground">
-            {ticks.map((t) => <span key={t} className="leading-none">{t}</span>)}
-          </div>
-          <div className="flex min-w-0 flex-1 flex-col">
-            <div className="relative min-h-0 flex-1">
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 top-5 flex flex-col justify-between">
-                {ticks.map((t, i) => (
-                  <div key={t} className={`w-full border-t ${i === ticks.length - 1 ? "border-border" : "border-dashed border-border/70"}`} />
-                ))}
-              </div>
-              <div className="absolute inset-x-0 bottom-0 top-5 flex items-stretch gap-1">
-                {stats.months.map((m, i) => {
-                  const sel = filters.month === m.key;
-                  const hot = hoverMonth === i;
-                  const dim = (filters.month && !sel) || (hoverMonth !== null && !hot);
-                  return (
-                    <button
-                      key={m.key}
-                      type="button"
-                      onClick={() => toggle("month", m.key)}
-                      onMouseEnter={() => setHoverMonth(i)}
-                      onMouseLeave={() => setHoverMonth(null)}
-                      onFocus={() => setHoverMonth(i)}
-                      onBlur={() => setHoverMonth(null)}
-                      aria-pressed={sel}
-                      title={`${m.full}: ${m.created} created · ${m.responded} replies — click to filter`}
-                      className={`relative flex min-w-0 flex-1 items-end justify-center gap-[3px] rounded-lg px-0.5 transition-colors ${sel ? "bg-primary/15" : hot ? "bg-primary/10" : ""}`}
-                      style={{ opacity: dim ? 0.5 : 1 }}
-                    >
-                      {([
-                        { v: m.created, c: "#6366f1", d: 0 },
-                        { v: m.responded, c: "#10b981", d: 60 },
-                      ]).map((bar, bi) => (
-                        <div key={bi} className="relative flex h-full w-full max-w-[30px] items-end justify-center">
-                          <span className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-extrabold leading-none tabular-nums text-foreground" style={{ bottom: `calc(${(bar.v / niceMax) * 100}% + 3px)`, fontSize: dense ? 10 : 12 }}>
-                            {bar.v > 0 ? bar.v : ""}
-                          </span>
-                          <div
-                            className="rfd-col w-full rounded-t-md"
-                            data-on={mounted}
-                            style={{ height: `${(bar.v / niceMax) * 100}%`, minHeight: bar.v > 0 ? 4 : 0, background: `linear-gradient(180deg, ${bar.c}, ${bar.c}cc)`, transitionDelay: `${i * 50 + bar.d}ms` }}
-                          />
-                        </div>
-                      ))}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="flex h-7 shrink-0 items-end gap-1">
-              {stats.months.map((m) => (
-                <span key={m.key} className={`min-w-0 flex-1 truncate text-center text-xs font-bold ${filters.month === m.key ? "text-primary" : "text-muted-foreground"}`}>{m.label}</span>
-              ))}
-            </div>
-          </div>
-        </div>
-        <p className="text-center text-xs text-muted-foreground">Hover a month for details · click to filter the dashboard</p>
-      </div>
-    );
-  };
-
-  const renderList = (maxH: string) => (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center rounded-full bg-muted p-0.5" role="group" aria-label="Sort RFIs">
-          <span className="px-2.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">Sort</span>
-          {([
-            { k: "priority", label: "Priority" },
-            { k: "newest", label: "Newest" },
-            { k: "oldest", label: "Oldest" },
-          ] as const).map((o) => (
-            <button key={o.k} type="button" aria-pressed={listSort === o.k} onClick={() => setListSort(o.k)}
-              className={`h-8 rounded-full px-3.5 text-xs font-bold transition ${listSort === o.k ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground"}`}>
-              {o.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => setViewOpen(true)} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border/70 px-3.5 text-xs font-bold text-foreground transition hover:bg-muted/60">
-            <Eye className="h-4 w-4" /> Open as table
+        <div className="relative z-10 flex flex-wrap items-center gap-2">
+          {scopeSwitch}
+          <button type="button" onClick={onRefresh} disabled={loading} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition hover:bg-muted active:scale-95 disabled:opacity-60">
+            <RefreshCw className={`h-4 w-4 ${loading ? "rfd-spin" : ""}`} /> {loading ? "Refreshing…" : "Refresh"}
           </button>
-          {onViewAll && (
-            <button type="button" onClick={onViewAll} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border/70 px-3.5 text-xs font-bold text-muted-foreground transition hover:bg-muted/60 hover:text-foreground">
-              Full list <ExternalLink className="h-4 w-4" />
-            </button>
-          )}
+          <button type="button" onClick={handleDownload} disabled={downloading || (isListSection ? listRows.length === 0 : rfis.length === 0)}
+            title={isListSection ? "Save the RFIs in this list as an Excel file" : "Save all RFIs as an Excel file"}
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-90 active:scale-95 disabled:opacity-50">
+            {downloading ? <Loader2 className="h-4 w-4 rfd-spin" /> : <Download className="h-4 w-4" />} {downloading ? "Preparing…" : "Download Excel"}
+          </button>
         </div>
-      </div>
+      </header>
 
-      {listRows.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
-          <p className="text-sm font-semibold text-foreground">{isWaiting && !filtered ? "Nothing is waiting on a reply 🎉" : "No RFIs match these filters"}</p>
-          {filtered && (
-            <button type="button" onClick={clearAll} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-bold text-primary-foreground transition hover:opacity-90">
-              <X className="h-4 w-4" /> Clear filters
-            </button>
-          )}
-        </div>
-      ) : (
-        <ul className="rfd-scroll space-y-2 pr-1" style={{ maxHeight: maxH }}>
-          {listRows.slice(0, listLimit).map(({ rfi, age }) => {
-            const when = parseDate(rfi.responseReceivedAt) ?? parseDate(rfi.createdAt);
-            const pending = AWAITING.has(rfi.status);
-            const stripe = PRIORITY_META[toRfiPriority(rfi.priority)].color;
+      <div className="grid items-start gap-4 lg:grid-cols-[250px_minmax(0,1fr)]">
+        {/* ══ SUB-SECTION MENU ══ */}
+        <nav className="rfd-in rfd-nav -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:sticky lg:top-2 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:p-2 lg:shadow-sm" role="tablist" aria-label="Dashboard sections" aria-orientation="vertical">
+          {MENU.map((m) => {
+            const active = m.id === section;
             return (
-              <li
-                key={rfi.id}
-                {...press(() => openRfi(rfi.id))}
-                className="rfd-row rounded-xl border border-border/60 bg-background/60 py-3 pl-3.5 pr-3"
-                style={{ borderLeft: `4px solid ${stripe}` }}
-                title={`${rfi.rfiNumber} — ${rfi.subject}`}
+              <button
+                key={m.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => go(m.id)}
+                className={`flex shrink-0 items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition lg:w-full lg:border-transparent ${active ? "border-primary bg-gradient-to-r from-primary to-primary/75 text-primary-foreground shadow-md" : "border-border bg-card text-foreground hover:bg-muted lg:bg-transparent"}`}
               >
-                <div className="flex items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-2">
-                      <span className="shrink-0 text-sm font-extrabold text-foreground">{rfi.rfiNumber}</span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/85">{rfi.subject}</span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                      <DisciplineTag discipline={rfi.discipline} />
-                      <PriorityTag priority={rfi.priority} />
-                      {!isWaiting && <StatusBadge status={getDisplayStatus(rfi, authName)} className="whitespace-nowrap" />}
-                      {pending && (
-                        <span className={`rounded-md px-2 py-0.5 text-xs font-bold tabular-nums ${age > 14 ? "bg-red-500/15 text-red-600" : age > 7 ? "bg-amber-500/15 text-amber-600" : "bg-emerald-500/15 text-emerald-600"}`} title={`Waiting ${age} day${age === 1 ? "" : "s"}`}>
-                          Waiting {age}d
-                        </span>
-                      )}
-                      {!isWaiting && <span className="text-xs tabular-nums text-muted-foreground">{when ? format(when, "dd MMM yyyy") : "—"}</span>}
-                    </div>
-                  </div>
-                  <span className="mt-0.5 inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-primary/10 px-3 text-xs font-bold text-primary">
-                    <Eye className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Details</span>
-                  </span>
-                </div>
-              </li>
+                <m.icon className="h-5 w-5 shrink-0" style={!active && m.tone ? { color: m.tone } : undefined} />
+                <span className="min-w-0 flex-1">
+                  <span className="block whitespace-nowrap text-sm font-semibold">{m.label}</span>
+                  <span className={`hidden truncate text-xs lg:block ${active ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{m.help}</span>
+                </span>
+                {m.count !== undefined && (
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{m.count}</span>
+                )}
+              </button>
             );
           })}
-        </ul>
-      )}
-      {listRows.length > listLimit && (
-        <p className="text-center text-xs text-muted-foreground">Showing the first {listLimit} of {listRows.length} — use “Open as table” or “Full list” to see everything.</p>
-      )}
-    </div>
-  );
+        </nav>
 
-  const PANELS: Record<PanelId, { title: string; icon: typeof Activity; hint: string }> = {
-    status: { title: "Status", icon: Activity, hint: "Click a slice or row to filter" },
-    activity: { title: "Activity", icon: Zap, hint: "Created vs replies per month" },
-    discipline: { title: "Discipline", icon: Layers, hint: "Click a bar to filter" },
-    priority: { title: "Priority & team", icon: Flame, hint: "Click a bar to filter" },
-    waiting: { title: "Waiting time", icon: Clock3, hint: "Only RFIs awaiting a reply" },
-    list: { title: isWaiting ? "Needs attention" : "Matching RFIs", icon: isWaiting ? AlertTriangle : FileText, hint: "Click an RFI to open its details" },
-  };
-
-  const renderPanelBody = (id: PanelId, big: boolean) => {
-    switch (id) {
-      case "status": return renderStatus(big);
-      case "activity": return renderActivity(big);
-      case "discipline": return renderDiscipline(big);
-      case "priority": return renderPriority(big);
-      case "waiting": return renderWaiting(big);
-      case "list": return renderList(big ? "60dvh" : "640px");
-    }
-  };
-
-  const panel = (id: PanelId, delay: number, count?: number) => (
-    <Panel
-      key={id}
-      title={PANELS[id].title}
-      icon={PANELS[id].icon}
-      hint={PANELS[id].hint}
-      count={count}
-      delay={delay}
-      onExpand={() => setExpanded(id)}
-    >
-      {renderPanelBody(id, false)}
-    </Panel>
-  );
-
-  const VIEW_TABS = [
-    { k: "overview", label: "Overview", icon: Activity, n: null as number | null, hint: "Status & activity" },
-    { k: "breakdown", label: "Breakdown", icon: Layers, n: null as number | null, hint: "Discipline, priority, team" },
-    { k: "waiting", label: "Waiting", icon: Hourglass, n: stats.pendingCount, hint: "Aging & needs attention" },
-    { k: "rfis", label: "RFIs", icon: FileText, n: stats.visibleCount, hint: "Browse matching RFIs" },
-  ] as const;
-
-  return (
-    <div className="rfd-root" data-rfi-dashboard>
-      <style>{DASH_CSS}</style>
-
-      {/* ══ HERO ══════════════════════════════════════════ */}
-      <section className="rfd-hero shrink-0 rounded-2xl px-5 py-4 text-white">
-        <span className="rfd-orb" style={{ width: 140, height: 140, left: -40, top: -60, background: "#fde047" }} aria-hidden="true" />
-        <span className="rfd-orb" style={{ width: 180, height: 180, right: -50, bottom: -90, background: "#22d3ee", animationDelay: "-4s" }} aria-hidden="true" />
-
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/80">
-              <span className="rfd-live" /> RFI Dashboard · click any tile or chart to filter
-            </p>
-            <h2 className="mt-1 break-words text-lg font-extrabold tracking-tight sm:text-2xl">{projectName}</h2>
-            <p className="mt-0.5 text-sm text-white/85">
-              {client ? `${client} · ` : ""}
-              {stats.pendingCount > 0 || filtered
-                ? `Showing ${stats.visibleCount} of ${rfis.length} RFI${rfis.length === 1 ? "" : "s"}${filtered ? " (filtered)" : ""}`
-                : "Every RFI has a reply or is closed"}
-            </p>
+        {/* ══ SECTION CONTENT ══ */}
+        <main key={section} className="rfd-in min-w-0" role="tabpanel" aria-label={current.label}>
+          <div className="mb-4 px-1">
+            <h3 className="flex items-center gap-2 text-lg font-extrabold text-foreground"><current.icon className="h-5 w-5 text-primary" /> {current.label}</h3>
+            <p className="mt-0.5 text-sm text-muted-foreground">{intro[section]}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="hidden rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold backdrop-blur md:inline">Updated {format(updatedAt, "hh:mm a")}</span>
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={loading}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white/20 px-4 text-xs font-bold backdrop-blur transition hover:bg-white/30 active:scale-95 disabled:opacity-60"
-              title="Reload the latest RFIs"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? "rfd-spin" : ""}`} />
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        {/* toolbar — its own row so nothing crowds the title */}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <label className="relative min-w-[200px] flex-1 sm:max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/75" />
-            <input
-              ref={searchRef}
-              value={filters.q}
-              onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
-              placeholder="Search RFI # or subject  ( / )"
-              className="h-9 w-full rounded-full bg-white/20 pl-9 pr-3 text-sm font-medium text-white outline-none backdrop-blur transition placeholder:text-white/70 focus:bg-white/30"
-              aria-label="Search RFIs"
-            />
-          </label>
-          <div className="flex items-center rounded-full bg-white/15 p-0.5 backdrop-blur" role="group" aria-label="Created within">
-            {RANGE_OPTIONS.map((o) => (
-              <button
-                key={o.key}
-                type="button"
-                onClick={() => setFilters((f) => ({ ...f, range: o.key }))}
-                className={`h-8 rounded-full px-3 text-xs font-bold transition ${filters.range === o.key ? "bg-white text-indigo-700 shadow" : "text-white/90 hover:bg-white/20"}`}
-                title={o.key === "all" ? "All time" : `Created in the last ${o.label}`}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-1 rounded-full bg-white/15 p-0.5 backdrop-blur" role="group" aria-label="RFI actions">
-            <button type="button" onClick={() => setViewOpen(true)} className="inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-xs font-bold transition hover:bg-white/25 active:scale-95" title="View the RFIs matching your filters in a table">
-              <Eye className="h-4 w-4" /> View
-            </button>
-            <button type="button" onClick={handleDownload} disabled={stats.visibleCount === 0} className="inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-xs font-bold transition hover:bg-white/25 active:scale-95 disabled:opacity-50" title={`Download ${stats.visibleCount} RFI${stats.visibleCount === 1 ? "" : "s"} as Excel`}>
-              <Download className="h-4 w-4" /> Download
-            </button>
-          </div>
-        </div>
-
-        {filtered && (
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-white/75">Filters</span>
-            {chips.map((c) => (
-              <button
-                key={c.label}
-                type="button"
-                onClick={c.clear}
-                className="inline-flex items-center gap-1 rounded-full bg-white/25 px-3 py-1 text-xs font-semibold backdrop-blur transition hover:bg-white/40"
-                title="Remove this filter"
-              >
-                {c.label}
-                <X className="h-3 w-3" />
-              </button>
-            ))}
-            <button type="button" onClick={clearAll} className="ml-1 text-xs font-bold underline underline-offset-2 hover:text-white/80">
-              Clear all
-            </button>
-          </div>
-        )}
-      </section>
-
-      {/* ══ KPI TILES (click = filter · "View RFIs" = open the list) ══ */}
-      <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
-        <Kpi icon={FileText} label="Total RFIs" value={stats.total} sub={`${stats.draft} draft · ${stats.cancelled} cancelled`} tone="from-indigo-500 to-violet-500" delay={40}
-          selected={!filters.group && !filters.status} onSelect={() => setFilters((f) => ({ ...f, group: null, status: null }))} onView={() => viewWith({})} />
-        <Kpi icon={Activity} label="Open" value={stats.open} sub={`${stats.total ? Math.round((stats.open / stats.total) * 100) : 0}% of total`} tone="from-sky-500 to-cyan-500" delay={80}
-          selected={filters.group === "open"} onSelect={() => toggle("group", "open")} onView={() => viewWith({ group: "open" })} />
-        <Kpi icon={Hourglass} label="Awaiting reply" value={stats.awaiting} sub={stats.urgentOpen > 0 ? `${stats.urgentOpen} high / urgent` : "none high priority"} tone="from-amber-500 to-orange-500" delay={120}
-          selected={filters.group === "awaiting"} onSelect={() => toggle("group", "awaiting")} onView={() => viewWith({ group: "awaiting" })} />
-        <Kpi icon={Reply} label="Response received" value={stats.responded} sub="in review" tone="from-teal-500 to-emerald-500" delay={160}
-          selected={filters.group === "responded"} onSelect={() => toggle("group", "responded")} onView={() => viewWith({ group: "responded" })} />
-        <Kpi icon={CheckCircle2} label="Closed" value={stats.closed} sub={`${stats.responseRate}% response rate`} tone="from-emerald-500 to-green-500" delay={200}
-          selected={filters.group === "closed"} onSelect={() => toggle("group", "closed")} onView={() => viewWith({ group: "closed" })} />
-        <Kpi icon={Clock3} label="Avg response" text={formatDuration(stats.avgResponseHours)} sub="request → first reply" tone="from-fuchsia-500 to-pink-500" delay={240} />
+          {section === "overview" && renderOverview()}
+          {isListSection && renderList()}
+          {section === "breakdown" && renderBreakdown()}
+          {section === "trends" && renderTrends()}
+        </main>
       </div>
 
-      {/* ══ QUICK FILTERS ═════════════════════════════════ */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick filters</span>
-        {([
-          { label: "High & urgent open", icon: Flame, n: presetCounts.urgentOpen, tone: "red", apply: { group: "open", urgent: true } as Partial<Filters>, on: filters.urgent && filters.group === "open" },
-          { label: "Waiting 15+ days", icon: Clock3, n: presetCounts.overdue, tone: "amber", apply: { group: "awaiting", minAge: 15 } as Partial<Filters>, on: filters.minAge === 15 && filters.group === "awaiting" },
-          { label: "Replies to review", icon: Reply, n: presetCounts.toReview, tone: "teal", apply: { group: "responded" } as Partial<Filters>, on: filters.group === "responded" && !filters.urgent && filters.minAge === null },
-          { label: "Created last 30 days", icon: Zap, n: presetCounts.fresh, tone: "indigo", apply: { range: "30" } as Partial<Filters>, on: filters.range === "30" && !filters.group },
-        ]).map((p) => {
-          const tones: Record<string, string> = {
-            red: "border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/20",
-            amber: "border-amber-500/40 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20",
-            teal: "border-teal-500/40 bg-teal-500/10 text-teal-600 hover:bg-teal-500/20",
-            indigo: "border-indigo-500/40 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20",
-          };
-          return (
-            <button
-              key={p.label}
-              type="button"
-              aria-pressed={p.on}
-              disabled={p.n === 0 && !p.on}
-              onClick={() => setFilters((f) => (p.on ? { ...NO_FILTERS, q: f.q } : { ...NO_FILTERS, q: f.q, ...p.apply }))}
-              className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-xs font-bold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${tones[p.tone]} ${p.on ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : ""}`}
-            >
-              <p.icon className="h-4 w-4" />
-              {p.label}
-              <span className="rounded-full bg-background/70 px-1.5 text-xs tabular-nums text-foreground">{p.n}</span>
-            </button>
-          );
-        })}
-        {filtered && (
-          <button type="button" onClick={clearAll} className="ml-auto inline-flex h-9 items-center gap-1 rounded-full border border-border px-3.5 text-xs font-bold text-muted-foreground transition hover:bg-muted/60 hover:text-foreground">
-            <X className="h-4 w-4" /> Reset all filters
-          </button>
-        )}
-      </div>
-
-      {/* ══ VIEW TABS ═════════════════════════════════════ */}
-      <div className="flex flex-wrap items-center gap-1 rounded-2xl border border-border/70 bg-card/80 p-1.5 shadow-sm backdrop-blur" role="tablist" aria-label="Dashboard view">
-        {VIEW_TABS.map((t) => (
-          <button
-            key={t.k}
-            type="button"
-            role="tab"
-            aria-selected={view === t.k}
-            title={t.hint}
-            onClick={() => setView(t.k)}
-            className={`inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-bold transition sm:flex-none ${view === t.k ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"}`}
-          >
-            <t.icon className="h-4 w-4" />
-            {t.label}
-            {t.n !== null && (
-              <span className={`rounded-full px-1.5 text-xs tabular-nums ${view === t.k ? "bg-white/25" : "bg-primary/15 text-primary"}`}>{t.n}</span>
-            )}
-          </button>
-        ))}
-        <span className="ml-auto hidden pr-2 text-xs text-muted-foreground lg:inline">Filters apply across all views</span>
-      </div>
-
-      {/* ══ PANELS — one view at a time ═══════════════════ */}
-      {view === "overview" && (
-        <div className="rfd-panels" data-cols="2">
-          {panel("status", 60)}
-          {panel("activity", 120)}
-        </div>
-      )}
-      {view === "breakdown" && (
-        <div className="rfd-panels" data-cols="2">
-          {panel("discipline", 60)}
-          {panel("priority", 120)}
-        </div>
-      )}
-      {view === "waiting" && (
-        <div className="rfd-panels" data-cols="2">
-          {panel("waiting", 60)}
-          {panel("list", 120, listRows.length)}
-        </div>
-      )}
-      {view === "rfis" && (
-        <div className="rfd-panels" data-cols="1">
-          {panel("list", 60, listRows.length)}
-        </div>
-      )}
-
-      {/* EXPAND — any panel opened large for easy reading */}
-      <Dialog open={expanded !== null} onOpenChange={(o) => !o && setExpanded(null)}>
-        <DialogContent className="flex max-h-[92dvh] max-w-4xl flex-col gap-4 overflow-y-auto">
-          {expanded && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  {(() => { const I = PANELS[expanded].icon; return <I className="h-5 w-5" />; })()}
-                  {PANELS[expanded].title}
-                  {filtered && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">filtered</span>}
-                </DialogTitle>
-                <DialogDescription>{projectName} · {PANELS[expanded].hint}</DialogDescription>
-              </DialogHeader>
-              {filtered && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {chips.map((c) => (
-                    <button key={c.label} type="button" onClick={c.clear} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary transition hover:bg-primary/20" title="Remove this filter">
-                      {c.label} <X className="h-3 w-3" />
-                    </button>
-                  ))}
-                  <button type="button" onClick={clearAll} className="ml-1 text-xs font-bold text-muted-foreground underline underline-offset-2 hover:text-foreground">Clear all</button>
-                </div>
-              )}
-              <div>{renderPanelBody(expanded, true)}</div>
-              {expanded !== "list" && (
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
-                  <p className="text-xs text-muted-foreground">{stats.visibleCount} RFI{stats.visibleCount === 1 ? "" : "s"} match the current filters</p>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => { setExpanded(null); setViewOpen(true); }} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-xs font-bold text-primary-foreground transition hover:opacity-90">
-                      <Eye className="h-4 w-4" /> View these RFIs
-                    </button>
-                    <button type="button" onClick={() => setExpanded(null)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3.5 text-xs font-bold text-muted-foreground transition hover:bg-muted/60 hover:text-foreground">
-                      Close
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* VIEW — table of the RFIs matching the current filters */}
-      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
-        <DialogContent className="flex max-h-[90dvh] max-w-5xl flex-col gap-3">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Eye className="h-5 w-5" /> {projectName} — RFIs</DialogTitle>
-            <DialogDescription>
-              {stats.visibleCount} RFI{stats.visibleCount === 1 ? "" : "s"}
-              {filtered ? ` matching: ${chips.map((c) => c.label).join(" · ")}` : " in this project"} · click a row to open it
-            </DialogDescription>
-          </DialogHeader>
-          <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-border">
-            <table className="w-full min-w-[760px] border-collapse text-sm">
-              <thead className="sticky top-0 z-10 bg-muted text-xs uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  {[
-                    { k: "num", h: "RFI #" }, { k: "subject", h: "Subject" }, { k: "disc", h: "Discipline" }, { k: "prio", h: "Priority" },
-                    { k: "status", h: "Status" }, { k: "created", h: "Created" }, { k: "replied", h: "Replied" }, { k: "age", h: "Age" },
-                  ].map((c) => (
-                    <th key={c.k} className="whitespace-nowrap px-3 py-2.5 text-left font-bold" aria-sort={viewSort.key === c.k ? (viewSort.dir === 1 ? "ascending" : "descending") : "none"}>
-                      <button type="button" onClick={() => setViewSort((v) => (v.key === c.k ? { key: c.k, dir: (v.dir * -1) as 1 | -1 } : { key: c.k, dir: 1 }))} className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-foreground" title={`Sort by ${c.h}`}>
-                        {c.h}
-                        {viewSort.key === c.k && (viewSort.dir === 1 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
-                      </button>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {viewRows.length === 0 && (
-                  <tr><td colSpan={8} className="py-10 text-center text-muted-foreground">No RFIs match these filters</td></tr>
-                )}
-                {viewRows.map((r) => {
-                  const c = parseDate(r.createdAt);
-                  const p = parseDate(r.responseReceivedAt);
-                  return (
-                    <tr
-                      key={r.id}
-                      tabIndex={0}
-                      className="cursor-pointer border-t border-border/60 transition-colors hover:bg-primary/5 focus-visible:bg-primary/10 focus-visible:outline-none"
-                      onClick={() => { setViewOpen(false); openRfi(r.id); }}
-                      onKeyDown={(e) => { if (e.key === "Enter") { setViewOpen(false); openRfi(r.id); } }}
-                    >
-                      <td className="whitespace-nowrap px-3 py-2.5 font-bold text-foreground">{r.rfiNumber}</td>
-                      <td className="max-w-[320px] truncate px-3 py-2.5 text-muted-foreground" title={r.subject}>{r.subject}</td>
-                      <td className="px-3 py-2.5"><DisciplineTag discipline={r.discipline} /></td>
-                      <td className="px-3 py-2.5"><PriorityTag priority={r.priority} /></td>
-                      <td className="px-3 py-2.5"><StatusBadge status={getDisplayStatus(r, authName)} className="whitespace-nowrap" /></td>
-                      <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-muted-foreground">{c ? format(c, "dd MMM yyyy") : "—"}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-muted-foreground">{p ? format(p, "dd MMM yyyy") : "—"}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-muted-foreground">{ageOf(r, nowTs)}d</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex shrink-0 flex-wrap justify-end gap-2">
-            {onViewAll && (
-              <button type="button" onClick={() => { setViewOpen(false); onViewAll(); }} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3.5 text-xs font-bold text-muted-foreground transition hover:bg-muted/60 hover:text-foreground">
-                <ExternalLink className="h-4 w-4" /> Open RFI history
-              </button>
-            )}
-            <button type="button" onClick={handleDownload} disabled={stats.visibleCount === 0} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-xs font-bold text-primary-foreground transition hover:opacity-90 disabled:opacity-50">
-              <Download className="h-4 w-4" /> Download Excel
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <RfiDetailDialog
-        projectName={projectName}
-        rfiId={openRfiId}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onRfiUpdated={onRefresh}
-      />
+      <RfiDetailDialog projectName={isAll ? rfis.find((r) => r.id === openId)?.projectName ?? null : projectName} rfiId={openId} open={dialogOpen} onOpenChange={setDialogOpen} onRfiUpdated={onRefresh} />
     </div>
   );
 };
@@ -1372,122 +856,201 @@ export const RfiDashboard = ({ client, projectName, rfis, loading, onRefresh, on
    SMALL PIECES
 ========================================================= */
 
-/** A dashboard card with a clear title row and an Expand button. */
-function Panel({
-  title, icon: Icon, hint, count, delay, onExpand, children,
+function Card({
+  title, hint, children, action, right,
 }: {
-  title: string; icon: typeof Activity; hint?: string; count?: number; delay: number; onExpand: () => void; children: ReactNode;
+  title: string; hint?: string; children: ReactNode; action?: { label: string; onClick: () => void; external?: boolean }; right?: ReactNode;
 }) {
   return (
-    <section
-      className="rfd-card rfd-rise flex min-w-0 cursor-zoom-in flex-col rounded-2xl border border-border/70 bg-card/80 p-4 shadow-sm backdrop-blur"
-      style={{ animationDelay: `${delay}ms` }}
-      onPointerMove={trackGlow}
-      title="Click an empty area of this card to expand it"
-      onClick={(e) => {
-        // Charts, rows and buttons keep their own click (filtering); the rest of the card expands it.
-        const t = e.target as Element;
-        if (t.closest('button, a, input, [role="button"], .rfd-seg, [data-nopanel]')) return;
-        onExpand();
-      }}
-    >
-      <header className="mb-3 flex items-start justify-between gap-3">
+    <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <header className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-foreground">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Icon className="h-4 w-4" />
-            </span>
-            <span className="truncate">{title}</span>
-            {count !== undefined && <span className="rounded-full bg-primary/15 px-2 text-xs tabular-nums text-primary">{count}</span>}
-          </h3>
-          {hint && <p className="mt-1 text-xs text-muted-foreground">{hint} · click card to expand</p>}
+          <h4 className="text-base font-bold text-foreground">{title}</h4>
+          {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
         </div>
-        <button
-          type="button"
-          onClick={onExpand}
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border/70 px-3 text-xs font-bold text-muted-foreground transition hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
-          title={`Open ${title} in a larger view`}
-          aria-label={`Expand ${title}`}
-        >
-          <Maximize2 className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Expand</span>
-        </button>
+        {right}
+        {action && (
+          <button type="button" onClick={action.onClick} className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-semibold text-primary transition hover:bg-primary/10">
+            {action.label} {action.external ? <ExternalLink className="h-3.5 w-3.5" /> : <ArrowRight className="h-3.5 w-3.5" />}
+          </button>
+        )}
       </header>
-      <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+      {children}
     </section>
   );
 }
 
-function Kpi({
-  icon: Icon,
-  label,
-  value,
-  text,
-  sub,
-  tone,
-  delay,
-  selected,
-  onSelect,
-  onView,
+function Tile({
+  icon: Icon, label, hint, value, color, onClick, index, spark, share,
 }: {
-  icon: typeof Activity;
-  label: string;
-  value?: number;
-  text?: string;
-  sub: string;
-  tone: string;
-  delay: number;
-  selected?: boolean;
-  onSelect?: () => void;
-  onView?: () => void;
+  icon: typeof FileText; label: string; hint: string; value: number; color: string; onClick: () => void; index: number; spark?: number[]; share?: number;
 }) {
-  const animated = useCountUp(value ?? 0);
+  const shown = useCountUp(value);
   return (
-    <div
-      className="rfd-card rfd-kpi rfd-rise flex min-h-[120px] min-w-0 flex-col justify-between gap-2 rounded-2xl border border-border/70 bg-card/80 p-3.5 shadow-sm backdrop-blur"
-      style={{ animationDelay: `${delay}ms`, cursor: onSelect ? "pointer" : "default" }}
-      data-sel={selected ? "true" : "false"}
-      onPointerMove={trackGlow}
-      {...(onSelect
-        ? {
-            role: "button" as const,
-            tabIndex: 0,
-            "aria-pressed": !!selected,
-            onClick: onSelect,
-            onKeyDown: (e: ReactKeyboardEvent) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onSelect();
-              }
-            },
-          }
-        : {})}
-    >
-      <div className="flex items-start gap-3">
-        <span className={`rfd-kpi-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${tone} text-white shadow-md`}>
-          <Icon className="h-5 w-5" />
+    <button type="button" onClick={onClick} title={`Open: ${label}`} className="rfd-tile rfd-lift rfd-in relative flex items-center gap-3 overflow-hidden rounded-2xl border border-border bg-card p-4 text-left shadow-sm" style={{ animationDelay: `${index * 60}ms` }}>
+      <span className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg, ${color}, ${color}00)` }} />
+      <span className="rfd-ico flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white shadow-md" style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}><Icon className="h-6 w-6" /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-3xl font-extrabold leading-none tabular-nums text-foreground">{shown}</span>
+        <span className="mt-1 block truncate text-sm font-semibold text-foreground">{label}</span>
+        <span className="block truncate text-xs text-muted-foreground">{share !== undefined ? `${share}% · ${hint}` : hint}</span>
+      </span>
+      {spark && <Spark values={spark} color={color} />}
+      {share !== undefined && (
+        <span className="absolute inset-x-0 bottom-0 h-1 bg-muted">
+          <span className="rfd-grow block h-full rounded-r-full" style={{ width: `${share}%`, background: color }} />
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-bold uppercase tracking-wider text-muted-foreground" title={label}>{label}</p>
-          <p className="text-3xl font-extrabold leading-tight tabular-nums text-foreground">
-            {text !== undefined ? text : Math.round(animated)}
-          </p>
-        </div>
-      </div>
-      <div className="flex items-end justify-between gap-2">
-        <p className="min-w-0 text-xs text-muted-foreground" title={sub}>{sub}</p>
-        {onView && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onView(); }}
-            onKeyDown={(e) => e.stopPropagation()}
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2.5 text-xs font-bold text-primary transition hover:bg-primary/20"
-            title={`View the ${label} RFIs`}
-          >
-            <Eye className="h-3.5 w-3.5" /> View
-          </button>
-        )}
+      )}
+    </button>
+  );
+}
+
+function Spark({ values, color }: { values: number[]; color: string }) {
+  if (values.length < 2) return null;
+  const W = 96, H = 28, max = Math.max(1, ...values);
+  const pts = values.map((v, i) => `${((i / (values.length - 1)) * W).toFixed(1)},${(H - 3 - (v / max) * (H - 8)).toFixed(1)}`);
+  const line = `M${pts.join(" L")}`;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="hidden h-7 w-24 shrink-0 sm:block" aria-hidden="true">
+      <path d={`${line} L${W},${H} L0,${H} Z`} fill={color} opacity="0.15" />
+      <path d={line} pathLength={1} className="rfd-spark" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Small progress ring (header): how many sent RFIs got a reply. */
+function Ring({ percent, mounted }: { percent: number; mounted: boolean }) {
+  const R = 26, C = 2 * Math.PI * R;
+  return (
+    <div className="relative h-16 w-16 shrink-0" title={`${percent}% of sent RFIs got a reply`} role="img" aria-label={`Reply rate ${percent}%`}>
+      <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90">
+        <circle cx="32" cy="32" r={R} fill="none" strokeWidth="7" className="stroke-muted" />
+        <circle cx="32" cy="32" r={R} fill="none" strokeWidth="7" strokeLinecap="round" stroke="hsl(var(--primary))" className="rfd-seg" strokeDasharray={`${mounted ? (percent / 100) * C : 0} ${C}`} />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-sm font-extrabold tabular-nums text-foreground">{percent}%</span>
+    </div>
+  );
+}
+
+/** Status donut: hover a slice to read it, click it to open those RFIs. */
+function Donut({
+  segments, total, mounted, onPick,
+}: {
+  segments: { key: string; label: string; value: number; color: string }[]; total: number; mounted: boolean; onPick: (key: string) => void;
+}) {
+  const [hover, setHover] = useState<string | null>(null);
+  const R = 52, C = 2 * Math.PI * R, GAP = segments.length > 1 ? 3 : 0;
+  const active = segments.find((x) => x.key === hover);
+  const shown = useCountUp(total);
+  let acc = 0;
+  return (
+    <div className="relative h-44 w-44 shrink-0">
+      <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90" role="img" aria-label="RFIs by status">
+        <circle cx="70" cy="70" r={R} fill="none" strokeWidth="16" className="stroke-muted" />
+        {segments.map((x) => {
+          const len = total > 0 ? (x.value / total) * C : 0;
+          const off = -acc;
+          acc += len;
+          return (
+            <circle
+              key={x.key} cx="70" cy="70" r={R} fill="none" stroke={x.color} strokeWidth={hover === x.key ? 20 : 16}
+              className="rfd-seg cursor-pointer" style={{ opacity: hover && hover !== x.key ? 0.35 : 1 }}
+              strokeDasharray={`${mounted ? Math.max(len - GAP, 0) : 0} ${C}`} strokeDashoffset={off}
+              onMouseEnter={() => setHover(x.key)} onMouseLeave={() => setHover(null)} onClick={() => onPick(x.key)}
+            >
+              <title>{`${x.label}: ${x.value}`}</title>
+            </circle>
+          );
+        })}
+      </svg>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+        <span className="text-3xl font-extrabold tabular-nums text-foreground">{active ? active.value : shown}</span>
+        <span className="max-w-[96px] truncate text-xs font-semibold text-muted-foreground">{active ? active.label : "RFIs"}</span>
       </div>
     </div>
   );
+}
+
+function Stat({ label, value, help }: { label: string; value: string; help: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-extrabold tabular-nums text-foreground">{value}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{help}</p>
+    </div>
+  );
+}
+
+function BarRow({
+  label, count, max, color, mounted, onClick,
+}: {
+  label: string; count: number; max: number; color: string; mounted: boolean; onClick: () => void;
+}) {
+  return (
+    <li>
+      <button type="button" onClick={onClick} title={`${label}: ${count} — click to see them`} className="w-full rounded-lg px-2.5 py-2 text-left transition hover:bg-muted/60">
+        <span className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+          <span className="truncate font-medium text-foreground">{label}</span>
+          <span className="font-bold tabular-nums text-foreground">{count}</span>
+        </span>
+        <span className="block h-2.5 overflow-hidden rounded-full bg-muted">
+          <span className="rfd-bar block h-full rounded-full" style={{ width: mounted ? `${(count / max) * 100}%` : "0%", background: color }} />
+        </span>
+      </button>
+    </li>
+  );
+}
+
+function RfiRow({
+  rfi, now, authName, onOpen, compact, delay = 0, showProject,
+}: {
+  rfi: Rfi; now: number; authName: string | null | undefined; onOpen: (id: number) => void; compact?: boolean; delay?: number; showProject?: boolean;
+}) {
+  const p = prio(rfi);
+  const waiting = WAITING.has(rfi.status);
+  const age = ageOf(rfi, now);
+  const replied = parseDate(rfi.responseReceivedAt);
+  const created = parseDate(rfi.createdAt);
+  return (
+    <li
+      {...clickable(() => onOpen(rfi.id))}
+      className="rfd-row rfd-in cursor-pointer rounded-xl border border-border bg-background/60 py-3 pl-4 pr-3"
+      style={{ borderLeft: `4px solid ${p.color}`, animationDelay: `${delay}ms` }}
+      aria-label={`Open ${rfi.rfiNumber}: ${rfi.subject}`}
+    >
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="flex items-baseline gap-2">
+            <span className="shrink-0 text-sm font-extrabold text-foreground">{rfi.rfiNumber}</span>
+            <span className="min-w-0 flex-1 truncate text-sm text-foreground/85">{rfi.subject}</span>
+          </p>
+          {showProject && rfi.projectName && (
+            <p className="mt-0.5 truncate text-xs font-semibold text-primary" title={rfi.projectName}>{rfi.projectName}</p>
+          )}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+            <StatusBadge status={getDisplayStatus(rfi, authName)} className="whitespace-nowrap" />
+            <span className="inline-flex items-center gap-1.5 font-medium"><span className={`h-2 w-2 rounded-full ${toRfiPriority(rfi.priority) === "URGENT" && waiting ? "rfd-pulse" : ""}`} style={{ background: p.color, color: p.color }} /> {p.label}</span>
+            {!compact && <span>{disciplineLabel(rfi.discipline)}</span>}
+            {waiting ? (
+              <span className={`rounded-md px-2 py-0.5 font-semibold ${age > 14 ? "bg-red-500/15 text-red-600 dark:text-red-300" : age > 7 ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"}`}>
+                Waiting {plural(age, "day")}
+              </span>
+            ) : replied ? (
+              <span>Replied {format(replied, "dd MMM yyyy")}</span>
+            ) : created ? (
+              <span>Created {format(created, "dd MMM yyyy")}</span>
+            ) : null}
+          </div>
+        </div>
+        <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-primary">
+          <span className="hidden sm:inline">Open</span>
+          <ChevronRight className="rfd-go h-4 w-4" />
+        </span>
+      </div>
+    </li>
+  );
+}
+
+function Empty({ text = "Nothing to show" }: { text?: string }) {
+  return <p className="py-8 text-center text-sm text-muted-foreground">{text}</p>;
 }

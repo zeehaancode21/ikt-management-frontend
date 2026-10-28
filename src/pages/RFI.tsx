@@ -18,6 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   getProjects,
   getRfis,
+  getAllRfis,
   getErrorMessage,
   syncAllRfisForProject,
   checkRepliesNow,
@@ -49,6 +50,11 @@ const RFI = () => {
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [rfis, setRfis] = useState<Rfi[]>([]);
+  // Dashboard sub-option: "project" = the selected project (as before),
+  // "all" = RFIs of every project. Only exists on this RFI portal.
+  const [dashScope, setDashScope] = useState<"project" | "all">("project");
+  const [allRfis, setAllRfis] = useState<Rfi[]>([]);
+  const [loadingAll, setLoadingAll] = useState(false);
   const [view, setView] = useState<"settings" | "create" | "history" | "dashboard">("create");
 
   const [loadingRfis, setLoadingRfis] = useState(false);
@@ -121,6 +127,29 @@ const RFI = () => {
     [selectedProject, teamType, discipline]
   );
 
+  // Same "newest call wins" ticket idea, for the all-projects list.
+  const allSeq = useRef(0);
+  const loadAllRfis = useCallback(
+    (silent: boolean = false): Promise<void> => {
+      const seq = ++allSeq.current;
+      if (!silent) setLoadingAll(true);
+      return getAllRfis(teamType, discipline)
+        .then((list) => {
+          if (seq === allSeq.current) setAllRfis(list);
+        })
+        .catch((err) =>
+          toast({ title: "Failed to load RFIs", description: getErrorMessage(err), variant: "destructive" })
+        )
+        .finally(() => {
+          if (!silent && seq === allSeq.current) setLoadingAll(false);
+        });
+    },
+    [teamType, discipline]
+  );
+
+  // True while the dashboard is showing the "All projects" option.
+  const allMode = view === "dashboard" && dashScope === "all";
+
   // The Refresh button (dashboard). It used to call loadRfis(true) — a SILENT reload — and the
   // button's spinner/disabled state follows `loading`, which a silent reload never sets, so it
   // never rotated and gave no feedback. It also only re-read the database, so a reply that had
@@ -129,13 +158,13 @@ const RFI = () => {
   const [refreshing, setRefreshing] = useState(false);
   const refreshingRef = useRef(false);
   const handleRefresh = useCallback(async () => {
-    if (refreshingRef.current || !selectedProject) return;
+    if (refreshingRef.current || (!allMode && !selectedProject)) return;
     refreshingRef.current = true;
     setRefreshing(true);
     const startedAt = Date.now();
     try {
       await checkRepliesNow(); // best effort — never blocks the reload
-      await loadRfis(true);
+      await (allMode ? loadAllRfis(true) : loadRfis(true));
     } finally {
       // keep the spinner up long enough to be seen even when the server answers instantly
       const left = 600 - (Date.now() - startedAt);
@@ -143,7 +172,7 @@ const RFI = () => {
       refreshingRef.current = false;
       setRefreshing(false);
     }
-  }, [selectedProject, loadRfis]);
+  }, [selectedProject, allMode, loadRfis, loadAllRfis]);
 
   // One row was synced from the list's row button: swap just that RFI into the shared list,
   // so the Dashboard, the filters and the next silent reload all agree with the row.
@@ -154,6 +183,12 @@ const RFI = () => {
   useEffect(() => {
     loadRfis();
   }, [loadRfis]);
+
+  // Fetch the all-projects list only when that option is actually opened
+  // (no extra server/database work for people who never use it).
+  useEffect(() => {
+    if (allMode) void loadAllRfis();
+  }, [allMode, loadAllRfis]);
 
   // A reply (sent from the app OR arriving by email) makes the backend push an RFI_UPDATE
   // notification over the existing websocket. Refresh the list quietly so the new status
@@ -167,6 +202,7 @@ const RFI = () => {
       if (t) clearTimeout(t);
       t = setTimeout(() => {
         void loadRfis(true);
+        if (allMode) void loadAllRfis(true);
         // tell an open RFI popup too, so its status + timeline refresh in place
         window.dispatchEvent(new Event("rfi-ws-update"));
       }, 1500);
@@ -175,13 +211,16 @@ const RFI = () => {
       if (t) clearTimeout(t);
       unsubscribe();
     };
-  }, [connected, subscribe, loadRfis]);
+  }, [connected, subscribe, loadRfis, loadAllRfis, allMode]);
 
    useEffect(() => {
-    const h = () => loadRfis(true);
+    const h = () => {
+      void loadRfis(true);
+      if (allMode) void loadAllRfis(true);
+    };
     window.addEventListener("rfi-replies-imported", h);
     return () => window.removeEventListener("rfi-replies-imported", h);
-  }, [loadRfis]);
+  }, [loadRfis, loadAllRfis, allMode]);
 
   const handleSyncAll = async () => {
     if (!selectedProject) return;
@@ -401,7 +440,7 @@ const RFI = () => {
           </TabsList>
         </Tabs>
 
-        {view !== "settings" && (
+        {view !== "settings" && !allMode && (
           <>
         {/* Client + Project pickers, in line with the tabs (replaces the old "Target Project" bar) */}
         <div className="rfi-picker flex min-w-0 items-center gap-1">
@@ -446,7 +485,7 @@ const RFI = () => {
        </div>
 
         <div className="ml-auto flex items-center gap-2">
-        {canShareLinks && selectedProjectInfo && (view === "history" || view === "dashboard") && (
+        {canShareLinks && selectedProjectInfo && !allMode && (view === "history" || view === "dashboard") && (
           <Button
             type="button"
             size="sm"
@@ -466,7 +505,7 @@ const RFI = () => {
             Share live link
           </Button>
         )}
-        {(view === "history" || view === "dashboard") && (
+        {(view === "history" || view === "dashboard") && !allMode && (
           <Button
   type="button"
   size="sm"
@@ -531,8 +570,10 @@ const RFI = () => {
               <RfiDashboard
                 client={selectedClient}
                 projectName={selectedProject}
-                rfis={rfis}
-                loading={loadingRfis || refreshing}
+                scope={dashScope}
+                onScopeChange={setDashScope}
+                rfis={dashScope === "all" ? allRfis : rfis}
+                loading={(dashScope === "all" ? loadingAll : loadingRfis) || refreshing}
                 onRefresh={handleRefresh}
                 onViewAll={() => setView("history")}
               />
