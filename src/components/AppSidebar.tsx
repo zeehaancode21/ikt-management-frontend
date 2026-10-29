@@ -1122,7 +1122,7 @@ export const AppSidebar = ({ isMinimized = false, onToggleMinimize }: AppSidebar
       ? [
           ADMIN_MEDIA_ENTRY,
           ...(hasRfiAccess ? [RFI_ENTRY] : []),
-          { to: "/employee-hub", label: "Employee Hub", icon: AnimatedTeamHubIcon, isAnimated: true },
+          { to: "/employee-hub", label: "Employee Portal", icon: AnimatedTeamHubIcon, isAnimated: true },
           ...(hasProjectsAccess ? [PROJECTS_ENTRY] : []),
         ]
       : role === "LEAD"

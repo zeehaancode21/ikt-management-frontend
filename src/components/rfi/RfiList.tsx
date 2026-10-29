@@ -463,7 +463,7 @@ export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh,
               <span className="text-xs font-bold text-foreground">{rfi.rfiNumber}</span>
               <StatusBadge status={getDisplayStatus(rfi, authName)} className="shrink-0 whitespace-nowrap" />
             </div>
-            <p className="mt-1.5 text-[13px] leading-snug text-foreground [overflow-wrap:anywhere]">{rfi.subject}</p>
+            <p className="mt-1.5 text-[13px] leading-snug text-foreground [overflow-wrap:break-word]">{rfi.subject}</p>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <DisciplineTag discipline={rfi.discipline} />
               <TeamTypeTag teamType={rfi.teamType} />
@@ -510,7 +510,7 @@ export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh,
               <TableHead className={`w-px ${HEAD_CLASS}`}>Discipline</TableHead>
               <TableHead className={`w-px ${HEAD_CLASS}`}>Team Type</TableHead>
               <TableHead className={`w-px ${HEAD_CLASS}`}>Priority</TableHead>
-              <TableHead className={`w-full ${HEAD_CLASS}`}>Subject</TableHead>
+              <TableHead className={`w-full min-w-[16rem] ${HEAD_CLASS}`}>Subject</TableHead>
               <TableHead className={`w-px ${HEAD_CLASS}`}>Date</TableHead>
               <TableHead className={`w-px ${HEAD_CLASS}`}>Status</TableHead>
               <TableHead className={`w-px text-right ${HEAD_CLASS}`}>Actions</TableHead>
@@ -538,10 +538,12 @@ export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh,
                   {rfi.status !== "CANCELLED" && <PriorityTag priority={rfi.priority} />}
                 </TableCell>
                 <TableCell
-                  className="max-w-[26rem] px-3 py-2.5 align-top text-xs leading-snug text-foreground [overflow-wrap:anywhere] whitespace-normal"
+                  className="min-w-[16rem] max-w-[26rem] px-3 py-2.5 align-middle text-xs leading-snug text-foreground whitespace-normal"
                   title={rfi.subject}
                 >
-                  {rfi.subject}
+                  {/* Wraps at word boundaries and is capped at 2 lines (full text in tooltip),
+                      so a long subject can never collapse into a one-word-per-line column. */}
+                  <div className="line-clamp-2 [overflow-wrap:break-word] [word-break:normal]">{rfi.subject}</div>
                 </TableCell>
                 <TableCell className="whitespace-nowrap px-3 py-2.5 text-xs text-muted-foreground">
                   {(() => {
