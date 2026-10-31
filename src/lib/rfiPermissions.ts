@@ -60,7 +60,7 @@ export const isRfiReceivedByMe = (
  */
 export const statusForReceiver = (status: string): string => {
   if (status === "SENT") return "RECEIVED";
-  if (status === "RESPONSE_RECEIVED") return "SENT";
+  if (status === "RESPONSE_RECEIVED") return "REPLY_SENT";
   return status;
 };
 

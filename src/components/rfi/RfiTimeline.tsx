@@ -204,9 +204,11 @@ export const RfiTimeline = ({ events, loading, rfiReceived = false }: Props) => 
   const visibleEvents = events.filter((e) => {
     if (e.type === "RFI_CREATED") return false;
     if (e.type !== "STATUS_CHANGED") return true;
-    if (e.toStatus === "SENT") return false;
     if (isSystemActor(e.performedBy)) return false;
-    return true;
+    // Only show status changes that have their own tile (Closed, Cancelled,
+    // Under Review, Outstanding, Resubmitted, Reopened). Everything else,
+    // e.g. the automatic Sent -> Response Received change, is hidden.
+    return !!e.toStatus && !!STATUS_CHANGE_META[e.toStatus];
   });
 
   if (visibleEvents.length === 0) {

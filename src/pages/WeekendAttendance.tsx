@@ -79,11 +79,22 @@ const fmtDate = (d: string) => {
   }
 };
 
+/**
+ * The backend sends LocalDateTime values with NO timezone, e.g. "2026-10-31T04:43:00",
+ * from a server running in UTC. parseISO() would read that as the browser's LOCAL time,
+ * which shifts everything by the UTC offset (5h30m in India). So text without a zone
+ * is read as UTC; text that already carries one ("Z" / "+05:30") is used as-is.
+ */
+const parseServerDate = (iso: string): Date => {
+  const hasZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(iso);
+  return parseISO(/T/.test(iso) && !hasZone ? `${iso}Z` : iso);
+};
+
 const fmtTime = (t: string | null) => {
   if (!t) return "—";
   try {
     // Backend sends LocalDateTime as "yyyy-MM-ddTHH:mm:ss"
-    return format(parseISO(t), "hh:mm a");
+    return format(parseServerDate(t), "hh:mm a");
   } catch {
     return t;
   }
@@ -789,7 +800,7 @@ function ElapsedRing({ checkIn }: { checkIn: string }) {
   const now = useNow(1000);
   let secs = 0;
   try {
-    secs = Math.max(0, Math.floor((now.getTime() - parseISO(checkIn).getTime()) / 1000));
+    secs = Math.max(0, Math.floor((now.getTime() - parseServerDate(checkIn).getTime()) / 1000));
   } catch {
     secs = 0;
   }

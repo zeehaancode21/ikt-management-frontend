@@ -64,7 +64,7 @@ const STATUS_LABELS: Record<RfiStatus, string> = {
   REOPENED: "Reopened",
   CANCELLED: "Cancelled",
   RESUBMITTED: "Resubmitted",
-  SENT: "Sent",
+  SENT: "Open",
 };
 
 const STATUS_ACTIONS: {

@@ -16,6 +16,7 @@ const styles: Record<string, string> = {
   BLOCKED: "bg-red-500/15 text-red-600 border-red-500/30", // Red: Critical stop
   SENT: "bg-sky-500/15 text-sky-600 border-sky-500/30", // Sky Blue: General dispatch
   RECEIVED: "bg-violet-500/15 text-violet-600 border-violet-500/30", // Violet: RFI received (shown to the recipient instead of Sent)
+  REPLY_SENT: "bg-sky-500/15 text-sky-600 border-sky-500/30", // Sky Blue: the receiver's own reply (shown as "Sent")
 
   // RFI Lifecycle (see backend RfiStatus.java)
   DRAFT: "bg-slate-500/15 text-slate-600 border-slate-500/30", // Slate: Neutral/unissued draft
@@ -39,7 +40,8 @@ const labels: Record<string, string> = {
   IN_PROGRESS: "In Progress",
   COMPLETED: "Completed",
   BLOCKED: "Blocked",
-  SENT: "Sent",
+  SENT: "Open",
+  REPLY_SENT: "Sent",
   RECEIVED: "Received",
   DRAFT: "Draft",
   SUBMITTED: "Submitted",
