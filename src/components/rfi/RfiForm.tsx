@@ -1,3 +1,4 @@
+// INTERNAL_RFI_COMING_SOON
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
@@ -863,6 +864,40 @@ const RFI_STYLES = `
     color: color-mix(in srgb, var(--scope-accent) 80%, hsl(var(--foreground)));
   }
   .rfi-scope-opt svg { flex-shrink: 0; }
+
+  /* Locked "Coming soon" option (see INTERNAL_RFI_COMING_SOON) */
+  .rfi-scope-opt[data-soon="true"] {
+    position: relative;
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .rfi-scope-opt[data-soon="true"]:hover { color: hsl(var(--muted-foreground)); }
+  .rfi-scope-opt[data-soon="true"]:active { transform: none; }
+  .rfi-scope-opt[data-soon="true"]::after {
+    content: "Coming soon";
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translate(-50%, -3px);
+    padding: 4px 9px;
+    border-radius: 9999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    color: hsl(var(--foreground));
+    background: hsl(var(--background));
+    border: 1px solid hsl(var(--foreground) / 0.18);
+    box-shadow: 0 6px 16px -6px hsl(0 0% 0% / 0.35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease, transform 160ms ease;
+    z-index: 50;
+  }
+  .rfi-scope-opt[data-soon="true"]:hover::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
   .rfi-scope-opt[data-active="true"][data-kind="internal"] svg {
     animation: rfi-lock-snap 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
   }
@@ -1411,6 +1446,15 @@ function SuggestContent({
 
 // ── Internal / External toggle ──────────────────────────────────────
 
+/* ╔═══════════════════════════════════════════════════════════════╗
+   ║  INTERNAL RFI SWITCH  (the only line you need to change)      ║
+   ║                                                               ║
+   ║  false = Internal button works normally  -> use while TESTING ║
+   ║  true  = Internal button is locked and shows "Coming soon"    ║
+   ║          when the mouse is over it       -> use before PUSHING ║
+   ╚═══════════════════════════════════════════════════════════════╝ */
+const INTERNAL_RFI_COMING_SOON = true;
+
 interface ScopeToggleProps {
   value: RfiTeamType;
   onChange: (next: RfiTeamType, viaPointer: boolean) => void;
@@ -1422,6 +1466,7 @@ function ScopeToggle({ value, onChange, disabled }: ScopeToggleProps) {
     if (disabled) return;
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
     e.preventDefault();
+    if (INTERNAL_RFI_COMING_SOON) return; // Internal is locked, nothing to switch to
     const next: RfiTeamType = value === "INTERNAL" ? "EXTERNAL" : "INTERNAL";
     // Roving focus: move focus to the option that is about to become active.
     e.currentTarget.querySelector<HTMLElement>('button[aria-checked="false"]')?.focus();
@@ -1443,6 +1488,7 @@ function ScopeToggle({ value, onChange, disabled }: ScopeToggleProps) {
         const Icon = getTeamTypeIcon(type);
         const active = type === value;
         const label = type === "INTERNAL" ? "Internal" : "External";
+        const comingSoon = INTERNAL_RFI_COMING_SOON && type === "INTERNAL";
         return (
           <button
             key={type}
@@ -1451,15 +1497,20 @@ function ScopeToggle({ value, onChange, disabled }: ScopeToggleProps) {
             aria-checked={active}
             tabIndex={active ? 0 : -1}
             disabled={disabled}
+            aria-disabled={comingSoon || undefined}
             data-active={active}
             data-kind={type.toLowerCase()}
+            data-soon={comingSoon ? "true" : undefined}
             title={
-              type === "INTERNAL"
+              comingSoon
+                ? undefined
+                : type === "INTERNAL"
                 ? "Internal — send to someone in your office"
                 : "External — send to a client or outside address"
             }
             className="rfi-scope-opt"
             onClick={(e) => {
+              if (comingSoon) return; // locked: ignore clicks
               if (!active) onChange(type, e.detail > 0);
             }}
           >
@@ -1915,6 +1966,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   };
 
   const handleScopeChange = (next: RfiTeamType, viaPointer: boolean) => {
+    if (INTERNAL_RFI_COMING_SOON && next === "INTERNAL") return;
     setTeamType(next);
     setToActiveIndex(-1);
     setIsToSuggestOpen(false);
