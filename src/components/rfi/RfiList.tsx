@@ -153,8 +153,26 @@ const handleRowPointerMove = (e: ReactPointerEvent<HTMLTableSectionElement>) => 
   row.style.setProperty("--mx", `${e.clientX - r.left}px`);
 };
 
+// md breakpoint (768px) - same as Tailwind's `md:`. Only ONE of the phone cards / desktop table is
+// rendered, instead of both being in the DOM with one hidden by CSS (which doubled the DOM nodes).
+const useIsDesktop = () => {
+  const query = "(min-width: 768px)";
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const onChange = () => setIsDesktop(mql.matches);
+    onChange();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return isDesktop;
+};
+
 export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh, onRfiSynced }: Props) => {
   const { name: authName } = useAuth();
+  const isDesktop = useIsDesktop();
   const [selectedRfiId, setSelectedRfiId] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   // Tracks which single row is currently syncing, so the spinner/disabled
@@ -443,6 +461,7 @@ export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh,
       </Collapsible>
 
       {/* Phones: one card per RFI (an 8-column table is unreadable on a small screen) */}
+      {!isDesktop && (
       <div className="space-y-2 md:hidden">
         {visibleRfis.map((rfi, idx) => (
           <div
@@ -481,7 +500,9 @@ export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh,
           </div>
         ))}
       </div>
+      )}
 
+      {isDesktop && (
       <div className="hidden overflow-hidden rounded-lg border-[1.5px] border-foreground/25 shadow-sm md:block">
         {/*
           Previous approach: table-fixed with hand-picked percentage widths
@@ -563,6 +584,7 @@ export const RfiList = ({ projectName, rfis: rfisFromParent, loading, onRefresh,
           </TableBody>
         </Table>
       </div>
+      )}
 
       <RfiDetailDialog
         projectName={projectName}

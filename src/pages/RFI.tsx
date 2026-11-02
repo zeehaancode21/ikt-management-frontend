@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Select,
   SelectContent,
@@ -12,8 +12,6 @@ import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { RfiForm } from "@/components/rfi/RfiForm";
 import { RfiList } from "@/components/rfi/RfiList";
-import { RfiEmailSettings } from "@/components/rfi/RfiEmailSettings";
-import { RfiGmailSettings } from "@/components/rfi/RfiGmailSettings";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   getProjects,
@@ -26,13 +24,32 @@ import {
 } from "@/lib/rfiApi";
 import type { Rfi, RfiDiscipline, RfiTeamType } from "@/types/rfi";
 import { Building, FolderGit2, LayoutDashboard, Share2 } from "lucide-react";
-import { RfiShareDialog } from "@/components/rfi/RfiShareDialog";
 import type { RfiShareTarget } from "@/lib/rfiShareApi";
 import { useAuth } from "@/context/AuthContext";
-import { RfiDashboard } from "@/components/rfi/RfiDashboard";
 import { useNotifications } from "@/context/NotificationsContext";
 import { useWebSocket } from "@/context/WebSocketContext";
 import type { CSSProperties } from "react";
+
+// Loaded only when the person opens that view (named exports -> default for React.lazy).
+// RfiForm stays eager: "create" is the default view, so lazy-loading it would only add a waterfall.
+const RfiEmailSettings = lazy(() =>
+  import("@/components/rfi/RfiEmailSettings").then((m) => ({ default: m.RfiEmailSettings }))
+);
+const RfiGmailSettings = lazy(() =>
+  import("@/components/rfi/RfiGmailSettings").then((m) => ({ default: m.RfiGmailSettings }))
+);
+const RfiShareDialog = lazy(() =>
+  import("@/components/rfi/RfiShareDialog").then((m) => ({ default: m.RfiShareDialog }))
+);
+const RfiDashboard = lazy(() =>
+  import("@/components/rfi/RfiDashboard").then((m) => ({ default: m.RfiDashboard }))
+);
+
+const ViewFallback = () => (
+  <div className="flex h-full min-h-[160px] items-center justify-center text-xs text-muted-foreground">
+    Loading…
+  </div>
+);
 
 const RFI = () => {
   // Clear the RFI badge in the left sidebar once the user is on this page, and keep it
@@ -47,6 +64,9 @@ const RFI = () => {
   const { role } = useAuth();
   const canShareLinks = role === "OWNER";
   const [shareTarget, setShareTarget] = useState<RfiShareTarget | null>(null); // null = dialog closed
+  // Once the share dialog has been opened it stays mounted, so its close animation still plays.
+  const shareDialogMounted = useRef(false);
+  if (shareTarget) shareDialogMounted.current = true;
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [rfis, setRfis] = useState<Rfi[]>([]);
@@ -548,10 +568,12 @@ const RFI = () => {
         <div className={`flex-1 min-h-0 ${view === "create" ? "overflow-y-auto overflow-x-hidden pb-4 rfi-page-scroll" : "overflow-hidden"}`}>
           {view === "settings" ? (
             <div className="rfi-page-scroll flex h-full min-h-0 flex-col gap-2 overflow-y-auto overflow-x-hidden pb-4">
-              <RfiGmailSettings />
-              <div className="flex min-h-[320px] flex-1 flex-col">
-                <RfiEmailSettings />
-              </div>
+              <Suspense fallback={<ViewFallback />}>
+                <RfiGmailSettings />
+                <div className="flex min-h-[320px] flex-1 flex-col">
+                  <RfiEmailSettings />
+                </div>
+              </Suspense>
             </div>
           ) : view === "create" ? (
             <RfiForm
@@ -567,6 +589,7 @@ const RFI = () => {
             // Full-bleed: no framed card, no padding — the dashboard uses the whole
             // work area and only scrolls on small screens.
             <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden rfi-page-scroll">
+              <Suspense fallback={<ViewFallback />}>
               <RfiDashboard
                 client={selectedClient}
                 projectName={selectedProject}
@@ -577,6 +600,7 @@ const RFI = () => {
                 onRefresh={handleRefresh}
                 onViewAll={() => setView("history")}
               />
+              </Suspense>
             </div>
           ) : (
             <div className="rfi-history-card">
@@ -588,7 +612,11 @@ const RFI = () => {
         </div>
       </div>
 
-      {canShareLinks && <RfiShareDialog target={shareTarget} onClose={() => setShareTarget(null)} />}
+      {canShareLinks && shareDialogMounted.current && (
+        <Suspense fallback={null}>
+          <RfiShareDialog target={shareTarget} onClose={() => setShareTarget(null)} />
+        </Suspense>
+      )}
     </div>
   );
 };
