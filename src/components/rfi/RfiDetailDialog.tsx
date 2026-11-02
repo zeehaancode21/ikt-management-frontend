@@ -391,7 +391,9 @@ export const RfiDetailDialog = ({
               <DetailRow icon={Mail} label="Receiver" tone="primary">
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate" title={rfi.recipientEmail}>
-                    {rfi.recipientEmail}
+                    {rfi.recipientEmail || (
+                      <span className="text-muted-foreground">Not set yet - the Owner adds it when sending</span>
+                    )}
                   </span>
                   <Button
                     type="button"

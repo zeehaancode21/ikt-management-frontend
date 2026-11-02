@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/Spinner";
 import { toast } from "@/hooks/use-toast";
-import { Check, CornerUpLeft, FileText, Info, Paperclip, Pencil, Send, X } from "lucide-react";
+import { Check, CornerUpLeft, Eye, FileText, Info, Paperclip, Pencil, Send, X } from "lucide-react";
+import { previewAttachment } from "@/lib/attachmentActions";
 import {
   approveInternalRfi,
   dispatchRfiDraft,
@@ -138,8 +139,11 @@ export const RfiInternalWorkflow = ({ projectName, rfi, onChanged, feedback }: P
   const [draftFile, setDraftFile] = useState<File | null>(null);
   // Send External RFI modal
   const [dispatchOpen, setDispatchOpen] = useState(false);
-  const [toText, setToText] = useState("");
-  const [ccText, setCcText] = useState("");
+  // Addresses already turned into chips, plus the text still being typed in each box.
+  const [toChips, setToChips] = useState<string[]>([]);
+  const [toDraftText, setToDraftText] = useState("");
+  const [ccChips, setCcChips] = useState<string[]>([]);
+  const [ccDraftText, setCcDraftText] = useState("");
   const [knownTo, setKnownTo] = useState<string[]>([]);
   const [knownCc, setKnownCc] = useState<string[]>([]);
 
@@ -168,10 +172,15 @@ export const RfiInternalWorkflow = ({ projectName, rfi, onChanged, feedback }: P
     };
   }, [dispatchOpen]);
 
-  const toList = useMemo(() => splitAddresses(toText), [toText]);
+  // Final lists = chips + whatever is still typed (so nothing typed is ever lost on Send).
+  // An address already in To is dropped from CC.
+  const toList = useMemo(() => splitAddresses([...toChips, toDraftText].join(" ")), [toChips, toDraftText]);
   const ccList = useMemo(
-    () => splitAddresses(ccText).filter((c) => !toList.some((t) => t.toLowerCase() === c.toLowerCase())),
-    [ccText, toList]
+    () =>
+      splitAddresses([...ccChips, ccDraftText].join(" ")).filter(
+        (c) => !toList.some((t) => t.toLowerCase() === c.toLowerCase())
+      ),
+    [ccChips, ccDraftText, toList]
   );
   const badAddress = [...toList, ...ccList].find((a) => !EMAIL_RE.test(a));
   const canSend = toList.length > 0 && !badAddress;
@@ -429,9 +438,10 @@ export const RfiInternalWorkflow = ({ projectName, rfi, onChanged, feedback }: P
         </div>
       )}
 
-      {/* ── Owner: edit the draft, then Approve & Send ── */}
+      {/* ── Owner: review the draft, edit it, then Approve & Send ── */}
       {ownerCanAct && (
         <div className="space-y-2">
+          <DraftPreview rfi={rfi} />
           <div className="flex flex-wrap gap-1.5">
             <Button
               type="button"
@@ -524,84 +534,75 @@ export const RfiInternalWorkflow = ({ projectName, rfi, onChanged, feedback }: P
 
       {/* ── To & CC configuration modal ── */}
       <Dialog open={dispatchOpen} onOpenChange={(open) => !busy && setDispatchOpen(open)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Send External RFI</DialogTitle>
             <DialogDescription>
-              {rfi.rfiNumber} goes to the client now, from your connected Gmail account.
+              Review {rfi.rfiNumber}, add the client's addresses and send. It is emailed from your connected Gmail account.
             </DialogDescription>
           </DialogHeader>
 
+          <DraftPreview rfi={rfi} />
+
           <div className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="dispatch-to" className="text-[11px]">
-                To (client / external stakeholders) *
-              </Label>
-              <Input
-                id="dispatch-to"
-                value={toText}
-                onChange={(e) => setToText(e.target.value)}
-                placeholder="client@example.com, other@example.com"
-                className={inputCls}
-                autoFocus
-              />
-              {knownTo.length > 0 && (
-                <Suggestions
-                  addresses={knownTo}
-                  chosen={toList}
-                  onPick={(a) => setToText((t) => [...splitAddresses(t), a].join(", "))}
-                />
-              )}
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="dispatch-cc" className="text-[11px]">
-                CC
-              </Label>
-              <Input
-                id="dispatch-cc"
-                value={ccText}
-                onChange={(e) => setCcText(e.target.value)}
-                placeholder="optional"
-                className={inputCls}
-              />
-              {knownCc.length > 0 && (
-                <Suggestions
-                  addresses={knownCc}
-                  chosen={[...toList, ...ccList]}
-                  onPick={(a) => setCcText((t) => [...splitAddresses(t), a].join(", "))}
-                />
-              )}
-            </div>
+            <AddressInput
+              id="dispatch-to"
+              label="To (client / external stakeholders)"
+              required
+              chips={toChips}
+              onChipsChange={setToChips}
+              draft={toDraftText}
+              onDraftChange={setToDraftText}
+              placeholder="Type an address, press Enter or comma"
+              suggestions={knownTo}
+              autoFocus
+            />
+            <AddressInput
+              id="dispatch-cc"
+              label="CC"
+              chips={ccChips}
+              onChipsChange={setCcChips}
+              draft={ccDraftText}
+              onDraftChange={setCcDraftText}
+              placeholder="Optional"
+              suggestions={knownCc}
+              hidden={toList}
+            />
             {badAddress && <p className="text-[11px] text-rose-600">"{badAddress}" is not a valid email address.</p>}
           </div>
 
-          <DialogFooter>
-            <Button type="button" variant="ghost" size="sm" className="h-8 text-[12px]" onClick={() => setDispatchOpen(false)} disabled={busy}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="h-8 gap-1 bg-emerald-600 text-[12px] text-white hover:bg-emerald-500"
-              disabled={busy || !canSend}
-              onClick={() =>
-                run(
-                  () => dispatchRfiDraft(projectName, rfi.id, toList, ccList),
-                  "Could not send the RFI",
-                  () => {
-                    setDispatchOpen(false);
-                    toast({
-                      title: `${rfi.rfiNumber} sent to the client`,
-                      description: `Emailed to ${toList.join(", ")}`,
-                      className: "bg-emerald-600 text-white border-none shadow-xl",
-                    });
-                  }
-                )
-              }
-            >
-              {busy ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-              Send External RFI
-            </Button>
+          <DialogFooter className="items-center gap-2 sm:justify-between">
+            <span className="text-[11px] text-muted-foreground">
+              {toList.length} recipient(s) in To{ccList.length > 0 ? `, ${ccList.length} in CC` : ""}
+            </span>
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" size="sm" className="h-8 text-[12px]" onClick={() => setDispatchOpen(false)} disabled={busy}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 gap-1 bg-emerald-600 text-[12px] text-white hover:bg-emerald-500"
+                disabled={busy || !canSend}
+                onClick={() =>
+                  run(
+                    () => dispatchRfiDraft(projectName, rfi.id, toList, ccList),
+                    "Could not send the RFI",
+                    () => {
+                      setDispatchOpen(false);
+                      toast({
+                        title: `${rfi.rfiNumber} sent to the client`,
+                        description: `Emailed to ${toList.join(", ")}`,
+                        className: "bg-emerald-600 text-white border-none shadow-xl",
+                      });
+                    }
+                  )
+                }
+              >
+                {busy ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                Send External RFI
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -609,31 +610,139 @@ export const RfiInternalWorkflow = ({ projectName, rfi, onChanged, feedback }: P
   );
 };
 
-/** A few known addresses as one-click chips (already-used ones are hidden). */
-const Suggestions = ({
-  addresses,
-  chosen,
-  onPick,
-}: {
-  addresses: string[];
-  chosen: string[];
-  onPick: (address: string) => void;
-}) => {
-  const used = new Set(chosen.map((c) => c.toLowerCase()));
-  const options = addresses.filter((a) => !used.has(a.toLowerCase())).slice(0, 6);
-  if (options.length === 0) return null;
-  return (
-    <div className="flex flex-wrap gap-1">
-      {options.map((a) => (
-        <button
-          key={a}
+/** What will be emailed: subject, body and the PDF (with a Preview button). */
+const DraftPreview = ({ rfi }: { rfi: Rfi }) => (
+  <div className="space-y-1.5 rounded-md border border-border/70 bg-muted/20 p-2.5">
+    <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Email subject</div>
+    <div className="break-words text-[12px] font-medium">{rfi.generatedEmailSubject}</div>
+    <div className="pt-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Email body</div>
+    <div className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded border border-border/60 bg-background p-2 text-[12px]">
+      {rfi.emailBody}
+    </div>
+    <div className="flex items-center gap-2 rounded border border-border/60 bg-background px-2 py-1">
+      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1 truncate text-[12px]">{rfi.attachment?.originalName}</span>
+      {rfi.attachment && (
+        <Button
           type="button"
-          className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted"
-          onClick={() => onPick(a)}
+          variant="ghost"
+          size="sm"
+          className="h-6 gap-1 px-2 text-[11px]"
+          onClick={() => previewAttachment(rfi.attachment.id, rfi.attachment.originalName)}
         >
-          + {a}
-        </button>
-      ))}
+          <Eye className="h-3 w-3" /> Preview PDF
+        </Button>
+      )}
+    </div>
+  </div>
+);
+
+interface AddressInputProps {
+  id: string;
+  label: string;
+  required?: boolean;
+  chips: string[];
+  onChipsChange: (chips: string[]) => void;
+  draft: string;
+  onDraftChange: (text: string) => void;
+  placeholder?: string;
+  suggestions?: string[];
+  /** Addresses that must not be offered / kept here (e.g. already in To when this is the CC box). */
+  hidden?: string[];
+  autoFocus?: boolean;
+}
+
+/**
+ * An address box: every address becomes a removable chip when you press Enter, comma, semicolon,
+ * space or Tab, paste a list, or leave the box. Invalid addresses show red so they are easy to fix.
+ * Known contacts are offered as one-click chips underneath.
+ */
+const AddressInput = ({
+  id,
+  label,
+  required,
+  chips,
+  onChipsChange,
+  draft,
+  onDraftChange,
+  placeholder,
+  suggestions = [],
+  hidden = [],
+  autoFocus,
+}: AddressInputProps) => {
+  const commit = (text: string) => {
+    const incoming = splitAddresses(text);
+    if (incoming.length === 0) return;
+    const have = new Set(chips.map((c) => c.toLowerCase()));
+    onChipsChange([...chips, ...incoming.filter((a) => !have.has(a.toLowerCase()))]);
+    onDraftChange("");
+  };
+
+  const taken = new Set([...chips, ...hidden, ...splitAddresses(draft)].map((a) => a.toLowerCase()));
+  const options = suggestions.filter((a) => !taken.has(a.toLowerCase())).slice(0, 6);
+
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={id} className="text-[11px]">
+        {label}
+        {required ? " *" : ""}
+      </Label>
+      <div className="flex min-h-[38px] flex-wrap items-center gap-1 rounded-md border border-input bg-background px-2 py-1 focus-within:ring-2 focus-within:ring-ring">
+        {chips.map((c) => (
+          <span
+            key={c}
+            className={`flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${
+              EMAIL_RE.test(c) ? "border-border bg-muted/50" : "border-rose-500/60 bg-rose-500/10 text-rose-600"
+            }`}
+          >
+            <span className="truncate">{c}</span>
+            <button
+              type="button"
+              aria-label={`Remove ${c}`}
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => onChipsChange(chips.filter((x) => x !== c))}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        <input
+          id={id}
+          value={draft}
+          autoFocus={autoFocus}
+          placeholder={chips.length === 0 ? placeholder : ""}
+          className="h-6 min-w-[140px] flex-1 bg-transparent text-[12px] outline-none placeholder:text-muted-foreground"
+          onChange={(e) => {
+            const v = e.target.value;
+            // a separator typed or pasted at the end turns what came before it into chips
+            if (/[,;\s]$/.test(v) || /[,;\s]/.test(v.trim())) commit(v);
+            else onDraftChange(v);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit(draft);
+            } else if (e.key === "Backspace" && draft === "" && chips.length > 0) {
+              onChipsChange(chips.slice(0, -1));
+            }
+          }}
+          onBlur={() => commit(draft)}
+        />
+      </div>
+      {options.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {options.map((a) => (
+            <button
+              key={a}
+              type="button"
+              className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted"
+              onClick={() => onChipsChange([...chips, a])}
+            >
+              + {a}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
