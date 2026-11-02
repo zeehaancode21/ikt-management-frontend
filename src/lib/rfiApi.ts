@@ -90,6 +90,11 @@ export interface CreateRfiInput {
    * this number instead of 1. Omit to keep the automatic numbering.
    */
   startingNumber?: number;
+  /**
+   * INTERNAL RFIs only: the Owner who will send the approved RFI to the client.
+   * Omit to let the backend pick the first user with the OWNER role.
+   */
+  ownerUsername?: string;
 }
 
 export const createRfi = (projectName: string, input: CreateRfiInput) => {
@@ -111,6 +116,9 @@ export const createRfi = (projectName: string, input: CreateRfiInput) => {
   }
   if (input.startingNumber && input.startingNumber > 0) {
     form.append("startingNumber", String(input.startingNumber));
+  }
+  if (input.teamType === "INTERNAL" && input.ownerUsername?.trim()) {
+    form.append("ownerUsername", input.ownerUsername.trim());
   }
 
   return api
@@ -503,3 +511,73 @@ export const validateRfiGmailToken = () =>
 
 export const clearRfiGmailToken = () =>
   api.delete<{ message: string }>(`${RFI_SETTINGS_BASE}/token`).then((r) => r.data);
+
+// ── Internal workflow: Drafter -> Checker -> Owner -> Client ────────────
+// Base: /api/project-status/{projectName}/rfis/{id}. The backend checks the exact role on
+// every call (Checker / Drafter / Owner) and answers 403 for anyone else.
+
+const rfiBase = (projectName: string, id: number) =>
+  `/api/project-status/${encodeURIComponent(projectName)}/rfis/${id}`;
+
+type RfiResponse = { success: boolean; message: string; data: Rfi };
+
+/** Checker: send the RFI back to the Drafter. `status` is what it is flagged as meanwhile. */
+export const requestInternalRevision = (
+  projectName: string,
+  id: number,
+  status: Extract<RfiStatus, "UNDER_REVIEW" | "OUTSTANDING">,
+  note: string
+) =>
+  api
+    .post<RfiResponse>(`${rfiBase(projectName, id)}/internal/request-revision`, null, {
+      params: { status, note: note.trim() },
+    })
+    .then((r) => r.data.data);
+
+/** Drafter: send the revised RFI to the Checker again. The status goes back to OPEN. */
+export const resubmitInternalRfi = (projectName: string, id: number, input: ResubmitRfiInput) => {
+  const form = new FormData();
+  form.append("message", input.message);
+  (input.attachments ?? []).forEach((file) => form.append("attachments", file));
+  return api
+    .post<RfiResponse>(`${rfiBase(projectName, id)}/internal/resubmit`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((r) => r.data.data);
+};
+
+/** Checker: approve. Returns the approved internal RFI; the Owner's draft is created by the backend. */
+export const approveInternalRfi = (projectName: string, id: number, note?: string) =>
+  api
+    .post<RfiResponse>(`${rfiBase(projectName, id)}/internal/approve`, null, {
+      params: note?.trim() ? { note: note.trim() } : {},
+    })
+    .then((r) => r.data.data);
+
+export interface UpdateDraftInput {
+  subject?: string;
+  emailBody?: string;
+  /** A replacement PDF. Omit to keep the current file. */
+  attachment?: File;
+}
+
+/** Owner: edit the generated external draft. Only the fields you pass are changed. */
+export const updateRfiDraft = (projectName: string, id: number, input: UpdateDraftInput) => {
+  const form = new FormData();
+  if (input.subject !== undefined) form.append("subject", input.subject);
+  if (input.emailBody !== undefined) form.append("emailBody", input.emailBody);
+  if (input.attachment) form.append("attachment", input.attachment);
+  return api
+    .put<RfiResponse>(`${rfiBase(projectName, id)}/draft`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((r) => r.data.data);
+};
+
+/** Owner: "Send External RFI". `to` is required; both are comma-separated address lists. */
+export const dispatchRfiDraft = (projectName: string, id: number, to: string[], cc: string[]) =>
+  api
+    .post<RfiResponse>(`${rfiBase(projectName, id)}/dispatch`, null, {
+      params: { to: to.join(", "), ...(cc.length > 0 ? { cc: cc.join(", ") } : {}) },
+    })
+    .then((r) => r.data.data);

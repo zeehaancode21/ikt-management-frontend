@@ -24,7 +24,7 @@ const STATUS_DOT: Record<string, string> = {
   DRAFT: "bg-slate-500", SUBMITTED: "bg-cyan-500", ISSUED: "bg-indigo-500",
   AWAITING_RESPONSE: "bg-amber-500", RESPONSE_RECEIVED: "bg-teal-500", UNDER_REVIEW: "bg-purple-500",
   OUTSTANDING: "bg-orange-500", CLOSED: "bg-emerald-500", REOPENED: "bg-pink-500",
-  CANCELLED: "bg-rose-500", RESUBMITTED: "bg-fuchsia-500", SENT: "bg-sky-500", REPLY_SENT: "bg-sky-500", RECEIVED: "bg-violet-500",
+  CANCELLED: "bg-rose-500", RESUBMITTED: "bg-fuchsia-500", SENT: "bg-sky-500", OPEN: "bg-sky-500", INTERNAL_APPROVED: "bg-lime-500", DRAFTING: "bg-slate-500", REPLY_SENT: "bg-sky-500", RECEIVED: "bg-violet-500",
 };
 
 const CHIP_BASE =

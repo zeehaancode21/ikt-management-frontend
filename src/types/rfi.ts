@@ -41,7 +41,12 @@ export type RfiStatus =
   | "REOPENED"
   | "CANCELLED"
   | "RESUBMITTED"
-  | "SENT";
+  | "SENT"
+  // OPEN is what every new RFI starts as (SENT is its old name, same meaning).
+  | "OPEN"
+  // Internal workflow: checker approved the internal RFI / unsent external draft of the Owner.
+  | "INTERNAL_APPROVED"
+  | "DRAFTING";
 
 export const RFI_STATUSES: RfiStatus[] = [
   "DRAFT",
@@ -55,7 +60,22 @@ export const RFI_STATUSES: RfiStatus[] = [
   "REOPENED",
   "CANCELLED",
   "RESUBMITTED",
+  "OPEN",
+  "INTERNAL_APPROVED",
+  "DRAFTING",
 ];
+
+// Matches backend RfiInternalStage.java: where an RFI is in the Internal workflow
+// (Drafter -> Checker -> Owner -> Client). Absent on plain external RFIs.
+export type RfiInternalStage =
+  | "CHECKER_REVIEW"
+  | "REVISION_REQUESTED"
+  | "APPROVED_INTERNAL"
+  | "DRAFT_OWNER"
+  | "DISPATCHED";
+
+// The viewer's part in the internal workflow on one RFI (filled in by the backend).
+export type RfiInternalRole = "DRAFTER" | "CHECKER" | "OWNER";
 
 export interface RfiAttachment {
   id: number;
@@ -124,6 +144,17 @@ export interface Rfi {
   // employee who is sent an INTERNAL RFI. Used to show "Received" instead of "Sent".
   receivedByViewer?: boolean;
   sentBy?: string;
+  // ── Internal workflow (all absent on plain external RFIs) ──
+  // The Drafter is `sentBy`. The Checker is who the internal RFI was sent to.
+  checkerUsername?: string | null;
+  ownerUsername?: string | null;
+  internalStage?: RfiInternalStage | null;
+  // On the generated external draft: the approved internal RFI it came from.
+  sourceRfiId?: number | null;
+  // On the approved internal RFI: the external draft / RFI generated from it.
+  forwardedRfiId?: number | null;
+  // What the logged-in user is on THIS RFI in the workflow; null when nothing.
+  internalRole?: RfiInternalRole | null;
   createdAt: string;
   // Reflects Rfi.senderEmail / Rfi.senderName on the backend entity — the
   // sender actually used as Reply-To, plus the cosmetic display label.

@@ -284,9 +284,10 @@ function statusTone(status = ""): Tone {
       return "bad";
     case "CANCELLED":
     case "DRAFT":
+    case "DRAFTING":
       return "neutral";
     default:
-      return "warn"; // SENT, SUBMITTED, ISSUED, AWAITING_RESPONSE, RESUBMITTED
+      return "warn"; // SENT, OPEN, SUBMITTED, ISSUED, AWAITING_RESPONSE, RESUBMITTED
   }
 }
 

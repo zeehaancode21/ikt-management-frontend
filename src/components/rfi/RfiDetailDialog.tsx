@@ -31,6 +31,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { canModifyRfi, getDisplayStatus, isRfiReceivedByMe } from "@/lib/rfiPermissions";
 import { RfiStatusActions } from "./RfiStatusActions";
+import { RfiInternalWorkflow } from "./RfiInternalWorkflow";
 import { RfiTimeline } from "./RfiTimeline";
 import { DownloadProgressButton } from "@/components/DownloadProgressButton";
 
@@ -99,6 +100,9 @@ const DetailRow = ({
     </div>
   );
 };
+
+// Must match the note the backend writes when a Checker sends an internal RFI back (RfiServiceImpl#requestInternalRevision).
+const CHECKER_FEEDBACK_PREFIX = "Sent back to the Drafter for revision: ";
 
 export const RfiDetailDialog = ({
   projectName,
@@ -507,10 +511,33 @@ export const RfiDetailDialog = ({
                   {syncing ? "Checking..." : "Check for Replies"}
                 </Button>
               </div>
-              <RfiTimeline events={history} loading={false} rfiReceived={rfi ? isRfiReceivedByMe(rfi, authName) : false} />
+              <RfiTimeline events={history} loading={false} rfiReceived={rfi ? !rfi.internalStage && isRfiReceivedByMe(rfi, authName) : false} />
             </div>
-            {/* Status control — not shown at all for a CANCELLED RFI */}
-            {rfi.status !== "CANCELLED" && (
+            {/* Internal review workflow (Drafter -> Checker -> Owner -> Client); only on RFIs that are part of it */}
+            {rfi.internalStage && (
+              <>
+                <Separator />
+                <RfiInternalWorkflow
+                  projectName={projectName!}
+                  rfi={rfi}
+                  feedback={
+                    [...history]
+                      .filter((e) => e.type === "STATUS_CHANGED" && e.message?.startsWith(CHECKER_FEEDBACK_PREFIX))
+                      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                      .pop()
+                      ?.message?.slice(CHECKER_FEEDBACK_PREFIX.length) ?? null
+                  }
+                  onChanged={(updated) => {
+                    setRfi(updated);
+                    loadAll(true);
+                    onRfiUpdated();
+                  }}
+                />
+              </>
+            )}
+            {/* Status control — not shown for a CANCELLED RFI, nor for an unsent draft / an approved internal RFI
+                (those move only through the workflow panel above) */}
+            {rfi.status !== "CANCELLED" && rfi.status !== "DRAFTING" && rfi.status !== "INTERNAL_APPROVED" && (
               <>
               <Separator />
 
@@ -542,7 +569,7 @@ export const RfiDetailDialog = ({
               <Separator />
               </>
             )}
-            {rfi.status === "CANCELLED" && <Separator />}
+            {(rfi.status === "CANCELLED" || rfi.status === "DRAFTING" || rfi.status === "INTERNAL_APPROVED") && <Separator />}
 
             {/* Bottom close button */}
             <DialogFooter>

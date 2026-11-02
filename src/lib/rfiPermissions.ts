@@ -59,11 +59,13 @@ export const isRfiReceivedByMe = (
  * Every other status is shown as is. The sender always sees the stored status unchanged.
  */
 export const statusForReceiver = (status: string): string => {
-  if (status === "SENT") return "RECEIVED";
+  if (status === "SENT" || status === "OPEN") return "RECEIVED";
   if (status === "RESPONSE_RECEIVED") return "REPLY_SENT";
   return status;
 };
 
 /** The status to SHOW for the person looking at this RFI. */
 export const getDisplayStatus = (rfi: Rfi, authName?: string | null): string =>
-  isRfiReceivedByMe(rfi, authName) ? statusForReceiver(rfi.status) : rfi.status;
+  // RFIs in the internal review workflow show their real status to everyone (the Checker sees
+  // "Open", not "Received"): the workflow statuses mean the same thing to every participant.
+  !rfi.internalStage && isRfiReceivedByMe(rfi, authName) ? statusForReceiver(rfi.status) : rfi.status;

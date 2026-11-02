@@ -30,6 +30,9 @@ const styles: Record<string, string> = {
   REOPENED: "bg-pink-500/15 text-pink-600 border-pink-500/30", // Pink: Reactivated state (distinct from cancelled)
   CANCELLED: "bg-rose-500/15 text-rose-600 border-rose-500/30", // Rose: Aborted/cancelled
   RESUBMITTED: "bg-fuchsia-500/15 text-fuchsia-600 border-fuchsia-500/30", // Fuchsia: Re-entry submission
+  OPEN: "bg-sky-500/15 text-sky-600 border-sky-500/30", // Sky Blue: new RFI, waiting for action (old name: SENT)
+  INTERNAL_APPROVED: "bg-lime-500/15 text-lime-700 border-lime-500/30", // Lime: Checker approved, forwarded to the Owner
+  DRAFTING: "bg-slate-500/15 text-slate-600 border-slate-500/30", // Slate: external draft, not sent yet
 };
 
 const labels: Record<string, string> = {
@@ -54,6 +57,9 @@ const labels: Record<string, string> = {
   REOPENED: "Reopened",
   CANCELLED: "Cancelled",
   RESUBMITTED: "Resubmitted",
+  OPEN: "Open",
+  INTERNAL_APPROVED: "Approved (Internal)",
+  DRAFTING: "Draft",
 };
 
 const FALLBACK_STYLE = "bg-muted text-muted-foreground border-border";
