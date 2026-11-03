@@ -50,23 +50,6 @@ export const ApplyBanner = ({
           <h2 className="pfx-banner-title">{title}</h2>
           <p className="pfx-banner-sub">{subtitle}</p>
         </div>
-        <div className="pfx-ring" role="img" aria-label={`Form ${pct}% complete`}>
-          <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
-            <circle cx="18" cy="18" r="15.5" fill="none" stroke="rgba(255,255,255,.28)" strokeWidth="3" />
-            <circle
-              cx="18"
-              cy="18"
-              r="15.5"
-              fill="none"
-              stroke="#fff"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeDasharray={`${(pct / 100) * 97.4} 97.4`}
-              style={{ transition: "stroke-dasharray .6s cubic-bezier(.16,1,.3,1)" }}
-            />
-          </svg>
-          <span className="pfx-ring-text">{pct === 100 ? <Check className="h-4 w-4" aria-hidden="true" /> : `${pct}%`}</span>
-        </div>
       </div>
       {children && <div className="pfx-banner-chips">{children}</div>}
       <div className="pfx-banner-bar" aria-hidden="true">
