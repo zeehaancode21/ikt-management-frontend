@@ -1,4 +1,3 @@
-// INTERNAL_RFI_COMING_SOON
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
@@ -23,6 +22,10 @@ import {
   ChevronDown,
   Plus,
   Users,
+  FastForward,
+  ClipboardCheck,
+  Mail,
+  MessageSquare,
 } from "lucide-react";
 import { AnimatedUploadIcon } from "@/components/icons/AnimatedUploadIcon";
 import { AnimatedChecklistIcon } from "@/components/icons/Animatedchecklisticon";
@@ -1453,7 +1456,11 @@ function SuggestContent({
    ║  true  = Internal button is locked and shows "Coming soon"    ║
    ║          when the mouse is over it       -> use before PUSHING ║
    ╚═══════════════════════════════════════════════════════════════╝ */
-const INTERNAL_RFI_COMING_SOON = true;
+const INTERNAL_RFI_COMING_SOON = false;
+
+// "Without mail" keeps the PDF in the database (there is no Gmail copy), so it is limited to a small size.
+// Must match app.rfi.in-app.max-attachment-bytes on the backend (default 3 MB).
+const IN_APP_MAX_FILE_BYTES = 3 * 1024 * 1024;
 
 interface ScopeToggleProps {
   value: RfiTeamType;
@@ -1533,6 +1540,11 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   // ── Form State ──────────────────────────────────────────────────────
   const [discipline, setDiscipline] = useState<RfiDiscipline>(DEFAULT_DISCIPLINE);
   const [teamType, setTeamType] = useState<RfiTeamType>("EXTERNAL");
+  // Internal only: true = Person B converts it to a draft and sends it straight to the Owner.
+  const [draftRoute, setDraftRoute] = useState(false);
+  // Internal only. false = "With mail" (the RFI and every reply go by email inside ONE Gmail thread).
+  // true = "Without mail" (stays inside the app: no email, no Gmail needed, tiny database footprint).
+  const [inAppOnly, setInAppOnly] = useState(false);
   const [priority, setPriority] = useState<RfiPriority>(DEFAULT_RFI_PRIORITY);
   const [subject, setSubject] = useState("");
   // Optional: only offered while the project has no RFIs yet. Blank = automatic (RFI#001).
@@ -1547,13 +1559,24 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   const [isDragging, setIsDragging] = useState(false);
   // The To field has two independent values — one per scope — so flipping the
   // toggle never wipes what was typed on the other side.
-  const [externalRecipient, setExternalRecipient] = useState(initialRecipientEmail);
+  const [externalRecipient, setExternalRecipient] = useState("");
   const [internalRecipient, setInternalRecipient] = useState("");
   const isInternal = teamType === "INTERNAL";
   const recipientEmail = isInternal ? internalRecipient : externalRecipient;
   const setRecipientEmail = (value: string) =>
     isInternal ? setInternalRecipient(value) : setExternalRecipient(value);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  // The "make a draft" route is offered ONLY when the internal RFI is sent to an Owner (e.g. Noor).
+  // For anyone else it is Check & approve only.
+  const recipientIsOwner =
+    isInternal &&
+    employees.some(
+      (e) =>
+        !!e.email &&
+        e.email.trim().toLowerCase() === internalRecipient.trim().toLowerCase() &&
+        (e.role ?? "").trim().toUpperCase() === "OWNER"
+    );
+  const draftRouteOn = recipientIsOwner && draftRoute;
   // The Gmail account RFIs are sent FROM (RFI Settings). Like the sender's own email,
   // it can never be a To or CC address.
   const [gmailFromEmail, setGmailFromEmail] = useState("");
@@ -1569,7 +1592,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   const [favoriteToContacts, setFavoriteToContacts] = useState<RfiEmailContact[]>([]);
   const [favoriteCcContacts, setFavoriteCcContacts] = useState<RfiEmailContact[]>([]);
   const [ccPickerTab, setCcPickerTab] = useState<"favorites" | "employees">("favorites");
-  const [ccEmails, setCcEmails] = useState<string[]>(() => parseEmailList(initialCcEmails));
+  const [ccEmails, setCcEmails] = useState<string[]>([]);
   const [ccInput, setCcInput] = useState("");
   const [isToPickerOpen, setIsToPickerOpen] = useState(false);
   const [isCcPickerOpen, setIsCcPickerOpen] = useState(false);
@@ -1817,8 +1840,10 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   }, []);
 
   useEffect(() => {
-    setExternalRecipient(initialRecipientEmail);
-  }, [initialRecipientEmail]);
+  setExternalRecipient("");
+  setCcEmails([]);
+  setCcInput("");
+}, [projectName]);
 
   // Full contact books for the typeahead. Silent on failure: these 400 until the
   // user has saved Gmail settings once, and the favorites loader above already
@@ -1833,10 +1858,6 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   }, [loadAllContacts]);
 
   useEffect(() => {
-    setCcEmails(parseEmailList(initialCcEmails));
-  }, [initialCcEmails]);
-
-  useEffect(() => {
     if (!projectName || isBodyCustomized || isEditingBody) return;
 
     if (bodyPreviewTimerRef.current) clearTimeout(bodyPreviewTimerRef.current);
@@ -1844,7 +1865,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     bodyPreviewTimerRef.current = setTimeout(() => {
       const requestId = ++previewRequestRef.current;
       setIsBodyPreviewLoading(true);
-      previewRfiEmail(projectName, subject, parsedStartingNumber)
+      previewRfiEmail(projectName, subject, parsedStartingNumber, teamType)
         .then((preview) => {
           if (requestId !== previewRequestRef.current) return;
           bodyLoadedRef.current = true;
@@ -1861,7 +1882,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     return () => {
       if (bodyPreviewTimerRef.current) clearTimeout(bodyPreviewTimerRef.current);
     };
-  }, [projectName, subject, parsedStartingNumber, isBodyCustomized, isEditingBody]);
+  }, [projectName, subject, parsedStartingNumber, teamType, isBodyCustomized, isEditingBody]);
 
   // Tracks whether this project already has RFIs (decides if the "starting number"
   // field is shown) and which number the next RFI will get. Runs even when the
@@ -1869,7 +1890,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   useEffect(() => {
     if (!projectName) return;
     let cancelled = false;
-    previewRfiEmail(projectName, "", parsedStartingNumber)
+    previewRfiEmail(projectName, "", parsedStartingNumber, teamType)
       .then((preview) => {
         if (cancelled) return;
         setProjectHasRfis(preview.hasExistingRfis);
@@ -1879,7 +1900,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     return () => {
       cancelled = true;
     };
-  }, [projectName, parsedStartingNumber]);
+  }, [projectName, parsedStartingNumber, teamType]);
 
   // A different project means a different numbering situation — drop any typed value.
   useEffect(() => {
@@ -1925,7 +1946,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     if (!projectName) return;
     const requestId = ++previewRequestRef.current;
     setIsBodyPreviewLoading(true);
-    previewRfiEmail(projectName, subject, parsedStartingNumber)
+    previewRfiEmail(projectName, subject, parsedStartingNumber, teamType)
       .then((preview) => {
         if (requestId === previewRequestRef.current) setEmailBody(preview.emailBody);
       })
@@ -2072,6 +2093,8 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   const resetForm = () => {
     setDiscipline(DEFAULT_DISCIPLINE);
     setTeamType("EXTERNAL");
+    setDraftRoute(false);
+    setInAppOnly(false);
     setPriority(DEFAULT_RFI_PRIORITY);
     setSubject("");
     setStartingNumber("");
@@ -2084,6 +2107,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     setCcEmails([]);
     setCcInput("");
     setInternalRecipient("");
+    setExternalRecipient(""); 
     setIsToSuggestOpen(false);
     setIsCcSuggestOpen(false);
   };
@@ -2135,6 +2159,11 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     if (isInternal && !officeContacts.some((c) => c.email.toLowerCase() === recipientEmail.trim().toLowerCase())) {
       return failValidation("Internal RFIs go to someone in your office — pick a colleague from the list");
     }
+    if (isInternal && inAppOnly && file.size > IN_APP_MAX_FILE_BYTES) {
+      return failValidation(
+        `This PDF is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Without mail, files are kept in the app's database, so the limit is ${IN_APP_MAX_FILE_BYTES / (1024 * 1024)} MB. Compress the PDF or choose "With mail".`
+      );
+    }
     if (!currentEmployee || !currentEmployee.email) {
       return failValidation("Your account isn't linked to an employee email — contact an admin");
     }
@@ -2173,10 +2202,14 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
         recipientEmail: recipientEmail.trim(),
         ccEmails: ccEmailsToSend,
         startingNumber: !projectHasRfis ? parsedStartingNumber : undefined,
+        draftRoute: draftRouteOn || undefined,
+        inAppOnly: isInternal && inAppOnly ? true : undefined,
       });
       toast({
-        title: `${created.rfiNumber} sent successfully!`,
-        description: `Emailed to ${created.recipientEmail}`,
+        title: created.inAppOnly ? `${created.rfiNumber} created!` : `${created.rfiNumber} sent successfully!`,
+        description: created.inAppOnly
+          ? `Sent inside the app to ${created.recipientEmail} (no email)`
+          : `Emailed to ${created.recipientEmail}`,
         className: "bg-emerald-600 text-white border-none shadow-xl",
       });
       setSendState("success");
@@ -2808,6 +2841,132 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                 disabled={isBusy}
                 className={FIELD_CLASS}
               />
+              {/* Internal only: should the RFI travel by email or stay inside the app? */}
+              {isInternal && (
+                <div className="mt-2 space-y-1.5" role="radiogroup" aria-label="How should this RFI be exchanged?">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Exchange this RFI
+                  </div>
+                  <div className="grid gap-1.5 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={!inAppOnly}
+                      disabled={isBusy}
+                      onClick={() => setInAppOnly(false)}
+                      className={`rounded-lg border p-2 text-left transition-all disabled:opacity-60 ${
+                        !inAppOnly
+                          ? "border-sky-500/60 bg-sky-500/10 ring-1 ring-sky-500/40"
+                          : "border-border/70 hover:bg-muted/40"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+                        <Mail className="h-3.5 w-3.5 text-sky-600" /> With mail
+                      </div>
+                      <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">
+                        Sent by email. Every reply stays in one single email thread.
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={inAppOnly}
+                      disabled={isBusy}
+                      onClick={() => setInAppOnly(true)}
+                      className={`rounded-lg border p-2 text-left transition-all disabled:opacity-60 ${
+                        inAppOnly
+                          ? "border-emerald-500/60 bg-emerald-500/10 ring-1 ring-emerald-500/40"
+                          : "border-border/70 hover:bg-muted/40"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+                        <MessageSquare className="h-3.5 w-3.5 text-emerald-600" /> Without mail
+                        <span className="ml-auto rounded-full bg-emerald-500/15 px-1.5 py-px text-[9px] font-bold uppercase text-emerald-600">
+                          In-app
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">
+                        No email at all. Only inside the app (PDF up to {IN_APP_MAX_FILE_BYTES / (1024 * 1024)} MB).
+                      </p>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Internal only: how the person it is sent to ("Person B") handles it */}
+              {recipientIsOwner && (
+                <div className="mt-2 space-y-1.5" role="radiogroup" aria-label="What should the person you send it to do?">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    How should it reach them?
+                  </div>
+                  <div className="grid gap-1.5 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={!draftRouteOn}
+                      disabled={isBusy}
+                      onClick={() => setDraftRoute(false)}
+                      className={`rounded-lg border p-2 text-left transition-all disabled:opacity-60 ${
+                        !draftRouteOn
+                          ? "border-sky-500/60 bg-sky-500/10 ring-1 ring-sky-500/40"
+                          : "border-border/70 hover:bg-muted/40"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+                        <ClipboardCheck className="h-3.5 w-3.5 text-sky-600" /> Check &amp; approve
+                      </div>
+                      <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">
+                        They review it, then approve it or send it back to you.
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={draftRouteOn}
+                      disabled={isBusy}
+                      onClick={() => setDraftRoute(true)}
+                      className={`relative overflow-hidden rounded-lg border p-2 text-left transition-all disabled:opacity-60 ${
+                        draftRouteOn
+                          ? "border-violet-500/60 bg-gradient-to-br from-violet-500/15 via-indigo-500/10 to-emerald-500/10 ring-1 ring-violet-500/40"
+                          : "border-border/70 hover:bg-muted/40"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+                        <FastForward className="h-3.5 w-3.5 text-violet-600" /> Send as draft to Owner
+                        <span className="ml-auto rounded-full bg-violet-500/15 px-1.5 py-px text-[9px] font-bold uppercase text-violet-600">
+                          Fast
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">
+                        It goes straight to the Owner as a draft. They edit it and send it to the client.
+                      </p>
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
+                    <span className="rounded-full border border-border px-1.5 py-px font-semibold">You</span>
+                    <span>→</span>
+                    <span className="max-w-[160px] truncate rounded-full border border-border px-1.5 py-px font-semibold">
+                      {recipientEmail.trim() || "Person B"}
+                    </span>
+                    <span>→</span>
+                    <span
+                      className={`rounded-full border px-1.5 py-px font-semibold ${
+                        draftRouteOn ? "border-violet-500/50 text-violet-600" : "border-border"
+                      }`}
+                    >
+                      {draftRouteOn ? "Draft" : "Approval"}
+                    </span>
+                    <span>→</span>
+                    <span className="rounded-full border border-border px-1.5 py-px font-semibold">Owner</span>
+                  </div>
+                </div>
+              )}
+            
+              {isInternal && !recipientIsOwner && recipientEmail.trim() && (
+                <p className="mt-2 text-[10.5px] text-muted-foreground">
+                  They will check &amp; approve it. Choose an Owner in To to also offer the draft route.
+                </p>
+              )}
             </section>
           </div>
 
