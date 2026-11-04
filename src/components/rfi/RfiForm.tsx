@@ -1456,7 +1456,7 @@ function SuggestContent({
    ║  true  = Internal button is locked and shows "Coming soon"    ║
    ║          when the mouse is over it       -> use before PUSHING ║
    ╚═══════════════════════════════════════════════════════════════╝ */
-const INTERNAL_RFI_COMING_SOON = false;
+const INTERNAL_RFI_COMING_SOON = true;
 
 // "Without mail" keeps the PDF in the database (there is no Gmail copy), so it is limited to a small size.
 // Must match app.rfi.in-app.max-attachment-bytes on the backend (default 3 MB).
