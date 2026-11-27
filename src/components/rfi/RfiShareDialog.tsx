@@ -81,7 +81,7 @@ function RfiShareDialogBody({ target }: { target: RfiShareTarget }) {
   const [actionError, setActionError] = useState("");
 
   const [creating, setCreating] = useState(false);
-  const [expiry, setExpiry] = useState("never");
+  const [expiry, setExpiry] = useState("30"); // safer default: links expire in 30 days unless "Never" is picked
 
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [confirmRevokeId, setConfirmRevokeId] = useState<number | null>(null);

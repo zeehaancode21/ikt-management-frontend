@@ -2,6 +2,7 @@ import axios from 'axios';
 
 import { logger } from "@/lib/logger";
 import { API_BASE_URL } from "@/lib/config";
+import { compressImageIfNeeded } from "@/lib/compressImage";
 // Use the same env var as api.ts so it works in both dev and prod
 
 export interface ProfileForm {
@@ -103,8 +104,11 @@ export const updateOwnProfile = async (profile: ProfileForm): Promise<void> => {
 };
 
 export const uploadOwnPicture = async (file: File): Promise<void> => {
+  // A profile picture is shown as a small avatar, so 512 px is plenty. This turns a multi-MB
+  // phone photo into roughly 30-80 KB before it is stored in the database.
+  const small = await compressImageIfNeeded(file, { maxSide: 512, quality: 0.85, skipBelowBytes: 60 * 1024 });
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', small);
 
   const token = localStorage.getItem('token');
   await axios.post(`${API_BASE_URL}/profile/me/picture`, formData, {

@@ -13,12 +13,22 @@ export default function Login() {
   const [focused, setFocused] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [capsOn, setCapsOn] = useState(false);
 
   const { login } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     setMounted(true);
+    try {
+      if (sessionStorage.getItem("session-expired")) {
+        setNotice("Your session expired, so you were signed out. Please sign in again to continue where you left off.");
+        sessionStorage.removeItem("session-expired");
+      }
+    } catch {
+      /* storage blocked */
+    }
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -30,7 +40,17 @@ export default function Login() {
       const { token, role, name, roleName } = response.data;
       login(token, role as Role, name ?? username, roleName ?? null);
       // Route based on role
-      if (role === "OWNER" || role === "LEAD") {
+      // After an expired session, bring the person back to the page they were on.
+      let returnTo: string | null = null;
+      try {
+        returnTo = sessionStorage.getItem("return-to");
+        sessionStorage.removeItem("return-to");
+      } catch {
+        /* storage blocked */
+      }
+      if (returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") && !returnTo.startsWith("/login")) {
+        navigate(returnTo);
+      } else if (role === "OWNER" || role === "LEAD") {
         navigate("/dashboard");
       } else {
         navigate("/reports");
@@ -230,6 +250,21 @@ export default function Login() {
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        .notice-box {
+          margin-top: 16px;
+          display: flex; align-items: flex-start; gap: 9px;
+          background: rgba(96,165,250,0.1);
+          border: 1px solid rgba(96,165,250,0.25);
+          border-radius: 10px;
+          padding: 11px 14px;
+          color: #93c5fd;
+          font-size: 13.5px;
+          line-height: 1.45;
+          animation: errorSlide 0.25s ease;
+        }
+        .caps-warn {
+          margin-top: 6px; font-size: 12px; font-weight: 600; color: #fbbf24;
+        }
         .error-box {
           margin-top: 16px;
           display: flex; align-items: center; gap: 9px;
@@ -529,8 +564,9 @@ export default function Login() {
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    onKeyUp={(e) => setCapsOn(e.getModifierState?.("CapsLock") ?? false)}
                     onFocus={() => setFocused("password")}
-                    onBlur={() => setFocused(null)}
+                    onBlur={() => { setFocused(null); setCapsOn(false); }}
                     required
                     autoComplete="current-password"
                   />
@@ -539,6 +575,7 @@ export default function Login() {
                     className="eye-btn"
                     onClick={() => setShowPassword((v) => !v)}
                     tabIndex={-1}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? (
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -552,6 +589,9 @@ export default function Login() {
                     )}
                   </button>
                 </div>
+                {capsOn && (
+                  <div className="caps-warn" role="status">Caps Lock is on</div>
+                )}
               </div>
             </div>
 
@@ -563,8 +603,17 @@ export default function Login() {
             </button>
           </form>
 
+          {notice && !error && (
+            <div className="notice-box" role="status">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+              </svg>
+              {notice}
+            </div>
+          )}
+
           {error && (
-            <div className="error-box">
+            <div className="error-box" role="alert">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                 <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>

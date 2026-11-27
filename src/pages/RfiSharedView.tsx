@@ -263,7 +263,7 @@ type Tone = "ok" | "warn" | "bad" | "info" | "neutral";
 type Group = "awaiting" | "answered" | "closed";
 
 const CLOSED_STATUSES = new Set(["CLOSED", "CANCELLED"]);
-const ANSWERED_STATUSES = new Set(["RESPONSE_RECEIVED", "UNDER_REVIEW"]);
+const ANSWERED_STATUSES = new Set(["RESPONSE_RECEIVED", "UNDER_REVIEW", "PARTIALLY_ANSWERED"]);
 
 function groupOf(status: string): Group {
   const s = (status || "").toUpperCase();
@@ -278,6 +278,7 @@ function statusTone(status = ""): Tone {
       return "ok";
     case "RESPONSE_RECEIVED":
     case "UNDER_REVIEW":
+    case "PARTIALLY_ANSWERED":
       return "info";
     case "OUTSTANDING":
     case "REOPENED":
@@ -310,7 +311,7 @@ function label(v?: string | null): string {
 }
 
 function timeLabel(d: Date | null): string {
-  return d ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+  return d ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }) : "";
 }
 
 function daysSince(iso?: string | null): number | null {

@@ -30,6 +30,7 @@ import { Spinner, FullSpinner } from "@/components/Spinner";
 import { StatusBadge } from "@/components/StatusBadge";
 import { RejectReasonModal } from "@/components/RejectReasonModal";
 import { UsageAnalyticsChart } from "@/components/UsageAnalyticsChart";
+import { TimingTag, TimingColumn, getLeaveTiming, useNow } from "@/components/RequestTiming";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -676,6 +677,8 @@ interface LeaveCardProps {
   onApprove?: (l: Leave) => void;
   onReject?: (l: Leave) => void;
   actingId?: string | number | null;
+  // Owner views only: show the "Date passed" tag / upcoming countdown column.
+  showTiming?: boolean;
 }
 
 const LeaveCard = ({
@@ -688,7 +691,11 @@ const LeaveCard = ({
   onApprove,
   onReject,
   actingId,
+  showTiming = false,
 }: LeaveCardProps) => {
+  const now = useNow(showTiming);
+  const timing = showTiming ? getLeaveTiming(l, now) : null;
+  const awaitingDecision = ["PENDING", "REAPPROVAL_PENDING"].includes((l.status || "").toUpperCase());
   const colors = getLeaveTypeColors(l.leaveType);
   const isSingleDay = l.fromDate === l.toDate;
   const isReapproval = l.status?.toUpperCase() === "REAPPROVAL_PENDING";
@@ -702,6 +709,8 @@ const LeaveCard = ({
       style={{ animationDelay: `${Math.min(index, 12) * 0.05}s` }}
     >
       <span className="pfx-shine" aria-hidden="true" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+      <div className="min-w-0 flex-1">
       {/* Top row: (optional avatar+name) + type badge + days + status */}
       <div className="mb-2 flex flex-wrap items-center gap-2">
         {showEmployee && (
@@ -721,6 +730,7 @@ const LeaveCard = ({
           {l.leaveType}
         </span>
         <SurplusBadge leave={l} />
+        <TimingTag timing={timing} kind="leave" highlight={awaitingDecision} />
         <div className="ml-auto flex items-center gap-2">
           <span className="pfx-badge-pop inline-flex items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-xs font-bold text-foreground">
             <Clock3 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
@@ -851,6 +861,9 @@ const LeaveCard = ({
           )}
         </div>
       )}
+      </div>
+      <TimingColumn timing={timing} kind="leave" now={now} />
+      </div>
     </div>
   );
 };
@@ -2364,7 +2377,7 @@ const OwnerView = () => {
             ) : (
               <div className="space-y-3">
                 {leaves.map((l, index) => (
-                  <LeaveCard key={l.id} leave={l} index={index} showEmployee onApprove={(leave) => act(leave.id, "APPROVED")} onReject={(leave) => setRejectTarget(leave)} actingId={actingId} />
+                  <LeaveCard key={l.id} leave={l} index={index} showEmployee showTiming onApprove={(leave) => act(leave.id, "APPROVED")} onReject={(leave) => setRejectTarget(leave)} actingId={actingId} />
                 ))}
               </div>
             )}
@@ -2570,6 +2583,7 @@ const OwnerView = () => {
                         key={l.id}
                         leave={l}
                         index={index}
+                        showTiming
                         onApprove={(leave) => act(leave.id, "APPROVED")}
                         onReject={(leave) => setRejectTarget(leave)}
                         actingId={actingId}

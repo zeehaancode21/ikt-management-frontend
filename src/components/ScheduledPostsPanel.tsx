@@ -165,7 +165,7 @@ const ScheduledPostsPanel: React.FC<Props> = ({ token }) => {
     loadPosts();
     // Refresh periodically so status changes (PENDING -> RUNNING -> COMPLETED/FAILED)
     // show up without a manual reload.
-    const interval = setInterval(loadPosts, 20000);
+    const interval = setInterval(loadPosts, 60000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { sizeMap, type IconSize } from "./AnimatedIconbase";
+import { AnimatedIconBase, sizeMap, type IconSize } from "./AnimatedIconbase";
 
 import { logger } from "@/lib/logger";
 /**
@@ -166,9 +166,68 @@ export const AnimatedRFIsIcon = createAnimatedRFIIcon(
   "RFIs"
 );
 
-export const AnimatedRFISettingIcon = createAnimatedRFIIcon(
-  "/icons/rfisetting.png",
-  "/icons/rfisetting.gif",
-  "AnimatedRFISettingIcon",
-  "RFI Settings"
-);
+/**
+ * RFI Settings tab icon.
+ * Uses the shared AnimatedIconBase (same as the sidebar icons) instead of the simple factory above:
+ * it inspects the PNG / GIF once, removes a baked-in white background when there is one, and in dark
+ * mode draws clean white artwork. That fixes the white box / flicker / odd animation in dark mode.
+ */
+interface AnimatedRFISettingIconProps {
+  size?: IconSize;
+  className?: string;
+  isParentHovered?: boolean;
+  triggerParentHover?: boolean;
+  disabled?: boolean;
+  forceWhite?: boolean;
+  style?: CSSProperties;
+  ariaLabel?: string;
+}
+
+const useIsDark = () => {
+  const [isDark, setIsDark] = useState(
+    () => typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+  );
+  useEffect(() => {
+    const el = document.documentElement;
+    const update = () => setIsDark(el.classList.contains("dark"));
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(el, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+};
+
+export const AnimatedRFISettingIcon = ({
+  size = "md",
+  className = "",
+  isParentHovered = false,
+  triggerParentHover = false,
+  disabled = false,
+  forceWhite = false,
+  style,
+  ariaLabel = "RFI Settings",
+}: AnimatedRFISettingIconProps) => {
+  const isDark = useIsDark();
+  const active = !disabled && (isParentHovered || triggerParentHover);
+  return (
+    <span
+      role="img"
+      aria-label={ariaLabel}
+      className="inline-flex shrink-0 items-center justify-center"
+      style={{ opacity: disabled ? 0.5 : 1, ...style }}
+    >
+      <AnimatedIconBase
+        className={className}
+        size={size}
+        pngSrc="/icons/rfisetting.png"
+        animatedSrc="/icons/rfisetting.gif"
+        alt=""
+        triggerParentHover
+        isParentHovered={active}
+        whiteBackground="auto"
+        forceWhite={forceWhite || isDark}
+      />
+    </span>
+  );
+};

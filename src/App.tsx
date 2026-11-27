@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";  
 import { AppLayout } from "@/components/AppLayout";
 import { Toaster } from "@/components/ui/toaster";
+import { ConfirmHost } from "@/components/ConfirmHost";
 import { FullSpinner } from "@/components/Spinner";
 import { useEffect, lazy, Suspense } from "react";
 import { SectionTabs, type SectionTab } from "@/components/SectionTabs";
@@ -31,6 +32,7 @@ const SocialHub = lazy(() => import("./pages/SocialHub"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Messages = lazy(() => import("./pages/Messages"));
 const DocumentManager = lazy(() => import("./pages/DocumentManager"));
+const OwnerMail = lazy(() => import("./pages/OwnerMail"));
 import { WebSocketProvider } from "@/context/WebSocketContext";
 import { NotificationsProvider } from "@/context/NotificationsContext";
 const MyDocuments = lazy(() => import("./pages/MyDocuments"));
@@ -191,12 +193,14 @@ function App() {
                   <Route path="/my-documents" element={<OwnerOrLead><Lazy><MyDocuments /></Lazy></OwnerOrLead>} />
                   <Route path="/vault" element={<OwnerOnly><Lazy><Vault /></Lazy></OwnerOnly>} />
                   <Route path="/documents" element={<Lazy><DocumentManager /></Lazy>} />
+                  <Route path="/owner-mail" element={<OwnerOnly><Lazy><OwnerMail /></Lazy></OwnerOnly>} />
                 </Route>
 
                 <Route path="*" element={<Lazy><NotFound /></Lazy>} />
               </Routes>
 
               <Toaster />
+              <ConfirmHost />
             </div>
           </BrowserRouter>
           </NotificationsProvider>

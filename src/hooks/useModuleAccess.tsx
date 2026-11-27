@@ -7,7 +7,8 @@ import { useAuth } from "@/context/AuthContext";
    useModuleAccess — "which modules may the logged-in user open?"
 
    Source of truth is the backend (Admin Console -> Access Control ticks),
-   via GET /api/module-access/me  ->  { rfi: boolean, projects: boolean }.
+   via GET /api/module-access/me  ->  { rfi: boolean, rfiViewOnly: boolean, projects: boolean }.
+   rfi = may open the RFI module at all; rfiViewOnly = may open it but only READ (no changes).
 
    • OWNER is always allowed (no request needed).
    • Everyone else is DENIED until the backend says otherwise.
@@ -22,10 +23,10 @@ import { useAuth } from "@/context/AuthContext";
    so route guards can wait instead of flashing a redirect.
    ───────────────────────────────────────────────────────────────────── */
 
-export type ModuleAccess = { rfi: boolean; projects: boolean };
+export type ModuleAccess = { rfi: boolean; rfiViewOnly: boolean; projects: boolean };
 
-const NONE: ModuleAccess = { rfi: false, projects: false };
-const ALL: ModuleAccess = { rfi: true, projects: true };
+const NONE: ModuleAccess = { rfi: false, rfiViewOnly: false, projects: false };
+const ALL: ModuleAccess = { rfi: true, rfiViewOnly: false, projects: true };
 const RECHECK_MS = 15_000;
 
 // ── tiny module-level store (no provider, no extra library) ──────────
@@ -55,7 +56,9 @@ async function load(token: string, force = false): Promise<void> {
     let next: ModuleAccess = NONE; // fail closed
     try {
       const { data } = await api.get<Partial<ModuleAccess>>("/api/module-access/me");
-      next = { rfi: data?.rfi === true, projects: data?.projects === true };
+      const rfi = data?.rfi === true;
+      // view-only only means something while RFI access is on
+      next = { rfi, rfiViewOnly: rfi && data?.rfiViewOnly === true, projects: data?.projects === true };
     } catch {
       /* keep NONE */
     }

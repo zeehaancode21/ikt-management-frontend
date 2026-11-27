@@ -19,6 +19,8 @@ import {
   AlertTriangle,
   ClipboardEdit,
   History as HistoryIcon,
+  LayoutGrid,
+  List as ListViewIcon,
 } from "lucide-react";
 import ShareLinkDialog from "@/components/ShareLinkDialogFixed";
 import { ActionIcon } from "@/components/icons/ActionIcon";
@@ -26,6 +28,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useRfiAccess } from "@/hooks/useRfiAccess";
 import { RfiForm } from "@/components/rfi/RfiForm";
 import { RfiList } from "@/components/rfi/RfiList";
+import { MyRfiSection } from "@/components/rfi/MyRfiSection";
 import { AnimatedSyncGmailIcon } from "@/components/icons/AnimatedSyncGmailIconFixed";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -428,6 +431,25 @@ const styles = `
   .client-card-foot .client-card-count { margin-top: 0; }
   .client-card-actions { flex-shrink: 0; z-index: 2; display: flex; gap: 6px; margin-left: auto; }
 
+  /* Tiles | List switch (clients screen and projects screen) */
+  .view-toggle { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--border-dark); border-radius: 10px; background: var(--surface); }
+  .view-toggle button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: none; border-radius: 7px; background: transparent; color: var(--text-muted); font-size: 0.78rem; font-weight: 600; font-family: 'Outfit', sans-serif; cursor: pointer; transition: background .2s, color .2s, transform .15s, box-shadow .2s; }
+  .view-toggle button:hover:not(.active) { background: var(--surface-2); color: var(--text-soft); }
+  .view-toggle button:active { transform: scale(0.96); }
+  .view-toggle button.active { background: var(--indigo); color: #fff; box-shadow: var(--shadow-sm); }
+  .view-toggle button:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+
+  /* Big project tiles (projects screen, "Tiles" view) */
+  .project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+  .project-tile { position: relative; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px 20px 18px; cursor: pointer; background: var(--surface); overflow: hidden; box-shadow: var(--shadow-sm); transition: border-color .25s, box-shadow .25s, transform .2s; }
+  .project-tile::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--copper); transform: scaleX(0); transform-origin: left; transition: transform .3s; }
+  .project-tile:hover, .project-tile:focus-visible { border-color: var(--copper-light); box-shadow: var(--shadow); transform: translateY(-2px); }
+  .project-tile:hover::before, .project-tile:focus-visible::before { transform: scaleX(1); }
+  .project-tile-name { font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 700; color: var(--text); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; min-width: 0; flex: 1 1 auto; }
+  .project-tile-badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 24px; }
+  .project-tile-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; }
+  .project-tile-actions { display: flex; gap: 6px; }
+
   .project-list { display: flex; flex-direction: column; gap: 10px; }
   .project-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; cursor: pointer; background: var(--surface); box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: space-between; gap: 16px; transition: border-color .2s, box-shadow .2s, transform .15s; position: relative; overflow: hidden; }
   .project-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--copper); transform: scaleY(0); transition: transform .25s; transform-origin: bottom; }
@@ -798,7 +820,7 @@ const styles = `
     .year-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
     .year-card { padding: 28px 12px; }
     .year-card-num { font-size: 2.4rem; }
-    .client-grid { grid-template-columns: 1fr; gap: 10px; }
+    .client-grid, .project-grid { grid-template-columns: 1fr; gap: 10px; }
     .client-card-name { font-size: 1.1rem; }
     .icon-btn { width: 30px; height: 30px; }
     .project-card { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 16px; }
@@ -1374,13 +1396,19 @@ export default function Dashboard() {
   // hasRfiAccess) - keeps the in-project RFI tab visible to the same users
   // who can already see the top-level RFI nav entry.
   // Now driven by Admin Console -> RFI Access (backend flag), not user names.
-  const { allowed: canAccessRfi } = useRfiAccess();
+  // viewOnly: the owner gave this person RFI "View only" - they see the RFI list but cannot create RFIs or sync Gmail.
+  const { allowed: canAccessRfi, viewOnly: rfiViewOnly } = useRfiAccess();
 
   const [allProjects, setAllProjects] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear().toString());
   const [selectedClient, setSelectedClient] = useState(null);
+  // Tiles | List: clients screen opens as big tiles, projects screen as a list (both remembered).
+  const [clientsView, setClientsView] = useState(() => readView("dash.clientsView", "tiles"));
+  const [projectsView, setProjectsView] = useState(() => readView("dash.projectsView", "list"));
+  const changeClientsView = (v) => { setClientsView(v); saveView("dash.clientsView", v); };
+  const changeProjectsView = (v) => { setProjectsView(v); saveView("dash.projectsView", v); };
   const [selectedProject, setSelectedProject] = useState(null);
   const [activeTab, setActiveTab] = useState("main");
 
@@ -1514,7 +1542,7 @@ export default function Dashboard() {
   };
 
   const handleSyncAllProjectRfis = async () => {
-    if (!selectedProject) return;
+    if (rfiViewOnly || !selectedProject) return;
     setRfiSyncingAll(true);
     try {
       const results = await syncAllRfisForProject(selectedProject.projectName);
@@ -1868,6 +1896,23 @@ export default function Dashboard() {
       <style>{styles}</style>
       <div className="dash-root" onPointerMove={handleDashPointerMove} onPointerDown={handleDashPointerDown}>
         <div className="dash-content">
+          {/* ════ MY RFIs — collapsed by default ════
+              RFIs where the logged-in employee is on the To or CC list, newest activity first.
+              Starts closed (and loads nothing) until the person opens it. The main home of this list
+              is RFI → Dashboard → "My RFIs". Shown on the landing screens (years / clients) and hidden
+              once a client's projects are open. Same gate as the RFI tab / sidebar. */}
+          {canAccessRfi && !selectedClient && (
+            <MyRfiSection
+              collapsible
+              defaultOpen={false}
+              leading={
+                selectedYear ? (
+                  <button className="back-btn" onClick={() => setSelectedYear(null)}>← Back to years</button>
+                ) : null
+              }
+            />
+          )}
+
           <AnimatePresence mode="wait">
 
             {/* ════ YEAR SELECTION ════ */}
@@ -1922,10 +1967,11 @@ export default function Dashboard() {
             {/* ════ CLIENT SELECTION ════ */}
             {selectedYear && !selectedClient && (
               <motion.div key="clients" variants={fadeUp} initial="hidden" animate="show" exit="exit">
-                <button className="back-btn" onClick={() => setSelectedYear(null)}>← Back to years</button>
+                {/* with RFI access the Back button sits beside the "My RFIs" button (see MyRfiSection `leading`) */}
+                {!canAccessRfi && <button className="back-btn" onClick={() => setSelectedYear(null)}>← Back to years</button>}
                 <p className="section-title">Clients — {selectedYear}</p>
                 <p className="section-subtitle">{clientsForYear.length} client{clientsForYear.length === 1 ? "" : "s"} with active projects</p>
-                <div style={{ marginBottom: 18 }}>
+                <div style={{ marginBottom: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <button className="btn btn-gold" onClick={() => {
                     setShowAddProject(v => !v);
                     if (selectedClient) {
@@ -1938,6 +1984,7 @@ export default function Dashboard() {
                   }}>
                     {showAddProject ? <><X size={14} /> Cancel</> : <><ActionIcon kind="new" size="md" onColor /> New project</>}
                   </button>
+                  {clientsForYear.length > 0 && <ViewToggle value={clientsView} onChange={changeClientsView} label="Show clients as tiles or a list" />}
                 </div>
                 <AnimatePresence>
                   {showAddProject && (
@@ -1962,6 +2009,7 @@ export default function Dashboard() {
                     <p className="empty-state-sub">Create a new project to get this year started.</p>
                   </div>
                 ) : (
+                  clientsView === "tiles" ? (
                   <div className="client-grid">
                     {clientsForYear.map((client) => {
                       const clientProjects = filteredByYear.filter(p => p.client === client);
@@ -2015,6 +2063,60 @@ export default function Dashboard() {
                       );
                     })}
                   </div>
+                  ) : (
+                  <motion.div className="project-list" variants={fadeUp}>
+                    {clientsForYear.map((client) => {
+                      const clientProjects = filteredByYear.filter(p => p.client === client);
+                      return (
+                        <motion.div
+                          key={client} variants={item} className="project-card" role="button" tabIndex={0}
+                          aria-label={`View ${clientProjects.length} projects for ${client}`}
+                          onClick={() => setSelectedClient(client)}
+                          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedClient(client); } }}
+                          whileTap={{ scale: 0.99 }}
+                        >
+                          <div className="project-info">
+                            <div className="project-name"><span className="project-name-text" title={client}>{client}</span></div>
+                          </div>
+                          <div className="project-meta">
+                            <span className="project-job">{clientProjects.length} project{clientProjects.length === 1 ? "" : "s"}</span>
+                              {canShareLinks && (
+                                <button
+                                  type="button"
+                                  className="icon-btn"
+                                  title="Share live link with this client"
+                                  aria-label={`Share live link for ${client}`}
+                                  onClick={(e) => { e.stopPropagation(); setShareTarget({ scope: "CLIENT", client, year: selectedYear }); }}
+                                >
+                                  <ActionIcon kind="share" size="lg" />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                title="View all projects for this client"
+                                aria-label={`View all projects for ${client}`}
+                                onClick={(e) => handleViewClientAll(e, client, clientProjects)}
+                              >
+                                <ActionIcon kind="view" size="lg" />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                title="Download all projects for this client (Excel)"
+                                aria-label={`Download all projects for ${client} as Excel`}
+                                disabled={downloadingClient}
+                                onClick={(e) => handleDownloadClientAll(e, client, clientProjects)}
+                              >
+                                {downloadingClient ? <span className="btn-spinner btn-spinner-dark" aria-hidden="true" /> : <ActionIcon kind="download" size="lg" />}
+                              </button>
+                            <span className="project-arrow" aria-hidden="true"><ChevronRight size={18} /></span>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </motion.div>
+                  )
                 )}
               </motion.div>
             )}
@@ -2066,6 +2168,7 @@ export default function Dashboard() {
                   }}>
                     {showAddProject ? <><X size={14} /> Cancel</> : <><ActionIcon kind="new" size="md" onColor /> New project</>}
                   </button>
+                  {projectsForClient.length > 0 && <ViewToggle value={projectsView} onChange={changeProjectsView} label="Show projects as tiles or a list" />}
                 </div>
                 <AnimatePresence>
                   {showAddProject && (
@@ -2090,6 +2193,68 @@ export default function Dashboard() {
                     <p className="empty-state-sub">Add the first project for {selectedClient} above.</p>
                   </div>
                 ) : (
+                  projectsView === "tiles" ? (
+                  <motion.div className="project-grid" variants={fadeUp}>
+                    {projectsForClient.map((p) => (
+                      <motion.div
+                        key={p.jobNumber || p.projectName} variants={item} className="project-tile" role="button" tabIndex={0}
+                        aria-label={`Open project ${p.projectName}`}
+                        onClick={() => { setSelectedProject(p); setActiveTab("main"); setEditingProjectMode(false); }}
+                        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedProject(p); setActiveTab("main"); setEditingProjectMode(false); } }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+                          <div className="project-tile-name" title={p.projectName}>{p.projectName}</div>
+                          <CopyButton text={p.projectName} label="project name" />
+                        </div>
+                        <div className="project-tile-badges">
+                          {p.jobNumber && <span className="project-job">#{p.jobNumber}</span>}
+                          {p.approvalStatus && <span className="badge badge-default">Approval: {p.approvalStatus}</span>}
+                          {p.fabStatus && <span className="badge badge-default">FAB: {p.fabStatus}</span>}
+                        </div>
+                        <div className="project-tile-foot">
+                          <div className="project-tile-actions">
+                            {canShareLinks && (
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                title="Share live link for this project"
+                                aria-label={`Share live link for ${p.projectName}`}
+                                onClick={(e) => { e.stopPropagation(); setShareTarget({ scope: "PROJECT", projectId: p.id, projectName: p.projectName, client: p.client }); }}
+                              >
+                                <ActionIcon kind="share" size="lg" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="View details"
+                              aria-label={`View details for ${p.projectName}`}
+                              onClick={(e) => handleViewProject(e, p)}
+                            >
+                              <ActionIcon kind="view" size="lg" />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="Download Excel"
+                              aria-label={`Download Excel for ${p.projectName}`}
+                              disabled={downloadingKey === (p.jobNumber || p.projectName)}
+                              onClick={(e) => handleDownloadProject(e, p)}
+                            >
+                              {downloadingKey === (p.jobNumber || p.projectName) ? (
+                                <span className="btn-spinner btn-spinner-dark" aria-hidden="true" />
+                              ) : (
+                                <ActionIcon kind="download" size="lg" />
+                              )}
+                            </button>
+                          </div>
+                          <span className="project-arrow" aria-hidden="true"><ChevronRight size={18} /></span>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                  ) : (
                   <motion.div className="project-list" variants={fadeUp}>
                     {projectsForClient.map((p) => (
                       <motion.div
@@ -2150,6 +2315,7 @@ export default function Dashboard() {
                       </motion.div>
                     ))}
                   </motion.div>
+                  )
                 )}
               </motion.div>
             )}
@@ -2357,14 +2523,16 @@ export default function Dashboard() {
                             >
                               <HistoryIcon size={13} /> RFI's
                             </button>
+                            {!rfiViewOnly && (
                             <button
                               className={`btn btn-sm ${rfiView === "create" ? "btn-teal" : "btn-ghost"}`}
                               onClick={() => setRfiView("create")}
                             >
                               <ClipboardEdit size={13} /> Create RFI
                             </button>
+                            )}
                           </div>
-                          {rfiView === "history" && (
+                          {rfiView === "history" && !rfiViewOnly && (
                             <button
                               type="button"
                               className="btn btn-ghost btn-sm"
@@ -2386,7 +2554,7 @@ export default function Dashboard() {
 
                         {/* No client/project selector here on purpose — this tab is
                             always scoped to the project already open in this modal. */}
-                        {rfiView === "create" ? (
+                        {rfiView === "create" && !rfiViewOnly ? (
                           <RfiForm
                             projectName={selectedProject.projectName}
                             initialRecipientEmail={selectedProject.rfiRecipientEmail ?? ""}
@@ -3193,6 +3361,33 @@ function AddClientModal({ existingClients = [], onAdd, onCancel }) {
     </motion.div>
   );
 }
+
+// ─── Tiles | List switch ──────────────────────────────────────────────────────
+function ViewToggle({ value, onChange, label = "Choose how it is shown" }) {
+  return (
+    <div className="view-toggle" role="group" aria-label={label}>
+      <button type="button" className={value === "tiles" ? "active" : ""} aria-pressed={value === "tiles"} title="Big tiles" onClick={() => onChange("tiles")}>
+        <LayoutGrid size={14} aria-hidden="true" /> Tiles
+      </button>
+      <button type="button" className={value === "list" ? "active" : ""} aria-pressed={value === "list"} title="Compact list" onClick={() => onChange("list")}>
+        <ListViewIcon size={14} aria-hidden="true" /> List
+      </button>
+    </div>
+  );
+}
+
+// Remembers the Tiles / List choice in this browser (falls back quietly when storage is blocked).
+const readView = (key, fallback) => {
+  try {
+    const v = localStorage.getItem(key);
+    return v === "tiles" || v === "list" ? v : fallback;
+  } catch {
+    return fallback;
+  }
+};
+const saveView = (key, value) => {
+  try { localStorage.setItem(key, value); } catch { /* choice lasts until reload */ }
+};
 
 // ─── Copy Button ──────────────────────────────────────────────────────────────
 function CopyButton({ text, label = "text" }) {

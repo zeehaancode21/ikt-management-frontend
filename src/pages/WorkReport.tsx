@@ -18,6 +18,7 @@ import {
   AnimatedChangeDateIcon,
 } from "@/components/icons/AnimatedWorkReportIcons";
 import { format } from "date-fns";
+import { Link } from "react-router-dom";
 import api, { getErrorMessage } from "@/lib/api";
 import { groupByYear } from "@/lib/yearGrouping";
 import { useAuth } from "@/context/AuthContext";
@@ -1923,6 +1924,7 @@ const EmployeeView = () => {
           (dk) => Boolean(reportsByDate[dk])
         );
 
+  const weekendBlockedForDraft = Boolean(draftDate) && isWeekend(draftDate) && !reports.some((r) => toDateKey(r.date) === draftDate);
   const existingReportForDraft = draftDate
     ? reports.some((r) => toDateKey(r.date) === draftDate)
     : false;
@@ -2118,6 +2120,18 @@ const EmployeeView = () => {
 
     const existingReports = reports.filter((r) => toDateKey(r.date) === newDate);
 
+    // Saturday / Sunday work must be logged in Weekend Entry, not in the Work
+    // Report. Dates that already have a report stay editable so old data
+    // isn't locked.
+    if (isWeekend(newDate) && existingReports.length === 0) {
+      toast({
+        title: "Weekend work goes in Weekend Entry",
+        description: `${fmt(newDate)} is a ${weekendLabel(newDate)}. Please add this record under Weekend Entry.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (existingReports.length > 0) {
       setIsEditMode(true);
       const groups = new Map<string, WorkEntry & { _ids: string[] }>();
@@ -2278,6 +2292,16 @@ const EmployeeView = () => {
       return;
     }
 
+    if (!isEditMode && isWeekend(date)) {
+      triggerShake();
+      toast({
+        title: "Weekend work goes in Weekend Entry",
+        description: `${fmt(date)} is a ${weekendLabel(date)}. Please add this record under Weekend Entry.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const timeSum = entries.reduce((s, e) => s + (parseFloat(e.time) || 0), 0);
     if (timeSum > 24) {
       triggerShake();
@@ -2401,7 +2425,24 @@ const EmployeeView = () => {
               max={today}
             />
 
-            {draftDate && (
+            {draftDate && weekendBlockedForDraft && (
+              <div
+                role="alert"
+                key={`weekend-${draftDate}`}
+                className="relative mt-3 flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-xs text-violet-700 animate-fade-in-up max-w-[min(20rem,calc(100vw-4rem))] dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-300"
+              >
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="font-semibold">{fmtLong(draftDate)}</span> is a {weekendLabel(draftDate)}. Weekend work can't be added to the Work Report —{" "}
+                  <Link to="/weekend-attendance" className="font-semibold underline underline-offset-2">
+                    add it in Weekend Entry
+                  </Link>
+                  .
+                </span>
+              </div>
+            )}
+
+            {draftDate && !weekendBlockedForDraft && (
               <div
                 role="status"
                 key={draftDate}
@@ -2426,7 +2467,7 @@ const EmployeeView = () => {
 
             <Button
               onClick={() => commitDate(draftDate)}
-              disabled={!draftDate}
+              disabled={!draftDate || weekendBlockedForDraft}
               className="wr-continue relative mt-5 h-10 w-full sm:w-auto gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-sm font-semibold shadow-sm btn-hover-scale disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 px-5"
             >
               Continue

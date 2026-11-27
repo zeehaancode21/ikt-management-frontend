@@ -6,7 +6,7 @@ import { useRfiAccess } from "@/hooks/useRfiAccess";
 import { useProjectsAccess } from "@/hooks/useModuleAccess";
 import { useNotifications, type NotificationModule } from "@/context/NotificationsContext";
 import { cn } from "@/lib/utils";
-import { useEffect, useRef, useState, type CSSProperties, type ComponentType } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ComponentType, type MouseEvent as ReactMouseEvent } from "react";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
 import { UserAvatar } from "@/components/UserAvatar";
 
@@ -19,7 +19,7 @@ import { AnimatedMediaHubIcon } from "@/components/icons/AnimatedMediaHubIcon";
 import { AnimatedCctvIcon } from "@/components/icons/AnimatedCctvIcon";
 import { AnimatedLeftIcon, AnimatedRightIcon } from "@/components/icons/AnimatedArrowIcons";
 import { AnimatedWorkAttendanceIcon } from "@/components/icons/AnimatedWorkAttendanceIcon";
-import { AnimatedLeavePermissionIcon } from "@/components/icons/AnimatedLeavePermissionIcon";
+import { AnimatedQuestionIcon } from "@/components/icons/AnimatedQuestionIcon";
 import { AnimatedChangePasswordIcon } from "@/components/icons/AnimatedChangePasswordIcon";
 import { AnimatedLogoutIcon } from "@/components/icons/AnimatedLogoutIcon";
 
@@ -83,8 +83,8 @@ interface AppSidebarProps {
 // ── Grouped entries (each one opens a page with tabs) ────────────────────
 const LEAVE_PERMISSION_ENTRY: NavItem = {
   to: "/leave",
-  label: "Leave & Permission",
-  icon: AnimatedLeavePermissionIcon,
+  label: "Permission Hub",
+  icon: AnimatedQuestionIcon,
   isAnimated: true,
   match: ["/leave", "/permission"],
   badgeRoutes: ["/leave", "/permission"],
@@ -111,6 +111,511 @@ const ADMIN_MEDIA_ENTRY: NavItem = {
 // ── Company website ───────────────────────────────────────────────────────
 const COMPANY_WEBSITE_URL = "https://www.iktangience.com";
 const COMPANY_WEBSITE_LABEL = "IK Tangience";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🪟 GLASS HEADER (logo block + company link) – same glass look as the top "Welcome" header.
+// Colour stays the sidebar blue (--sidebar-primary); only the surface, animation and transitions are new.
+// Everything hangs off pseudo-elements, so the block itself gets no transform / filter / overflow clip:
+// the logo burst (rings, sparkles, magic message) can still fly outside it exactly as before.
+// ═══════════════════════════════════════════════════════════════════════════
+const glassHeaderStyles = `
+  .sb-aside .sb-logo-block {
+    isolation: isolate;
+    margin: 10px 10px 6px;
+    padding: 16px 14px 12px;
+    border: 1px solid hsl(var(--sidebar-primary) / 0.3);
+    border-radius: 18px;
+    background: transparent;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.22),
+      0 14px 30px -18px hsl(var(--sidebar-primary) / 0.75);
+    transition: border-color 0.3s ease, box-shadow 0.35s ease;
+    animation: sb-glass-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  @keyframes sb-glass-rise { from { opacity: 0; translate: 0 -8px; } }
+
+  .sb-aside .sb-logo-block:hover {
+    border-color: hsl(var(--sidebar-primary) / 0.55);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.3),
+      0 18px 36px -16px hsl(var(--sidebar-primary) / 0.9),
+      0 0 0 3px hsl(var(--sidebar-primary) / 0.12);
+  }
+
+  /* glass pane + living blue aurora drifting behind it */
+  .sb-aside .sb-logo-block::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      radial-gradient(42% 70% at 14% 28%, hsl(var(--sidebar-primary) / 0.5), transparent 70%),
+      radial-gradient(38% 65% at 86% 72%, rgba(6, 182, 212, 0.3), transparent 70%),
+      radial-gradient(34% 60% at 55% 8%, rgba(129, 140, 248, 0.3), transparent 70%),
+      linear-gradient(135deg, hsl(var(--sidebar-primary) / 0.2), hsl(var(--sidebar-accent) / 0.4) 50%, hsl(var(--sidebar-primary) / 0.12));
+    background-size: 140% 140%;
+    background-repeat: no-repeat;
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    backdrop-filter: blur(18px) saturate(180%);
+    animation: sb-glass-aurora 14s ease-in-out infinite alternate;
+  }
+  @keyframes sb-glass-aurora {
+    0%   { background-position: 0% 0%; }
+    100% { background-position: 100% 100%; }
+  }
+
+  /* a light line glides along the top edge of the glass */
+  .sb-aside .sb-logo-block::after {
+    content: "";
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    top: 0;
+    height: 1px;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.9), transparent);
+    background-size: 40% 100%;
+    background-repeat: no-repeat;
+    animation: sb-glass-glide 5s ease-in-out infinite;
+  }
+  @keyframes sb-glass-glide { 0% { background-position: -50% 0; } 100% { background-position: 150% 0; } }
+
+  /* the old round glow behind the logo becomes a softer blue halo */
+  .sb-aside .sb-logo-glow { z-index: -1; opacity: 0.8; }
+
+  /* logo: floats up a little and lights up on hover */
+  .sb-aside .sb-logo-img { transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.4s ease; }
+  .sb-aside .sb-logo-block:hover .sb-logo-img {
+    transform: translateY(-2px) scale(1.04);
+    filter: drop-shadow(0 8px 18px hsl(var(--sidebar-primary) / 0.55));
+  }
+
+  /* company link: glass pill, blue spinning border kept */
+  .sb-aside .sb-site-content {
+    background: hsl(var(--sidebar-background) / 0.55);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    backdrop-filter: blur(12px) saturate(160%);
+    overflow: hidden;
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+  }
+  .sb-aside .sb-site-content:hover {
+    background: hsl(var(--sidebar-primary) / 0.22);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.25), 0 8px 18px -10px hsl(var(--sidebar-primary) / 0.8);
+  }
+  /* soft sheen sweeps across the pill on hover */
+  .sb-aside .sb-site-content::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 30%, hsl(var(--sidebar-primary) / 0.35) 50%, transparent 70%);
+    transform: translateX(-120%);
+    transition: transform 0.7s ease;
+  }
+  .sb-aside .sb-site-link:hover .sb-site-content::after { transform: translateX(120%); }
+  .sb-aside .sb-site-link { transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .sb-aside .sb-site-link:hover { transform: translateY(-1px); }
+
+  /* minimized sidebar: a smaller glass chip */
+  .sb-aside .sb-logo-block.minimized {
+    margin: 8px 6px 4px;
+    padding: 10px 4px;
+    border-radius: 14px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sb-aside .sb-logo-block,
+    .sb-aside .sb-logo-block::before,
+    .sb-aside .sb-logo-block::after { animation: none !important; }
+    .sb-aside .sb-logo-img,
+    .sb-aside .sb-site-content::after,
+    .sb-aside .sb-site-link { transition: none !important; }
+  }
+`;
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🪟 FULL-SIDEBAR GLASS – aurora backdrop, glass user card, glass nav pills, glass footer.
+// Everything below only changes surfaces, borders, shadows and motion. Layout, routes,
+// icons and behaviour are untouched.
+// ═══════════════════════════════════════════════════════════════════════════
+const fullGlassStyles = `
+  /* ── Sidebar shell: deep base + living aurora behind every glass panel ── */
+  .sb-aside {
+    position: relative;
+    isolation: isolate;
+    background: hsl(var(--sidebar-background));
+    color: hsl(var(--sidebar-foreground));
+  }
+  .sb-aside .sb-bg {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+    background:
+      radial-gradient(120% 60% at 50% 0%, hsl(var(--sidebar-primary) / 0.14), transparent 70%),
+      linear-gradient(180deg, hsl(var(--sidebar-background)), hsl(var(--sidebar-background) / 0.96));
+  }
+  .sb-aside .sb-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(46px);
+    will-change: transform;
+  }
+  .sb-aside .sb-orb-a {
+    width: 210px; height: 210px; top: -50px; left: -70px;
+    background: hsl(var(--sidebar-primary) / 0.5);
+    animation: sb-orb-a 18s ease-in-out infinite alternate;
+  }
+  .sb-aside .sb-orb-b {
+    width: 190px; height: 190px; top: 38%; right: -90px;
+    background: rgba(6, 182, 212, 0.3);
+    animation: sb-orb-b 22s ease-in-out infinite alternate;
+  }
+  .sb-aside .sb-orb-c {
+    width: 230px; height: 230px; bottom: -80px; left: -60px;
+    background: rgba(129, 140, 248, 0.34);
+    animation: sb-orb-c 26s ease-in-out infinite alternate;
+  }
+  @keyframes sb-orb-a { to { transform: translate3d(90px, 140px, 0) scale(1.15); } }
+  @keyframes sb-orb-b { to { transform: translate3d(-110px, -120px, 0) scale(0.9); } }
+  @keyframes sb-orb-c { to { transform: translate3d(110px, -150px, 0) scale(1.12); } }
+
+  /* right edge: hairline with a soft light travelling down it */
+  .sb-aside .sb-edge {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 1px;
+    pointer-events: none;
+    background:
+      linear-gradient(180deg, transparent, hsl(var(--sidebar-primary) / 0.9), transparent) 0 -40% / 100% 40% no-repeat,
+      hsl(0 0% 100% / 0.08);
+    animation: sb-edge-run 7s ease-in-out infinite;
+  }
+  @keyframes sb-edge-run { to { background-position: 0 140%, 0 0; } }
+
+  /* ── shared glass recipe ── */
+  .sb-aside .sb-user,
+  .sb-aside .sb-foot-card {
+    position: relative;
+    border: 1px solid hsl(0 0% 100% / 0.1);
+    background: linear-gradient(180deg, hsl(0 0% 100% / 0.08), hsl(0 0% 100% / 0.025));
+    -webkit-backdrop-filter: blur(16px) saturate(170%);
+    backdrop-filter: blur(16px) saturate(170%);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.16),
+      0 12px 26px -18px hsl(0 0% 0% / 0.8);
+  }
+
+  /* ── User card ── */
+  .sb-aside .sb-user {
+    display: block;
+    width: calc(100% - 20px);
+    margin: 4px 10px 8px;
+    padding: 10px 12px;
+    border-radius: 16px;
+    cursor: pointer;
+    text-align: left;
+    flex-shrink: 0;
+    transition: border-color 0.3s ease, background 0.3s ease, box-shadow 0.35s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    animation: sb-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.12s backwards;
+  }
+  .sb-aside .sb-user:hover {
+    border-color: hsl(var(--sidebar-primary) / 0.5);
+    background: linear-gradient(180deg, hsl(var(--sidebar-primary) / 0.2), hsl(0 0% 100% / 0.03));
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.22),
+      0 14px 28px -16px hsl(var(--sidebar-primary) / 0.85),
+      0 0 0 3px hsl(var(--sidebar-primary) / 0.1);
+    transform: translateY(-1px);
+  }
+  .sb-aside .sb-user:active { transform: translateY(0) scale(0.985); }
+  .sb-aside .sb-user:focus-visible { outline: 2px solid hsl(var(--sidebar-primary)); outline-offset: 2px; }
+  .sb-aside .sb-user .sb-user-role {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(var(--sidebar-primary));
+  }
+  .sb-aside .sb-user.minimized-chip {
+    width: calc(100% - 16px);
+    margin: 4px 8px 8px;
+    padding: 8px 0 !important;
+    border-radius: 14px;
+  }
+  @keyframes sb-rise { from { opacity: 0; translate: 0 -8px; } }
+
+  /* hairline separators */
+  .sb-aside .sb-divider {
+    height: 1px;
+    margin: 2px 12px;
+    flex-shrink: 0;
+    background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.16), transparent);
+  }
+
+  /* ── Navigation pills ── */
+  .sb-aside .sb-nav { padding: 10px 10px; }
+  .sb-aside .sb-link {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border-radius: 13px;
+    border: 1px solid transparent;
+    font-size: 13.5px;
+    font-weight: 500;
+    letter-spacing: 0.005em;
+    color: hsl(var(--sidebar-foreground));
+    text-decoration: none;
+    transition:
+      color 0.25s ease,
+      background-color 0.3s ease,
+      border-color 0.3s ease,
+      box-shadow 0.35s ease,
+      translate 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.22s ease;
+    animation: sb-item-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i, 0) * 65ms + 160ms) backwards;
+  }
+  @keyframes sb-item-in { from { opacity: 0; translate: -14px 0; } }
+
+  /* soft light that sweeps across the pill on hover */
+  .sb-aside .sb-link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 35%, hsl(0 0% 100% / 0.14) 50%, transparent 65%);
+    background-size: 260% 100%;
+    background-position: 130% 0;
+    background-repeat: no-repeat;
+    opacity: 0;
+    transition: background-position 0.8s ease, opacity 0.3s ease;
+  }
+  .sb-aside .sb-link:hover::after { background-position: -30% 0; opacity: 1; }
+
+  .sb-aside .sb-link:hover {
+    color: #fff;
+    border-color: hsl(0 0% 100% / 0.12);
+    background: linear-gradient(180deg, hsl(0 0% 100% / 0.1), hsl(0 0% 100% / 0.035));
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    backdrop-filter: blur(12px) saturate(160%);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.14), 0 10px 22px -16px hsl(0 0% 0% / 0.9);
+    translate: 3px 0;
+  }
+  .sb-aside .sb-link:active { translate: 3px 0; scale: 0.985; }
+  .sb-aside .sb-link:focus-visible { outline: 2px solid hsl(var(--sidebar-primary)); outline-offset: 2px; }
+
+  /* active page: blue-tinted glass, glowing edge, indicator bar that grows in */
+  .sb-aside .sb-link.is-active {
+    color: #fff;
+    border-color: hsl(var(--sidebar-primary) / 0.55);
+    background:
+      linear-gradient(135deg, hsl(var(--sidebar-primary) / 0.5), hsl(var(--sidebar-primary) / 0.16) 70%);
+    -webkit-backdrop-filter: blur(14px) saturate(180%);
+    backdrop-filter: blur(14px) saturate(180%);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.28),
+      0 12px 26px -14px hsl(var(--sidebar-primary) / 0.95),
+      0 0 0 3px hsl(var(--sidebar-primary) / 0.1);
+  }
+  .sb-aside .sb-link.is-active:hover { translate: 0 0; }
+  .sb-aside .sb-link.is-active::before {
+    content: "";
+    position: absolute;
+    left: -1px;
+    top: 50%;
+    width: 3px;
+    height: 54%;
+    border-radius: 0 4px 4px 0;
+    background: linear-gradient(180deg, #fff, hsl(var(--sidebar-primary)));
+    box-shadow: 0 0 12px 1px hsl(var(--sidebar-primary) / 0.9);
+    transform: translateY(-50%);
+    transform-origin: center;
+    animation: sb-indicator-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+  }
+  @keyframes sb-indicator-in { from { transform: translateY(-50%) scaleY(0); opacity: 0; } }
+
+  /* icon sits in a tiny glass tile */
+  .sb-aside .sb-link .sb-icon-wrap { transition: transform 0.3s ease, color 0.25s ease; }
+
+  /* ── SEMICIRCLE MENU: the items sit on the right half of a ring, like the four-part semi-circle diagram.
+        JS sets, per item, its position on the arc: --x (push to the right), --rz (small fan tilt),
+        --sc (size) and --op (fade). The arc is centred on the ACTIVE item (it bulges out the most);
+        while the pointer is over the menu the arc follows the pointer, so the items roll like a wheel. ── */
+  .sb-aside .sb-nav { position: relative; overflow-x: hidden; }
+
+  /* one colour per item, cycling through the four segment colours */
+  .sb-aside .sb-nav > .sb-link:nth-child(4n+1) { --acc: 242 95 70; }   /* red    */
+  .sb-aside .sb-nav > .sb-link:nth-child(4n+2) { --acc: 252 171 32; }  /* orange */
+  .sb-aside .sb-nav > .sb-link:nth-child(4n+3) { --acc: 58 197 226; }  /* blue   */
+  .sb-aside .sb-nav > .sb-link:nth-child(4n+4) { --acc: 111 168 110; } /* green  */
+
+  .sb-aside .sb-nav.is-arc .sb-link {
+    width: calc(100% - 40px);                 /* room for the bulge on the right */
+    transform-origin: 0% 50%;
+    transform: translateX(calc(var(--x, 0) * 1px)) rotate(calc(var(--rz, 0) * 1deg)) scale(var(--sc, 1));
+    opacity: var(--op, 1);
+    border-radius: 7px 24px 24px 7px;         /* wedge-like: square inner side, round outer side */
+    border-color: rgb(var(--acc) / 0.4);
+    /* darker band on the inner side (the inner ring of the diagram) + soft tint */
+    background:
+      linear-gradient(90deg, rgb(0 0 0 / 0.2) 0 15px, transparent 15px),
+      linear-gradient(135deg, rgb(var(--acc) / 0.3), rgb(var(--acc) / 0.12));
+    box-shadow: none;
+  }
+  .sb-aside .sb-nav.is-arc .sb-link:hover {
+    color: #fff;
+    border-color: rgb(var(--acc) / 0.8);
+    background:
+      linear-gradient(90deg, rgb(0 0 0 / 0.2) 0 15px, transparent 15px),
+      linear-gradient(135deg, rgb(var(--acc) / 0.65), rgb(var(--acc) / 0.35));
+    box-shadow: 0 10px 22px -14px rgb(var(--acc) / 0.9);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  /* selected: solid segment colour */
+  .sb-aside .sb-nav.is-arc .sb-link.is-active {
+    color: #fff;
+    border-color: rgb(255 255 255 / 0.55);
+    background:
+      linear-gradient(90deg, rgb(0 0 0 / 0.22) 0 15px, transparent 15px),
+      linear-gradient(135deg, rgb(var(--acc)), rgb(var(--acc) / 0.82));
+    box-shadow: 0 14px 28px -14px rgb(var(--acc) / 0.95), 0 0 0 3px rgb(var(--acc) / 0.18);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .sb-aside .sb-nav.is-arc .sb-link.is-active::before {
+    background: #fff;
+    box-shadow: 0 0 12px 1px rgb(var(--acc) / 0.95);
+  }
+
+  /* ── HOVER-TO-SELECT LINE: a line draws along the bottom of the item while you keep the pointer on it
+        (DWELL = 2 s). When it is full the page opens, and the line slides up-left and turns into the
+        glowing bar on the left edge of the active item. A normal click does the same conversion. ── */
+  .sb-aside .sb-link .sb-dwell {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 3px;
+    height: 2px;
+    border-radius: 2px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    transform: scaleX(0);
+    transform-origin: left center;
+    background: linear-gradient(90deg, hsl(var(--sidebar-primary)), #fff);
+    box-shadow: 0 0 8px hsl(var(--sidebar-primary) / 0.9);
+  }
+  .sb-aside .sb-link .sb-dwell.is-dwelling {
+    opacity: 1;
+    animation: sb-dwell-fill var(--sb-dwell-ms, 2000ms) linear forwards;
+  }
+  @keyframes sb-dwell-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .sb-aside .sb-link .sb-dwell.is-converting {
+    opacity: 1;
+    animation: sb-dwell-convert 0.6s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+  }
+  @keyframes sb-dwell-convert {
+    0%   { transform: translate(0, 0) scaleX(1); opacity: 1; }
+    80%  { opacity: 1; }
+    100% { transform: translate(-14px, -15px) scaleX(0.01); opacity: 0; }
+  }
+  .sb-aside .sb-link.minimized-nav-item .sb-dwell { left: 8px; right: 8px; }
+
+  /* unread badge: gentle pulse */
+  .sb-aside .sb-badge { animation: sb-badge-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) backwards, sb-badge-pulse 2.6s ease-in-out 0.6s infinite; }
+  @keyframes sb-badge-pop { from { transform: scale(0); } }
+  @keyframes sb-badge-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45); }
+    50%      { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
+  }
+
+  /* minimized: pills become centred glass tiles */
+  .sb-aside .sb-link.minimized-nav-item { padding: 8px !important; border-radius: 14px; }
+  .sb-aside .sb-link.minimized-nav-item:hover { translate: 0 0; }
+  .sb-aside .sb-link.minimized-nav-item.is-active::before { left: -2px; }
+  @media (max-width: 768px) {
+    .sb-aside .sb-link.minimized-nav-item { padding: 9px 12px !important; }
+  }
+
+  /* ── Footer: one glass card ── */
+  .sb-aside .sb-foot-card {
+    margin: 8px 10px 10px;
+    padding: 6px;
+    border-radius: 18px;
+    flex-shrink: 0;
+    animation: sb-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.3s backwards;
+  }
+  .sb-aside .sb-foot-card.minimized { margin: 8px 8px 10px; padding: 4px; border-radius: 16px; }
+  .sb-aside .sb-foot-card .sb-divider { margin: 4px 6px; }
+
+  .sb-aside .sb-foot-btn,
+  .sb-aside .sb-minimize-btn,
+  .sb-aside .sb-camera-btn,
+  .sb-aside .sb-minimize-icon-btn {
+    border: 1px solid transparent;
+    border-radius: 12px;
+    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, color 0.25s ease, transform 0.2s ease;
+  }
+  .sb-aside .sb-foot-btn:hover,
+  .sb-aside .sb-minimize-btn:hover,
+  .sb-aside .sb-camera-btn:hover,
+  .sb-aside .sb-minimize-icon-btn:hover {
+    background: linear-gradient(180deg, hsl(0 0% 100% / 0.1), hsl(0 0% 100% / 0.03));
+    border-color: hsl(0 0% 100% / 0.12);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.14);
+  }
+  .sb-aside .sb-foot-btn.sb-foot-danger:hover {
+    background: linear-gradient(180deg, hsl(0 75% 55% / 0.28), hsl(0 75% 55% / 0.08));
+    border-color: hsl(0 80% 60% / 0.4);
+    color: #fecaca;
+  }
+  .sb-aside .sb-minimize-btn { padding: 8px 12px; }
+
+  /* light line gliding along the footer card's top edge */
+  .sb-aside .sb-foot-card::after {
+    content: "";
+    position: absolute;
+    left: 16px; right: 16px; top: 0;
+    height: 1px;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.8), transparent);
+    background-size: 40% 100%;
+    background-repeat: no-repeat;
+    animation: sb-glass-glide 6s ease-in-out 1s infinite;
+  }
+
+  /* tidy scrollbar on glass */
+  .sb-aside .sb-nav { scrollbar-color: hsl(0 0% 100% / 0.22) transparent; }
+  .sb-aside .sb-nav::-webkit-scrollbar-thumb { background: hsl(0 0% 100% / 0.22); }
+  .sb-aside .sb-nav::-webkit-scrollbar-thumb:hover { background: hsl(var(--sidebar-primary) / 0.7); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sb-aside .sb-orb,
+    .sb-aside .sb-edge,
+    .sb-aside .sb-user,
+    .sb-aside .sb-link,
+    .sb-aside .sb-link::before,
+    .sb-aside .sb-badge,
+    .sb-aside .sb-foot-card,
+    .sb-aside .sb-foot-card::after { animation: none !important; }
+    .sb-aside .sb-link,
+    .sb-aside .sb-link::after,
+    .sb-aside .sb-user { transition: none !important; }
+    .sb-aside .sb-nav.is-arc .sb-link { transform: none !important; opacity: 1 !important; }
+  }
+`;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🎨 SIDEBAR STYLES CONSTANT - COMPLETE
@@ -930,54 +1435,132 @@ interface SidebarNavLinkProps {
   badgeCount: number;
   groupActive: boolean | null;
   isMinimized: boolean;
+  index: number;
 }
 
-const SidebarNavLink = ({ item, badgeCount, groupActive, isMinimized }: SidebarNavLinkProps) => {
+// How long the pointer must rest on an item before it opens by itself.
+const DWELL_MS = 2000;
+
+// The line under an item: fills while hovering, then converts into the active bar on selection.
+const DwellLine = ({ active, dwelling }: { active: boolean; dwelling: boolean }) => {
+  const prevActive = useRef(active);
+  const [converting, setConverting] = useState(false);
+  useLayoutEffect(() => {
+    if (!active) {
+      setConverting(false);
+    } else if (!prevActive.current) {
+      setConverting(true);
+      const t = window.setTimeout(() => setConverting(false), 650);
+      prevActive.current = active;
+      return () => window.clearTimeout(t);
+    }
+    prevActive.current = active;
+  }, [active]);
+  return (
+    <span
+      aria-hidden="true"
+      className={cn("sb-dwell", dwelling && !active && "is-dwelling", converting && "is-converting")}
+      style={{ ["--sb-dwell-ms" as string]: `${DWELL_MS}ms` } as CSSProperties}
+    />
+  );
+};
+
+const canHover = () =>
+  typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
+const SidebarNavLink = ({ item, badgeCount, groupActive, isMinimized, index }: SidebarNavLinkProps) => {
+  const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
+  const [dwelling, setDwelling] = useState(false);
+  const dwellTimer = useRef<number | null>(null);
+  const resetTimer = useRef<number | null>(null);
+  const activeRef = useRef(false);
+
+  const clearTimers = useCallback(() => {
+    if (dwellTimer.current) window.clearTimeout(dwellTimer.current);
+    if (resetTimer.current) window.clearTimeout(resetTimer.current);
+    dwellTimer.current = null;
+    resetTimer.current = null;
+  }, []);
+
+  useEffect(() => clearTimers, [clearTimers]);
+
+  const startDwell = () => {
+    if (!canHover() || activeRef.current) return;
+    clearTimers();
+    setDwelling(true);
+    dwellTimer.current = window.setTimeout(() => {
+      dwellTimer.current = null;
+      if (!activeRef.current) navigate(item.to);
+      // if nothing opened for any reason, do not leave a full line behind
+      resetTimer.current = window.setTimeout(() => setDwelling(false), 900);
+    }, DWELL_MS);
+  };
+
+  const stopDwell = () => {
+    clearTimers();
+    setDwelling(false);
+  };
 
   return (
     <NavLink
       to={item.to}
+      style={{ ["--i" as string]: index } as CSSProperties}
       className={({ isActive }) =>
         cn(
-          `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${isMinimized ? 'minimized-nav-item' : ''}`,
-          (groupActive ?? isActive)
-            ? "bg-sidebar-primary text-sidebar-primary-foreground"
-            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-white"
+          "sb-link",
+          isMinimized && "minimized-nav-item",
+          (groupActive ?? isActive) && "is-active"
         )
       }
       title={isMinimized ? item.label : ""}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={() => {
+        setIsHovered(true);
+        startDwell();
+      }}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        stopDwell();
+      }}
+      onClick={clearTimers} // a click opens it right away; keep the line so it can convert
     >
-      {item.isAnimated ? (
-        <span key={isMinimized ? "min" : "max"} className={cn("sb-icon-wrap", isHovered && "sb-icon-hovered")}>
-          <item.icon
-            size="xl"
-            className={`h-5 w-5 shrink-0 ${isMinimized ? 'minimized-icon' : ''}`}
-            isParentHovered={isHovered}
-          />
-        </span>
-      ) : (
-        <item.icon className={`h-4 w-4 shrink-0 ${isMinimized ? 'minimized-icon' : ''}`} />
-      )}
-      {!isMinimized && <span className="sb-nav-label sb-label-in flex-1">{item.label}</span>}
-      {!isMinimized && badgeCount > 0 && (
-        <span
-          className="ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white"
-          aria-label={`${badgeCount} unread`}
-        >
-          {badgeCount > 9 ? "9+" : badgeCount}
-        </span>
-      )}
-      {isMinimized && badgeCount > 0 && (
-        <span
-          className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold leading-none text-white"
-          aria-label={`${badgeCount} unread`}
-        >
-          {badgeCount > 9 ? "9" : badgeCount}
-        </span>
-      )}
+      {({ isActive }) => {
+        const active = groupActive ?? isActive;
+        activeRef.current = active;
+        return (
+          <>
+            {item.isAnimated ? (
+              <span key={isMinimized ? "min" : "max"} className={cn("sb-icon-wrap", isHovered && "sb-icon-hovered")}>
+                <item.icon
+                  size="xl"
+                  className={`h-5 w-5 shrink-0 ${isMinimized ? 'minimized-icon' : ''}`}
+                  isParentHovered={isHovered}
+                />
+              </span>
+            ) : (
+              <item.icon className={`h-4 w-4 shrink-0 ${isMinimized ? 'minimized-icon' : ''}`} />
+            )}
+            {!isMinimized && <span className="sb-nav-label sb-label-in flex-1">{item.label}</span>}
+            {!isMinimized && badgeCount > 0 && (
+              <span
+                className="sb-badge ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white"
+                aria-label={`${badgeCount} unread`}
+              >
+                {badgeCount > 9 ? "9+" : badgeCount}
+              </span>
+            )}
+            {isMinimized && badgeCount > 0 && (
+              <span
+                className="sb-badge absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold leading-none text-white"
+                aria-label={`${badgeCount} unread`}
+              >
+                {badgeCount > 9 ? "9" : badgeCount}
+              </span>
+            )}
+            <DwellLine active={active} dwelling={dwelling} />
+          </>
+        );
+      }}
     </NavLink>
   );
 };
@@ -1021,6 +1604,67 @@ export const AppSidebar = ({ isMinimized = false, onToggleMinimize }: AppSidebar
 
   useEffect(() => {
     refreshRoleName();
+  }, []);
+
+  // ── Semicircle menu (arc) + wheel ────────────────────────────────────────
+  // The items are placed on the right half of a circle. The arc is centred on the pointer while it is
+  // over the menu (items roll like a wheel), otherwise on the active item. Plain DOM writes (CSS
+  // variables), no React re-render per mouse move. Uses offsetTop (not getBoundingClientRect) so the
+  // transforms never feed back into the maths.
+  const navRef = useRef<HTMLElement | null>(null);
+  const wheelY = useRef<number | null>(null); // pointer Y inside the nav (px), null = pointer outside
+  const wheelRaf = useRef(0);
+  const minimizedRef = useRef(isMinimized);
+  minimizedRef.current = isMinimized;
+  const ARC_STEP = 0.26;   // angle between two neighbouring items (radians)
+  const ARC_BULGE = 40;    // how far (px) the centre item sticks out to the right
+  const applyWheel = useCallback(() => {
+    wheelRaf.current = 0;
+    const nav = navRef.current;
+    if (!nav) return;
+    const links = Array.from(nav.querySelectorAll<HTMLElement>(".sb-link"));
+    const arcOn = !minimizedRef.current && links.length > 0;
+    nav.classList.toggle("is-arc", arcOn);
+    if (!arcOn) {
+      links.forEach((el) => ["--x", "--rz", "--sc", "--op"].forEach((v) => el.style.removeProperty(v)));
+      return;
+    }
+    const centerOf = (el: HTMLElement) => el.offsetTop + el.offsetHeight / 2 - nav.scrollTop;
+    let y = wheelY.current;
+    if (y === null) {
+      const active = links.find((el) => el.classList.contains("is-active"));
+      y = active ? centerOf(active) : nav.clientHeight / 2;
+    }
+    links.forEach((el) => {
+      const d = (centerOf(el) - y!) / (el.offsetHeight + 6);          // signed distance in items
+      const th = Math.max(-1.3, Math.min(1.3, d * ARC_STEP));           // angle on the ring
+      const cos = Math.cos(th);
+      el.style.setProperty("--x", (ARC_BULGE * cos).toFixed(1));        // centre sticks out, the ends tuck in
+      el.style.setProperty("--rz", (-th * 3).toFixed(2));               // slight fan tilt
+      el.style.setProperty("--sc", (0.8 + 0.2 * cos).toFixed(3));
+      el.style.setProperty("--op", (0.55 + 0.45 * cos).toFixed(3));
+    });
+  }, []);
+  const scheduleWheel = useCallback(() => {
+    if (!wheelRaf.current) wheelRaf.current = window.requestAnimationFrame(applyWheel);
+  }, [applyWheel]);
+  // re-centre the arc when the page (= active item) changes or the sidebar is minimised / expanded
+  useEffect(() => {
+    scheduleWheel();
+    const t = window.setTimeout(scheduleWheel, 900); // once more after the items' entrance animation
+    return () => window.clearTimeout(t);
+  }, [pathname, isMinimized, scheduleWheel]);
+  const onNavMouseMove = (e: ReactMouseEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    wheelY.current = e.clientY - r.top;
+    scheduleWheel();
+  };
+  const onNavMouseLeave = () => {
+    wheelY.current = null;
+    scheduleWheel();
+  };
+  useEffect(() => () => {
+    if (wheelRaf.current) window.cancelAnimationFrame(wheelRaf.current);
   }, []);
 
   // ── Logo click "magic" effect ────────────────────────────────────────
@@ -1143,12 +1787,20 @@ export const AppSidebar = ({ isMinimized = false, onToggleMinimize }: AppSidebar
 
   return (
     <>
-      <style>{sidebarStyles + minimizedStyles}</style>
+      <style>{sidebarStyles + minimizedStyles + glassHeaderStyles + fullGlassStyles}</style>
       {showCP && <ChangePasswordModal onClose={() => setShowCP(false)} />}
 
-      <aside className={`flex h-full w-full min-h-0 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground sb-aside ${isMinimized ? 'sidebar-minimized' : ''}`}>
+      <aside className={`flex h-full w-full min-h-0 shrink-0 flex-col text-sidebar-foreground sb-aside ${isMinimized ? 'sidebar-minimized' : ''}`}>
+        {/* GLASS BACKDROP: drifting aurora the glass panels blur through */}
+        <div className="sb-bg" aria-hidden="true">
+          <span className="sb-orb sb-orb-a" />
+          <span className="sb-orb sb-orb-b" />
+          <span className="sb-orb sb-orb-c" />
+        </div>
+        <span className="sb-edge" aria-hidden="true" />
+
         {/* LOGO */}
-        <div className={`sb-logo-block border-b border-sidebar-border ${isMinimized ? 'minimized' : ''}`}>
+        <div className={`sb-logo-block ${isMinimized ? 'minimized' : ''}`}>
           <div className="sb-logo-glow" />
 
           <button
@@ -1239,7 +1891,7 @@ export const AppSidebar = ({ isMinimized = false, onToggleMinimize }: AppSidebar
         {/* USER CHIP */}
         <button
           onClick={handleProfileClick}
-          className={`w-full shrink-0 border-b border-sidebar-border px-6 py-3 transition-colors hover:bg-sidebar-accent/50 cursor-pointer text-left ${isMinimized ? 'minimized-chip' : ''}`}
+          className={`sb-user ${isMinimized ? 'minimized-chip' : ''}`}
           title={isMinimized ? formatDisplayName(name || "User") : ""}
         >
           <div className={`flex items-center ${isMinimized ? 'justify-center' : 'gap-3'}`}>
@@ -1257,15 +1909,21 @@ export const AppSidebar = ({ isMinimized = false, onToggleMinimize }: AppSidebar
             {!isMinimized && (
               <div className="min-w-0 flex-1 sb-label-in">
                 <div className="truncate text-sm font-medium text-white">{formatDisplayName(name || "User")}</div>
-                <div className="text-xs uppercase tracking-wide text-sidebar-primary">{displayRole}</div>
+                <div className="sb-user-role">{displayRole}</div>
               </div>
             )}
           </div>
         </button>
 
         {/* NAV */}
-        <nav className={`sb-nav min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-3 ${isMinimized ? 'minimized-nav' : ''}`}>
-          {navItems.map((item) => {
+        <nav
+          ref={navRef}
+          onMouseMove={onNavMouseMove}
+          onMouseLeave={onNavMouseLeave}
+          onScroll={scheduleWheel}
+          className={`sb-nav min-h-0 flex-1 space-y-1.5 overflow-y-auto ${isMinimized ? 'minimized-nav' : ''}`}
+        >
+          {navItems.map((item, index) => {
             const badgeCount =
               item.to === "/employee-hub"
                 ? counts.leave + counts.permission
@@ -1285,16 +1943,17 @@ export const AppSidebar = ({ isMinimized = false, onToggleMinimize }: AppSidebar
                 badgeCount={badgeCount}
                 groupActive={groupActive}
                 isMinimized={isMinimized}
+                index={index}
               />
             );
           })}
         </nav>
 
         {/* FOOTER */}
-        <div className={`shrink-0 border-t border-sidebar-border ${isMinimized ? 'minimized-footer' : ''}`}>
+        <div className={`sb-foot-card ${isMinimized ? 'minimized' : ''}`}>
           {role === "OWNER" ? (
             /* OWNER: minimize control sits directly beside the camera logo, no text label */
-            <div className={`p-2 border-b border-sidebar-border ${isMinimized ? 'text-center' : ''}`}>
+            <div className={`p-1 ${isMinimized ? 'text-center' : ''}`}>
               <div
                 className={`flex items-center gap-2 ${isMinimized ? 'flex-col justify-center' : 'justify-between'}`}
               >
@@ -1303,7 +1962,7 @@ export const AppSidebar = ({ isMinimized = false, onToggleMinimize }: AppSidebar
                     const cameraUrl = "rtsp://admin:password@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0";
                     window.open(`/camera-viewer?url=${encodeURIComponent(cameraUrl)}`, "_blank");
                   }}
-                  className={`sb-camera-btn flex flex-1 ${isMinimized ? 'w-full justify-center' : ''} items-center justify-center py-1.5 hover:bg-sidebar-accent rounded-md transition-colors group`}
+                  className={`sb-camera-btn flex flex-1 ${isMinimized ? 'w-full justify-center' : ''} items-center justify-center py-1.5 group`}
                   title="Open camera viewer"
                 >
                   <AnimatedCctvIcon size="2xl" />
@@ -1327,10 +1986,10 @@ export const AppSidebar = ({ isMinimized = false, onToggleMinimize }: AppSidebar
             </div>
           ) : (
             /* OTHER ROLES: minimize control kept exactly as before, with its text label */
-            <div className={`p-2 border-b border-sidebar-border ${isMinimized ? 'text-center' : ''}`}>
+            <div className={`p-1 ${isMinimized ? 'text-center' : ''}`}>
               <button
                 onClick={onToggleMinimize}
-                className={`sb-minimize-btn w-full flex ${isMinimized ? 'justify-center' : 'justify-between'} items-center px-3 py-2 rounded-md hover:bg-sidebar-accent transition-colors group`}
+                className={`sb-minimize-btn w-full flex ${isMinimized ? 'justify-center' : 'justify-between'} items-center group`}
                 title={isMinimized ? "Expand sidebar" : "Minimize sidebar"}
               >
                 {!isMinimized && (
@@ -1347,9 +2006,10 @@ export const AppSidebar = ({ isMinimized = false, onToggleMinimize }: AppSidebar
             </div>
           )}
 
-          <div className={`p-3 space-y-2 ${isMinimized ? 'text-center' : ''}`}>
+          <div className="sb-divider" />
+          <div className={`p-1 space-y-1 ${isMinimized ? 'text-center' : ''}`}>
             <SidebarFooterButton
-              label="Change Password"
+              label="Access Reset"
               icon={AnimatedChangePasswordIcon}
               onClick={() => setShowCP(true)}
               isMinimized={isMinimized}

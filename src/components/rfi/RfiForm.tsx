@@ -19,6 +19,7 @@ import {
   RotateCcw,
   Loader2,
   Star,
+  Contact,
   ChevronDown,
   Plus,
   Users,
@@ -26,14 +27,20 @@ import {
   ClipboardCheck,
   Mail,
   MessageSquare,
+  Palette,
+  User,
+  Crown,
+  History,
 } from "lucide-react";
 import { AnimatedUploadIcon } from "@/components/icons/AnimatedUploadIcon";
 import { AnimatedChecklistIcon } from "@/components/icons/Animatedchecklisticon";
 import { GlassSelect, type GlassSelectOption } from "@/components/GlassSelect";
+import { RfiImportOldDialog } from "@/components/rfi/RfiImportOldDialog";
 import {
   DEFAULT_RFI_PRIORITY,
   RFI_DISCIPLINES,
   RFI_TEAM_TYPES,
+  type RfiCcGroup,
   type RfiDiscipline,
   type RfiEmailContact,
   type RfiPriority,
@@ -45,11 +52,15 @@ import {
   getErrorMessage,
   getFavoriteRfiEmailContacts,
   getRfiEmailContacts,
+  getRfiCcGroups,
   getRfiGmailSettings,
+  getRfiProjectContacts,
   previewRfiEmail,
   type EmployeeOption,
 } from "@/lib/rfiApi";
 import { useAuth } from "@/context/AuthContext";
+import { getOwnProfile } from "@/lib/profileApi";
+import { RfiCcGroupBubbles, hasCcDrag, readCcDrag, writeCcDrag } from "@/components/rfi/RfiCcGroupBubbles";
 import {
   getDisciplineTheme,
   getDisciplineIcon,
@@ -123,6 +134,132 @@ const SHAKE_KEYFRAMES: Keyframe[] = [
   { transform: "translateX(0)" },
 ];
 
+
+// ─────────────────────────────────────────────────────────────────────
+// "CO style" toggle — purely visual. Re-colours / re-fonts the Create RFI
+// form to match the Change Order (CO) panel. No logic, fields or data touched.
+// ─────────────────────────────────────────────────────────────────────
+const CO_STYLE_STORAGE_KEY = "rfi-create-co-style";
+const CO_THEME_SCOPE = ".rfi-co-theme, body.rfi-co-theme-on [data-radix-popper-content-wrapper]";
+const CO_THEME_SCOPE_DARK = ".dark .rfi-co-theme, .dark body.rfi-co-theme-on [data-radix-popper-content-wrapper]";
+
+const RFI_CO_SWITCH_CSS = `
+  .rfi-co-switch {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto;
+    height: 22px; padding: 0 8px 0 6px; border-radius: 999px; cursor: pointer;
+    border: 1px solid hsl(var(--border)); background: hsl(var(--muted) / 0.6);
+    color: hsl(var(--muted-foreground)); font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em;
+    white-space: nowrap; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+  }
+  .rfi-co-switch:hover { border-color: hsl(var(--foreground) / 0.35); color: hsl(var(--foreground)); }
+  .rfi-co-switch:focus-visible { outline: 2px solid hsl(var(--ring) / 0.6); outline-offset: 2px; }
+  .rfi-co-switch-track {
+    position: relative; width: 22px; height: 12px; border-radius: 999px; flex-shrink: 0;
+    background: hsl(var(--foreground) / 0.25); transition: background-color 160ms ease;
+  }
+  .rfi-co-switch-thumb {
+    position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; border-radius: 50%;
+    background: #fff; transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .rfi-co-switch[aria-checked="true"] { border-color: rgba(15,113,117,0.45); color: #0f7175; background: rgba(15,113,117,0.10); }
+  .dark .rfi-co-switch[aria-checked="true"] { color: #2dd4bf; border-color: rgba(45,212,191,0.45); background: rgba(45,212,191,0.14); }
+  .rfi-co-switch[aria-checked="true"] .rfi-co-switch-track { background: #0f7175; }
+  .rfi-co-switch[aria-checked="true"] .rfi-co-switch-thumb { transform: translateX(10px); }
+  @media (max-width: 420px) { .rfi-co-switch-text { display: none; } }
+`;
+
+const RFI_CO_THEME_CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  /* ── Palette: same tokens as the CO panel (Dashboard) ── */
+  ${CO_THEME_SCOPE} {
+    --co-surface: #ffffff; --co-surface-2: #f9f8f6;
+    --co-border: #e2e0db; --co-border-dark: #ccc9c2;
+    --co-text: #1a1917; --co-text-soft: #4a4845; --co-text-muted: #8a8780;
+    --co-indigo: #3d4f7c; --co-indigo-dim: rgba(61,79,124,0.08);
+    --co-teal: #0f7175; --co-teal-line: rgba(15,113,117,0.18); --co-teal-tint: rgba(15,113,117,0.03);
+    --co-shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+
+    --background: 0 0% 100%;            --foreground: 40 6% 10%;
+    --card: 0 0% 100%;                  --card-foreground: 40 6% 10%;
+    --popover: 0 0% 100%;               --popover-foreground: 40 6% 10%;
+    --primary: 182 77% 26%;             --primary-foreground: 0 0% 100%;
+    --secondary: 40 20% 97%;            --secondary-foreground: 40 6% 10%;
+    --muted: 40 20% 97%;                --muted-foreground: 42 4% 52%;
+    --accent: 182 40% 94%;              --accent-foreground: 182 77% 26%;
+    --border: 43 11% 87%;               --input: 43 11% 87%;
+    --ring: 223 34% 36%;
+  }
+  ${CO_THEME_SCOPE_DARK} {
+    --co-surface: #1e2126; --co-surface-2: #24272d;
+    --co-border: #33373f; --co-border-dark: #40444d;
+    --co-text: #e8e6e1; --co-text-soft: #b8b5ae; --co-text-muted: #82807a;
+    --co-indigo: #7c8fc9; --co-indigo-dim: rgba(124,143,201,0.12);
+    --co-teal: #2dd4bf; --co-teal-line: rgba(45,212,191,0.20); --co-teal-tint: rgba(45,212,191,0.04);
+    --co-shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+
+    --background: 218 12% 13%;          --foreground: 43 13% 90%;
+    --card: 218 12% 13%;                --card-foreground: 43 13% 90%;
+    --popover: 218 12% 13%;             --popover-foreground: 43 13% 90%;
+    --primary: 172 66% 50%;             --primary-foreground: 220 15% 9%;
+    --secondary: 220 11% 16%;           --secondary-foreground: 43 13% 90%;
+    --muted: 220 11% 16%;               --muted-foreground: 45 3% 49%;
+    --accent: 220 11% 16%;              --accent-foreground: 172 66% 50%;
+    --border: 220 11% 22%;              --input: 220 11% 22%;
+    --ring: 225 42% 64%;
+  }
+
+  /* ── Typography: Outfit body, Playfair title, JetBrains Mono labels ── */
+  .rfi-co-theme { font-family: 'Outfit', sans-serif; --rfi-border: var(--co-border-dark); --rfi-border-hover: var(--co-indigo); }
+  .rfi-co-theme .rfi-title { font-family: 'Playfair Display', serif; font-weight: 700; letter-spacing: -0.01em; color: var(--co-text); }
+  .rfi-co-theme .rfi-lbl,
+  .rfi-co-theme .rfi-header-to-label,
+  .rfi-co-theme .rfi-start-num-label {
+    font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 500; color: var(--co-text-muted);
+  }
+
+  /* ── Card: the teal-tinted "add panel" look of New change order ── */
+  .rfi-co-theme .rfi-form-card {
+    background: linear-gradient(var(--co-teal-tint), var(--co-teal-tint)), var(--co-surface);
+    border: 1px solid var(--co-teal-line);
+    box-shadow: var(--co-shadow-sm);
+    animation: rfi-form-in 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .rfi-co-theme .rfi-form-card:hover { border-color: var(--co-teal-line); }
+  .rfi-co-theme .rfi-header-bar { background: linear-gradient(90deg, var(--co-teal), transparent); }
+
+  /* ── Inputs: surface-2 fill, border-dark outline, indigo focus (like .form-input) ── */
+  .rfi-co-theme .rfi-field,
+  .rfi-co-theme .rfi-body-box textarea {
+    background: var(--co-surface-2); border: 1px solid var(--co-border-dark);
+    border-radius: 8px; color: var(--co-text); font-family: 'Outfit', sans-serif;
+  }
+  .rfi-co-theme .rfi-field:hover,
+  .rfi-co-theme .rfi-body-box textarea:hover { border-color: var(--co-border-dark); }
+  .rfi-co-theme input:focus-visible,
+  .rfi-co-theme textarea:focus-visible,
+  .rfi-co-theme .rfi-field:focus-visible {
+    border-color: var(--co-indigo); box-shadow: 0 0 0 3px var(--co-indigo-dim);
+  }
+
+  /* ── Panels / header "To" pill ── */
+  .rfi-co-theme .rfi-panel { background: var(--co-surface); border-color: var(--co-border); box-shadow: var(--co-shadow-sm); }
+  .rfi-co-theme .rfi-panel:focus-within { border-color: var(--co-indigo); box-shadow: 0 0 0 3px var(--co-indigo-dim); }
+  .rfi-co-theme .rfi-header-to { background: var(--co-surface-2); border-color: var(--co-border-dark); }
+  .rfi-co-theme .rfi-header-to:focus-within { border-color: var(--co-indigo); box-shadow: 0 0 0 3px var(--co-indigo-dim); }
+  .rfi-co-theme .rfi-header-to-input { font-family: 'Outfit', sans-serif; color: var(--co-text); }
+
+  /* ── Send button: solid CO teal (the "Add change order" button colour) ── */
+  .rfi-co-theme .rfi-send[data-state="idle"] {
+    background: #0f7175; background-image: none; border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(15,113,117,0.25); font-family: 'Outfit', sans-serif;
+  }
+  .rfi-co-theme .rfi-send[data-state="idle"]:hover:not(:disabled) {
+    background: #0b5a5d; box-shadow: 0 3px 10px rgba(15,113,117,0.3);
+  }
+`;
+
 const RFI_STYLES = `
   /* ── Visible borders + polish ── */
   .rfi-root { --rfi-border: hsl(var(--foreground) / 0.28); --rfi-border-hover: hsl(var(--primary) / 0.7); }
@@ -133,8 +270,9 @@ const RFI_STYLES = `
   .rfi-form-card {
     --rfi-sw: 1;
     --rfi-s: min(var(--rfi-sw), var(--rfi-sh, 1));
-    flex: 1 1 auto;
+    flex: 1 0 auto;
     min-width: 0;
+    min-height: min-content;
     padding: calc(12px * var(--rfi-s));
     border-radius: calc(16px * var(--rfi-s));
     border-width: 1.5px;
@@ -183,7 +321,7 @@ const RFI_STYLES = `
 
   /* The root fills the height its parent gives it (the card then stretches), and is the
      size container every responsive rule below measures. */
-  .rfi-root { container-type: inline-size; container-name: rfi; width: 100%; max-width: 100%; display: flex; flex-direction: column; min-height: 100%; --rfi-sh: 1; }
+  .rfi-root { container-type: inline-size; container-name: rfi; width: 100%; max-width: 100%; display: flex; flex-direction: column; height: auto; min-height: 100%; --rfi-sh: 1; }
 
   /* ═════════════ Screen-size scale ═════════════
      --rfi-s multiplies every size in the form (type, controls, icons, padding).
@@ -202,8 +340,9 @@ const RFI_STYLES = `
     grid-template-columns: minmax(0, 1fr);
     gap: 0.75rem 1.25rem;
     align-content: start;
-    flex: 1 1 auto;
+    flex: 1 0 auto;
     min-width: 0;
+    min-height: auto;
   }
   @container rfi (max-width: 640px) {
     .rfi-subtitle { display: none; }
@@ -232,7 +371,8 @@ const RFI_STYLES = `
     animation: rfi-line-in 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
-  .rfi-drop { transition: border-color 180ms ease, background-color 180ms ease; }
+  .rfi-drop { transition: border-color 180ms ease, background-color 180ms ease; overflow: hidden; min-width: 0; max-width: 100%; }
+  .rfi-drop .rfi-up-ico { flex: 0 0 auto; max-width: 100%; }
   .rfi-drag-active {
     border-color: hsl(var(--primary));
     background: hsl(var(--primary) / 0.08);
@@ -318,6 +458,18 @@ const RFI_STYLES = `
      stack on the left. The last left row stretches, so neither side ever
      leaves an empty gap underneath. */
   .rfi-cell-cc, .rfi-cell-classify, .rfi-cell-subject { min-width: 0; }
+  /* Discipline / Priority row + (new projects only) "Start RFI #" row are stacked inside ONE cell that grows
+     to fit them, so the Subject cell below always starts underneath and never overlaps. */
+  .rfi-cell-classify {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: calc(8px * var(--rfi-s, 1));
+    height: auto;
+    min-height: 0;
+  }
+  .rfi-cell-subject { position: relative; z-index: 0; }
 
   .rfi-cell-body {
     display: flex;
@@ -338,20 +490,38 @@ const RFI_STYLES = `
     flex-direction: column;
     gap: 0.4rem;
     min-width: 0;
+    min-height: min-content;
   }
-  .rfi-attach-slot { display: flex; flex: 1 1 auto; min-height: calc(60px * var(--rfi-s, 1)); max-height: calc(320px * var(--rfi-s, 1)); }
+  .rfi-attach-slot { display: flex; flex: 1 1 auto; min-height: calc(60px * var(--rfi-s, 1)); }
   .rfi-attach-slot > * { flex: 1 1 auto; min-width: 0; }
 
+  /* Narrow panels: the left wrapper vanishes (display: contents) and the cells are ordered with the CSS order property:
+       CC -> Discipline/Priority -> Subject -> Email body -> Attachment */
+  .rfi-col-left { display: contents; }
+  .rfi-cell-cc       { order: 1; }
+  .rfi-cell-classify { order: 2; }
+  .rfi-cell-subject  { order: 3; }
+  .rfi-cell-body     { order: 4; }
+  .rfi-cell-attach   { order: 5; }
+
+  /* Wide panels: the left column is ONE normal-flow column (CC, classify, subject, attachment stacked with a
+     gap), so its fields can never sit on top of each other whatever their height. The email body is the right column. */
   @container rfi (min-width: 760px) {
     .rfi-cols {
       grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-      grid-template-rows: auto auto auto 1fr;
+      grid-template-rows: auto;
+      align-content: stretch;
     }
-    .rfi-cell-cc       { grid-column: 1; grid-row: 1; }
-    .rfi-cell-classify { grid-column: 1; grid-row: 2; }
-    .rfi-cell-subject  { grid-column: 1; grid-row: 3; }
-    .rfi-cell-attach   { grid-column: 1; grid-row: 4; }
-    .rfi-cell-body     { grid-column: 2; grid-row: 1 / span 4; }
+    .rfi-col-left {
+      display: flex;
+      flex-direction: column;
+      gap: calc(12px * var(--rfi-s, 1));
+      grid-column: 1;
+      grid-row: 1;
+      min-width: 0;
+    }
+    .rfi-col-left > .rfi-cell-attach { flex: 1 1 auto; }
+    .rfi-cell-body { grid-column: 2; grid-row: 1; }
   }
 
   /* ── Discipline · Priority ──
@@ -362,13 +532,17 @@ const RFI_STYLES = `
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    align-content: flex-start;
     gap: 0.5rem 0.9rem;
     min-height: 34px;
+    width: 100%;
   }
   .rfi-classify-item { display: contents; }
   .rfi-classify-label { display: none; }
 
   .rfi-start-num {
+    flex: 0 0 auto;
+    max-width: 100%;
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -417,9 +591,11 @@ const RFI_STYLES = `
     flex: 1 1 auto;
     min-height: clamp(calc(150px * var(--rfi-s, 1)), 26vh, calc(420px * var(--rfi-s, 1)));
   }
+  /* Fill the whole column: the body text / editor always stretches to the bottom of the card. */
+  .rfi-cell-body .rfi-body-box > .rfi-body-text { height: 100%; }
   .rfi-body-box > * {
-    flex: 1 1 auto;
-    max-height: 70vh;
+    flex: 1 1 0;
+    min-height: 0;
     overflow-y: auto;
   }
   .rfi-body-box textarea { min-height: clamp(calc(150px * var(--rfi-s, 1)), 26vh, calc(420px * var(--rfi-s, 1))); }
@@ -1235,6 +1411,63 @@ const RFI_STYLES = `
     .rfi-header-to-label, .rfi-sug-item, .rfi-sug-avatar, .rfi-sug-item::before { transition: none !important; }
     .rfi-scope-opt svg, .rfi-to-swap, .rfi-suggest, .rfi-sug-item, .rfi-sug-empty, .rfi-chip-in { animation: none !important; }
   }
+  /* ═════════ Compact look: labels sit INSIDE their boxes, smaller text, no vertical scrolling ═════════ */
+  .rfi-root .rfi-lbl { font-size: calc(9.5px * var(--rfi-s, 1)); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; line-height: 1; }
+  .rfi-root .rfi-form-card { padding: calc(10px * var(--rfi-s, 1)) calc(14px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-cols { gap: calc(10px * var(--rfi-s, 1)) calc(16px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-col-left { gap: calc(10px * var(--rfi-s, 1)); }
+
+  /* Subject: small caption + counter inside the box, text underneath */
+  .rfi-inset { position: relative; }
+  .rfi-inset-lbl { position: absolute; left: calc(13px * var(--rfi-s, 1)); top: calc(7px * var(--rfi-s, 1)); z-index: 1; display: inline-flex; gap: 2px; pointer-events: none; transition: color 150ms ease; }
+  .rfi-inset-count { position: absolute; right: calc(13px * var(--rfi-s, 1)); top: calc(7px * var(--rfi-s, 1)); z-index: 1; pointer-events: none; font-size: calc(9.5px * var(--rfi-s, 1)); line-height: 1; }
+  .rfi-inset:focus-within .rfi-inset-lbl { color: hsl(var(--primary)); }
+  .rfi-root .rfi-inset .rfi-inset-input { height: calc(44px * var(--rfi-s, 1)); padding-top: calc(16px * var(--rfi-s, 1)); padding-bottom: calc(2px * var(--rfi-s, 1)); font-size: calc(12.5px * var(--rfi-s, 1)); }
+
+  /* Email body: ONE framed box, caption + Edit buttons inside its top edge */
+  .rfi-body-frame { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1.5px solid var(--rfi-border); border-radius: calc(12px * var(--rfi-s, 1)); background: hsl(var(--background) / 0.6); transition: border-color 180ms ease, box-shadow 180ms ease; }
+  .rfi-body-frame:hover { border-color: var(--rfi-border-hover); }
+  .rfi-body-frame:focus-within { border-color: hsl(var(--primary) / 0.6); box-shadow: 0 0 0 3px hsl(var(--primary) / 0.1); }
+  .rfi-body-head { padding: calc(7px * var(--rfi-s, 1)) calc(8px * var(--rfi-s, 1)) 0 calc(13px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-body-frame .rfi-body-box,
+  .rfi-root .rfi-body-frame .rfi-body-box textarea { min-height: clamp(calc(96px * var(--rfi-s, 1)), 16vh, calc(300px * var(--rfi-s, 1))); }
+  .rfi-root .rfi-body-frame .rfi-body-text,
+  .rfi-root .rfi-body-frame .rfi-body-box textarea { border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: calc(12px * var(--rfi-s, 1)); line-height: 1.5; padding: calc(4px * var(--rfi-s, 1)) calc(13px * var(--rfi-s, 1)) calc(8px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-body-frame .rfi-body-box textarea:focus-visible { outline: none; box-shadow: none; border: 0; }
+  @container rfi (max-width: 759px) {
+    .rfi-root .rfi-body-frame .rfi-body-box,
+    .rfi-root .rfi-body-frame .rfi-body-box textarea { min-height: clamp(150px, 26vh, 300px); }
+  }
+
+  /* Attachment: caption lives inside the upload / file box */
+  .rfi-attach-lbl { color: hsl(var(--muted-foreground)); }
+  .rfi-root .rfi-drop-pad { padding: calc(7px * var(--rfi-s, 1)) calc(12px * var(--rfi-s, 1)); justify-content: flex-start; }
+  .rfi-root .rfi-file-pad { padding: calc(7px * var(--rfi-s, 1)) calc(12px * var(--rfi-s, 1)); }
+  .rfi-attach-slot { min-height: calc(46px * var(--rfi-s, 1)); }
+
+  /* Internal: the choices (Check & approve / Draft route, With mail / Without mail) sit side by side when the
+     column is wide enough and stack when it is narrow, so nothing is squeezed or cut off. */
+  .rfi-root .rfi-cell-subject [role="radiogroup"] > .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+  .rfi-root .rfi-cell-subject [role="radiogroup"] > .grid > button { display: flex; flex-direction: column; justify-content: flex-start; }
+
+  /* Whole form always reachable: if the area is shorter than the form, the form scrolls inside itself instead of being cut off. */
+  .rfi-root { max-height: 100%; overflow-y: auto; }
+  .rfi-root .rfi-cell-subject [role="radiogroup"] button { min-width: 0; overflow-wrap: anywhere; }
+  /* Internal: the "how should it reach them" choices take less room */
+  .rfi-root .rfi-cell-subject [role="radiogroup"] button { padding: calc(5px * var(--rfi-s, 1)) calc(7px * var(--rfi-s, 1)); }
+  .rfi-root .rfi-cell-subject [role="radiogroup"] p { font-size: calc(9.5px * var(--rfi-s, 1)); line-height: 1.25; }
+
+  /* Route strip: You -> person -> Approval / Draft -> Owner (one tidy line; the e-mail address shrinks with ... when tight) */
+  .rfi-route { display: flex; flex-wrap: wrap; align-items: center; gap: calc(3px * var(--rfi-s, 1)) calc(2px * var(--rfi-s, 1)); min-width: 0; padding: calc(3px * var(--rfi-s, 1)) calc(5px * var(--rfi-s, 1)); border-radius: calc(8px * var(--rfi-s, 1)); border: 1px dashed hsl(var(--border)); background: hsl(var(--muted) / 0.35); }
+  .rfi-route-node { display: inline-flex; flex: 0 0 auto; align-items: center; gap: calc(3px * var(--rfi-s, 1)); height: calc(18px * var(--rfi-s, 1)); padding: 0 calc(6px * var(--rfi-s, 1)); border-radius: 9999px; border: 1px solid hsl(var(--border)); background: hsl(var(--background)); font-size: calc(10px * var(--rfi-s, 1)); font-weight: 600; line-height: 1; color: hsl(var(--foreground) / 0.85); white-space: nowrap; }
+  .rfi-route-node > svg { width: calc(10px * var(--rfi-s, 1)); height: calc(10px * var(--rfi-s, 1)); flex: 0 0 auto; }
+  /* The e-mail address is always shown in full (never cut with "..."); if the row is too narrow it wraps to a second line instead. */
+  .rfi-route-mid { flex: 0 0 auto; min-width: 0; max-width: 100%; color: hsl(var(--primary)); border-color: hsl(var(--primary) / 0.35); background: hsl(var(--primary) / 0.08); }
+  .rfi-route-node.is-approval { color: hsl(199 89% 38%); border-color: hsl(199 89% 48% / 0.4); background: hsl(199 89% 48% / 0.1); }
+  .rfi-route-node.is-draft { color: hsl(262 70% 52%); border-color: hsl(262 83% 58% / 0.45); background: hsl(262 83% 58% / 0.1); }
+  .rfi-route-node.is-owner { color: hsl(38 92% 36%); border-color: hsl(38 92% 50% / 0.45); background: hsl(38 92% 50% / 0.12); }
+  .rfi-route-line { position: relative; flex: 0 0 calc(10px * var(--rfi-s, 1)); width: calc(10px * var(--rfi-s, 1)); height: 1.5px; border-radius: 2px; background: hsl(var(--muted-foreground) / 0.4); }
+  .rfi-route-line::after { content: ""; position: absolute; right: 0; top: 50%; width: calc(5px * var(--rfi-s, 1)); height: calc(5px * var(--rfi-s, 1)); border-top: 1.5px solid hsl(var(--muted-foreground) / 0.6); border-right: 1.5px solid hsl(var(--muted-foreground) / 0.6); transform: translateY(-50%) rotate(45deg); }
 `;
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1456,7 +1689,7 @@ function SuggestContent({
    ║  true  = Internal button is locked and shows "Coming soon"    ║
    ║          when the mouse is over it       -> use before PUSHING ║
    ╚═══════════════════════════════════════════════════════════════╝ */
-const INTERNAL_RFI_COMING_SOON = true;
+const INTERNAL_RFI_COMING_SOON = false;
 
 // "Without mail" keeps the PDF in the database (there is no Gmail copy), so it is limited to a small size.
 // Must match app.rfi.in-app.max-attachment-bytes on the backend (default 3 MB).
@@ -1464,36 +1697,23 @@ const IN_APP_MAX_FILE_BYTES = 3 * 1024 * 1024;
 
 interface ScopeToggleProps {
   value: RfiTeamType;
+  /** false until the user has clicked Internal or External themselves (nothing is pre-selected). */
+  chosen: boolean;
   onChange: (next: RfiTeamType, viaPointer: boolean) => void;
   disabled?: boolean;
+  /** "Add old RFI" sits right beside Internal / External because it is a different flow from both. */
+  onAddOld?: () => void;
+  addOldDisabled?: boolean;
 }
 
-function ScopeToggle({ value, onChange, disabled }: ScopeToggleProps) {
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (disabled) return;
-    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
-    e.preventDefault();
-    if (INTERNAL_RFI_COMING_SOON) return; // Internal is locked, nothing to switch to
-    const next: RfiTeamType = value === "INTERNAL" ? "EXTERNAL" : "INTERNAL";
-    // Roving focus: move focus to the option that is about to become active.
-    e.currentTarget.querySelector<HTMLElement>('button[aria-checked="false"]')?.focus();
-    onChange(next, false);
-  };
-
+// Two compact, clearly separate buttons. Nothing is pre-selected: the user must click one.
+function ScopeToggle({ value, chosen, onChange, disabled, onAddOld, addOldDisabled }: ScopeToggleProps) {
   return (
-    <div
-      role="radiogroup"
-      aria-label="Team scope"
-      className="rfi-scope"
-      data-scope={value.toLowerCase()}
-      data-disabled={disabled ? "true" : "false"}
-      style={{ "--scope-accent": getTeamTypeTheme(value).accent } as CSSProperties}
-      onKeyDown={handleKeyDown}
-    >
-      <span className="rfi-scope-thumb" aria-hidden />
+    <div role="radiogroup" aria-label="Team scope" className="flex shrink-0 items-center gap-1.5">
       {RFI_TEAM_TYPES.map((type) => {
         const Icon = getTeamTypeIcon(type);
-        const active = type === value;
+        const accent = getTeamTypeTheme(type).accent;
+        const active = chosen && type === value;
         const label = type === "INTERNAL" ? "Internal" : "External";
         const comingSoon = INTERNAL_RFI_COMING_SOON && type === "INTERNAL";
         return (
@@ -1502,30 +1722,53 @@ function ScopeToggle({ value, onChange, disabled }: ScopeToggleProps) {
             type="button"
             role="radio"
             aria-checked={active}
-            tabIndex={active ? 0 : -1}
             disabled={disabled}
             aria-disabled={comingSoon || undefined}
-            data-active={active}
-            data-kind={type.toLowerCase()}
-            data-soon={comingSoon ? "true" : undefined}
             title={
               comingSoon
-                ? undefined
+                ? "Internal — coming soon"
                 : type === "INTERNAL"
                 ? "Internal — send to someone in your office"
                 : "External — send to a client or outside address"
             }
-            className="rfi-scope-opt"
             onClick={(e) => {
-              if (comingSoon) return; // locked: ignore clicks
+              if (comingSoon) return;
               if (!active) onChange(type, e.detail > 0);
             }}
+            className={[
+              "inline-flex h-6 items-center gap-1 rounded-full border px-2.5 text-[11px] font-bold leading-none transition-all duration-150",
+              "active:scale-95 disabled:pointer-events-none disabled:opacity-50",
+              active ? "text-white shadow-sm" : "bg-background/70 hover:shadow-sm",
+              comingSoon ? "cursor-not-allowed opacity-60" : "",
+            ].join(" ")}
+            style={
+              active
+                ? { backgroundColor: accent, borderColor: accent }
+                : { color: accent, borderColor: `${accent}80` }
+            }
           >
             <Icon className="h-3 w-3" strokeWidth={2.4} />
-            <span className="rfi-scope-label">{label}</span>
+            {label}
           </button>
         );
       })}
+      {!chosen && (
+        <span className="hidden animate-pulse text-[10px] font-semibold text-muted-foreground sm:inline">
+          ← choose one
+        </span>
+      )}
+      {onAddOld && (
+        <button
+          type="button"
+          onClick={onAddOld}
+          disabled={disabled || addOldDisabled}
+          title="Add an RFI that was created before this project used the app. It is added as an internal RFI: enter only its latest status, subject and PDF. Its status then follows the emails you add from the Inbox."
+          className="inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-dashed border-primary/60 bg-primary/5 px-2.5 text-[11px] font-bold leading-none text-primary transition-all duration-150 hover:bg-primary/10 active:scale-95 disabled:pointer-events-none disabled:opacity-50"
+        >
+          <History className="h-3 w-3" strokeWidth={2.4} aria-hidden />
+          Add old RFI
+        </button>
+      )}
     </div>
   );
 }
@@ -1537,9 +1780,36 @@ function ScopeToggle({ value, onChange, disabled }: ScopeToggleProps) {
 export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, onSent }: Props) => {
   const { name: authName } = useAuth();
 
+  // ── "CO style" look toggle (visual only; default OFF = the normal RFI look) ──
+  const [coStyle, setCoStyle] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(CO_STYLE_STORAGE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleCoStyle = useCallback(() => {
+    setCoStyle((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(CO_STYLE_STORAGE_KEY, next ? "1" : "0");
+      } catch {
+        /* storage unavailable — the toggle still works for this session */
+      }
+      return next;
+    });
+  }, []);
+  // Popovers render in a portal outside the form, so mirror the look onto them while it is on.
+  useEffect(() => {
+    document.body.classList.toggle("rfi-co-theme-on", coStyle);
+    return () => document.body.classList.remove("rfi-co-theme-on");
+  }, [coStyle]);
+
   // ── Form State ──────────────────────────────────────────────────────
   const [discipline, setDiscipline] = useState<RfiDiscipline>(DEFAULT_DISCIPLINE);
   const [teamType, setTeamType] = useState<RfiTeamType>("EXTERNAL");
+  // Nothing is pre-selected: the user must click Internal or External before the To field unlocks.
+  const [scopeChosen, setScopeChosen] = useState(false);
   // Internal only: true = Person B converts it to a draft and sends it straight to the Owner.
   const [draftRoute, setDraftRoute] = useState(false);
   // Internal only. false = "With mail" (the RFI and every reply go by email inside ONE Gmail thread).
@@ -1550,6 +1820,8 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   // Optional: only offered while the project has no RFIs yet. Blank = automatic (RFI#001).
   const [startingNumber, setStartingNumber] = useState("");
   const [projectHasRfis, setProjectHasRfis] = useState(true); // assume true until the preview says otherwise
+  // "Add old RFI": a separate dialog for an RFI that was created before the project used the app.
+  const [importOldOpen, setImportOldOpen] = useState(false);
   const [nextRfiNumberLabel, setNextRfiNumberLabel] = useState("");
   const parsedStartingNumber = (() => {
     const n = parseInt(startingNumber, 10);
@@ -1577,6 +1849,9 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
         (e.role ?? "").trim().toUpperCase() === "OWNER"
     );
   const draftRouteOn = recipientIsOwner && draftRoute;
+  // A draft sent to the Owner is only a draft: nothing is emailed until the Owner sends it to the client.
+  // So "Send as draft to Owner" always means "Without mail" and the With mail / Without mail choice is hidden.
+  const sendInAppOnly = isInternal && (draftRouteOn || inAppOnly);
   // The Gmail account RFIs are sent FROM (RFI Settings). Like the sender's own email,
   // it can never be a To or CC address.
   const [gmailFromEmail, setGmailFromEmail] = useState("");
@@ -1591,9 +1866,17 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   // ── CC & Recipient Picker State ─────────────────────────────────────
   const [favoriteToContacts, setFavoriteToContacts] = useState<RfiEmailContact[]>([]);
   const [favoriteCcContacts, setFavoriteCcContacts] = useState<RfiEmailContact[]>([]);
-  const [ccPickerTab, setCcPickerTab] = useState<"favorites" | "employees">("favorites");
+  const [ccPickerTab, setCcPickerTab] = useState<"favorites" | "employees" | "project">("favorites");
+  const [toPickerTab, setToPickerTab] = useState<"favorites" | "project">("favorites");
+  // Addresses saved for THIS project in Settings -> Project Addresses (one tiny request per project change).
+  const [projectToContacts, setProjectToContacts] = useState<string[]>([]);
+  const [projectCcContacts, setProjectCcContacts] = useState<string[]>([]);
   const [ccEmails, setCcEmails] = useState<string[]>([]);
   const [ccInput, setCcInput] = useState("");
+  // My private CC groups for THIS project (Settings -> Email Address -> CC Groups), shown as bubbles in CC.
+  const [ccGroups, setCcGroups] = useState<RfiCcGroup[]>([]);
+  // True while a group bubble / employee is dragged over the CC box.
+  const [isCcDragOver, setIsCcDragOver] = useState(false);
   const [isToPickerOpen, setIsToPickerOpen] = useState(false);
   const [isCcPickerOpen, setIsCcPickerOpen] = useState(false);
 
@@ -1645,6 +1928,14 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   const previewRequestRef = useRef(0);
 
   // ── Computed Values ─────────────────────────────────────────────────
+  // My exact email from /profile/me (so I'm never CC'd on my own RFI, even if the name match below misses).
+  const [myProfileEmail, setMyProfileEmail] = useState("");
+  useEffect(() => {
+    getOwnProfile()
+      .then((p) => setMyProfileEmail((p.email ?? "").trim().toLowerCase()))
+      .catch(() => undefined);
+  }, []);
+
   const currentEmployee = useMemo(() => {
     if (!authName || employees.length === 0) return null;
     const normalized = authName.trim().toLowerCase();
@@ -1665,8 +1956,9 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     if (mine) set.add(mine);
     const gmail = gmailFromEmail.trim().toLowerCase();
     if (gmail) set.add(gmail);
+    if (myProfileEmail) set.add(myProfileEmail);
     return set;
-  }, [currentEmployee, gmailFromEmail]);
+  }, [currentEmployee, gmailFromEmail, myProfileEmail]);
   const toLc = recipientEmail.trim().toLowerCase();
   const isFromAddress = (email: string) => fromSet.has(email.trim().toLowerCase());
 
@@ -1741,6 +2033,38 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   const ccFavoritesVisible = useMemo(
     () => favoriteCcContacts.filter((c) => !fromSet.has(c.email.trim().toLowerCase()) && c.email.trim().toLowerCase() !== toLc),
     [favoriteCcContacts, fromSet, toLc]
+  );
+
+  // Project tab lists: same hiding rules as the favorites (never the From address; CC also hides To).
+  const toProjectVisible = useMemo(
+    () => projectToContacts.filter((e) => !fromSet.has(e.trim().toLowerCase())),
+    [projectToContacts, fromSet]
+  );
+  const ccProjectVisible = useMemo(
+    () => projectCcContacts.filter((e) => !fromSet.has(e.trim().toLowerCase()) && e.trim().toLowerCase() !== toLc),
+    [projectCcContacts, fromSet, toLc]
+  );
+
+  // Lower-cased CC set + the addresses that may never be CC'd (From, To) - drive the group bubbles.
+  const ccSet = useMemo(() => new Set(ccEmails.map((c) => c.trim().toLowerCase())), [ccEmails]);
+  const ccBlocked = useMemo(() => {
+    const b = new Set<string>(Array.from(fromSet));
+    if (toLc) b.add(toLc);
+    return b;
+  }, [fromSet, toLc]);
+
+  // Members of every "auto" group: put in CC when the form opens for the project and again after a send.
+  const autoGroupEmails = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          ccGroups
+            .filter((g) => g.autoSelect)
+            .flatMap((g) => g.emails.map((e) => e.trim().toLowerCase()))
+            .filter((e) => e && !ccBlocked.has(e))
+        )
+      ),
+    [ccGroups, ccBlocked]
   );
 
   const toHighlightQuery = isInternal ? (internalPicked ? "" : internalRecipient) : externalRecipient;
@@ -1845,6 +2169,56 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   setCcInput("");
 }, [projectName]);
 
+  // Project-specific Send To / CC addresses (Settings -> Project Addresses).
+  // One small request when the project changes; silent on failure (the tab just stays empty).
+  useEffect(() => {
+    setProjectToContacts([]);
+    setProjectCcContacts([]);
+    if (!projectName) return;
+    let cancelled = false;
+    getRfiProjectContacts(projectName)
+      .then((res) => {
+        if (cancelled) return;
+        // The project's client emails are ONE list (Settings -> Project Addresses); older entries that
+        // still have separate To / CC lists are merged. The same list is offered for To and for CC.
+        const merged = Array.from(
+          new Set([...(res.emails ?? res.to ?? []), ...(res.cc ?? [])].map((e) => e.trim().toLowerCase()).filter(Boolean))
+        ).sort();
+        setProjectToContacts(merged);
+        setProjectCcContacts(merged);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [projectName]);
+
+  // My CC groups for this project (private to me). One tiny request per project change; silent on failure
+  // (no bubbles). Groups marked "auto" are put in CC right away - merged in, never replacing what's typed.
+  useEffect(() => {
+    setCcGroups([]);
+    if (!projectName) return;
+    let cancelled = false;
+    getRfiCcGroups(projectName)
+      .then((list) => {
+        if (cancelled) return;
+        setCcGroups(list);
+        const auto = Array.from(
+          new Set(list.filter((g) => g.autoSelect).flatMap((g) => g.emails.map((e) => e.trim().toLowerCase())))
+        ).filter(Boolean);
+        if (auto.length === 0) return;
+        setCcEmails((prev) => {
+          const have = new Set(prev.map((c) => c.toLowerCase()));
+          const add = auto.filter((e) => !have.has(e));
+          return add.length ? [...prev, ...add] : prev;
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [projectName]);
+
   // Full contact books for the typeahead. Silent on failure: these 400 until the
   // user has saved Gmail settings once, and the favorites loader above already
   // reports real connectivity problems.
@@ -1870,6 +2244,10 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
           if (requestId !== previewRequestRef.current) return;
           bodyLoadedRef.current = true;
           setEmailBody(preview.emailBody);
+          // The same answer also says whether the project has RFIs and which number comes next, so the
+          // separate request below is only needed while this effect is not running (body edited by hand).
+          setProjectHasRfis(preview.hasExistingRfis);
+          setNextRfiNumberLabel(preview.rfiNumber);
         })
         .catch((err) => {
           logger.error("Failed to load default RFI email body:", getErrorMessage(err));
@@ -1889,6 +2267,9 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   // email body has been hand-edited, which the effect above skips.
   useEffect(() => {
     if (!projectName) return;
+    // While the body is NOT hand-edited, the body-preview effect above already fetches (and applies) this
+    // same information, so asking the server again would just double the work on every form open.
+    if (!isBodyCustomized && !isEditingBody) return;
     let cancelled = false;
     previewRfiEmail(projectName, "", parsedStartingNumber, teamType)
       .then((preview) => {
@@ -1900,7 +2281,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     return () => {
       cancelled = true;
     };
-  }, [projectName, parsedStartingNumber, teamType]);
+  }, [projectName, parsedStartingNumber, teamType, isBodyCustomized, isEditingBody]);
 
   // A different project means a different numbering situation — drop any typed value.
   useEffect(() => {
@@ -1917,13 +2298,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     };
   }, []);
 
-  // ── Auto-grow the email body editor so the full text is always visible ──
-  useEffect(() => {
-    const el = bodyTextareaRef.current;
-    if (!isEditingBody || !el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight + 2}px`;
-  }, [isEditingBody, emailBodyDraft]);
+  // The email body editor fills the space left in its column (CSS) and scrolls inside itself if the text is longer.
 
   // ── Event Handlers ──────────────────────────────────────────────────
 
@@ -1989,6 +2364,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   const handleScopeChange = (next: RfiTeamType, viaPointer: boolean) => {
     if (INTERNAL_RFI_COMING_SOON && next === "INTERNAL") return;
     setTeamType(next);
+    setScopeChosen(true);
     setToActiveIndex(-1);
     setIsToSuggestOpen(false);
     // Switching to Internal → go straight to the office list.
@@ -2039,6 +2415,71 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
         ? prev.filter((c) => c.toLowerCase() !== email.toLowerCase())
         : [...prev, email]
     );
+
+  /** Add several addresses at once (group bubble / drag & drop). Returns how many were skipped (From / To). */
+  const addCcEmailsBulk = (emails: string[]): { added: number; skipped: number } => {
+    const clean = Array.from(new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean)));
+    const usable = clean.filter((e) => !ccBlocked.has(e));
+    const fresh = usable.filter((e) => !ccSet.has(e));
+    if (fresh.length > 0) {
+      setCcEmails((prev) => {
+        const have = new Set(prev.map((c) => c.toLowerCase()));
+        const add = fresh.filter((e) => !have.has(e));
+        return add.length ? [...prev, ...add] : prev;
+      });
+    }
+    return { added: fresh.length, skipped: clean.length - usable.length };
+  };
+
+  /** Click on a group bubble: all members in ⇄ all members out. */
+  const toggleCcGroup = (group: RfiCcGroup) => {
+    const members = Array.from(new Set(group.emails.map((e) => e.trim().toLowerCase()))).filter((e) => !ccBlocked.has(e));
+    if (members.length === 0) {
+      toast({
+        title: group.emails.length === 0 ? "This group has no members yet" : "Nobody to add",
+        description:
+          group.emails.length === 0
+            ? "Add employees in RFI Settings → Email Address → CC Groups."
+            : "Its members are the From / To address of this RFI.",
+      });
+      return;
+    }
+    const allIn = members.every((e) => ccSet.has(e));
+    if (allIn) {
+      const drop = new Set(members);
+      setCcEmails((prev) => prev.filter((c) => !drop.has(c.toLowerCase())));
+      return;
+    }
+    const { skipped } = addCcEmailsBulk(members);
+    if (skipped > 0) {
+      toast({ title: `${group.name} added`, description: `${skipped} member(s) skipped — From / To address.` });
+    }
+  };
+
+  // Drop a group bubble (or an employee) on the CC box.
+  const handleCcDragOver = (e: React.DragEvent) => {
+    if (isBusy || !hasCcDrag(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    if (!isCcDragOver) setIsCcDragOver(true);
+  };
+  const handleCcDragLeave = (e: React.DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsCcDragOver(false);
+  };
+  const handleCcDrop = (e: React.DragEvent) => {
+    setIsCcDragOver(false);
+    if (isBusy || !hasCcDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const emails = readCcDrag(e);
+    if (emails.length === 0) return;
+    const { added, skipped } = addCcEmailsBulk(emails);
+    if (added === 0 && skipped > 0) {
+      toast({ title: "Can't add to CC", description: "That's the From / To address.", variant: "destructive" });
+    } else if (added === 0) {
+      toast({ title: "Already in CC" });
+    }
+  };
 
   const handleCcPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     const text = e.clipboardData.getData("text");
@@ -2093,6 +2534,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   const resetForm = () => {
     setDiscipline(DEFAULT_DISCIPLINE);
     setTeamType("EXTERNAL");
+    setScopeChosen(false);
     setDraftRoute(false);
     setInAppOnly(false);
     setPriority(DEFAULT_RFI_PRIORITY);
@@ -2104,7 +2546,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     setEmailBodyDraft("");
     setIsEditingBody(false);
     setIsBodyCustomized(false);
-    setCcEmails([]);
+    setCcEmails(autoGroupEmails); // "auto" CC groups stay selected for the next RFI
     setCcInput("");
     setInternalRecipient("");
     setExternalRecipient(""); 
@@ -2149,6 +2591,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     e.preventDefault();
     if (sendState === "sending" || sendState === "success") return;
     if (!projectName) return failValidation("Select a project first");
+    if (!scopeChosen) return failValidation("Choose Internal or External first");
     if (!discipline) return failValidation("Discipline is required");
     if (!subject.trim()) return failValidation("Subject is required");
     if (!projectHasRfis && startingNumber.trim() && parsedStartingNumber === undefined) {
@@ -2159,9 +2602,11 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
     if (isInternal && !officeContacts.some((c) => c.email.toLowerCase() === recipientEmail.trim().toLowerCase())) {
       return failValidation("Internal RFIs go to someone in your office — pick a colleague from the list");
     }
-    if (isInternal && inAppOnly && file.size > IN_APP_MAX_FILE_BYTES) {
+    if (sendInAppOnly && file.size > IN_APP_MAX_FILE_BYTES) {
       return failValidation(
-        `This PDF is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Without mail, files are kept in the app's database, so the limit is ${IN_APP_MAX_FILE_BYTES / (1024 * 1024)} MB. Compress the PDF or choose "With mail".`
+        draftRouteOn
+          ? `This PDF is ${(file.size / (1024 * 1024)).toFixed(1)} MB. A draft to the Owner is kept inside the app (no email), so the limit is ${IN_APP_MAX_FILE_BYTES / (1024 * 1024)} MB. Compress the PDF or choose "Check & approve" with mail.`
+          : `This PDF is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Without mail, files are kept in the app's database, so the limit is ${IN_APP_MAX_FILE_BYTES / (1024 * 1024)} MB. Compress the PDF or choose "With mail".`
       );
     }
     if (!currentEmployee || !currentEmployee.email) {
@@ -2203,7 +2648,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
         ccEmails: ccEmailsToSend,
         startingNumber: !projectHasRfis ? parsedStartingNumber : undefined,
         draftRoute: draftRouteOn || undefined,
-        inAppOnly: isInternal && inAppOnly ? true : undefined,
+        inAppOnly: sendInAppOnly ? true : undefined,
       });
       toast({
         title: created.inAppOnly ? `${created.rfiNumber} created!` : `${created.rfiNumber} sent successfully!`,
@@ -2241,8 +2686,10 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
   // ─────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="rfi-root">
+    <div className={`rfi-root${coStyle ? " rfi-co-theme" : ""}`}>
       <style>{RFI_STYLES}</style>
+      <style>{RFI_CO_SWITCH_CSS}</style>
+      {coStyle && <style>{RFI_CO_THEME_CSS}</style>}
 
       <form
         onSubmit={handleSubmit}
@@ -2270,7 +2717,28 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
               {/* Title row: "New RFI" + the compact scope toggle (sits above the To field). */}
               <div className="flex min-w-0 items-center gap-2.5">
                 <h2 className="rfi-title shrink-0 whitespace-nowrap font-bold leading-tight tracking-tight text-foreground">New RFI</h2>
-                <ScopeToggle value={teamType} onChange={handleScopeChange} disabled={isBusy} />
+                <ScopeToggle
+                  value={teamType}
+                  chosen={scopeChosen}
+                  onChange={handleScopeChange}
+                  disabled={isBusy}
+                  onAddOld={() => setImportOldOpen(true)}
+                  addOldDisabled={!projectName}
+                />
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={coStyle}
+                  onClick={toggleCoStyle}
+                  title="Use the Change Order (CO) colours & layout style — look only, nothing else changes"
+                  className="rfi-co-switch"
+                >
+                  <Palette className="h-3 w-3" aria-hidden />
+                  <span className="rfi-co-switch-text">CO style</span>
+                  <span className="rfi-co-switch-track" aria-hidden>
+                    <span className="rfi-co-switch-thumb" />
+                  </span>
+                </button>
               </div>
 
               {/* "To" field.
@@ -2309,11 +2777,13 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                         onClick={() => setIsToSuggestOpen(true)}
                         onKeyDown={handleToKeyDown}
                         placeholder={
-                          isInternal
+                          !scopeChosen
+                            ? "Choose Internal or External first"
+                            : isInternal
                             ? "Search or pick a colleague in your office"
                             : "reviewer@client.com — type to search saved emails"
                         }
-                        disabled={isBusy}
+                        disabled={isBusy || !scopeChosen}
                         autoComplete="off"
                         spellCheck={false}
                         className="rfi-header-to-input"
@@ -2342,21 +2812,68 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                         <Users className="h-3.5 w-3.5" style={{ color: INTERNAL_ACCENT }} />
                       </button>
                     ) : (
-                      <Popover open={isToPickerOpen} onOpenChange={setIsToPickerOpen}>
+                      <Popover
+                        open={isToPickerOpen}
+                        onOpenChange={(open) => {
+                          // Open on the Project tab when this project has saved addresses.
+                          if (open) setToPickerTab(projectToContacts.length > 0 ? "project" : "favorites");
+                          setIsToPickerOpen(open);
+                        }}
+                      >
                         <PopoverTrigger asChild>
                           <button
                             key="favorites"
                             type="button"
-                            disabled={isBusy}
-                            title="Pick a Send To address"
-                            aria-label="Pick a Send To address"
+                            disabled={isBusy || !scopeChosen}
+                            title="Saved Send To addresses (Project emails · Favorites)"
+                            aria-label="Saved Send To addresses"
                             className="rfi-header-to-star animate-rfi-pop"
                           >
-                            <Star className="h-3.5 w-3.5 text-amber-500" />
+                            <Contact className="h-3.5 w-3.5 text-primary" />
                           </button>
                         </PopoverTrigger>
                         <PopoverContent align="end" collisionPadding={12} className="w-72 max-w-[calc(100vw-1.5rem)] p-2">
-                          {toFavoritesVisible.length === 0 ? (
+                          <div className="mb-2 flex gap-1 rounded-md bg-muted/50 p-0.5">
+                            {(["project", "favorites"] as const).map((tab) => (
+                              <button
+                                key={tab}
+                                type="button"
+                                onClick={() => setToPickerTab(tab)}
+                                className={[
+                                  "flex-1 rounded-sm px-2 py-1.5 text-xs font-semibold capitalize transition-colors",
+                                  toPickerTab === tab
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground",
+                                ].join(" ")}
+                              >
+                                {tab === "project" ? `Project (${toProjectVisible.length})` : "Favorites"}
+                              </button>
+                            ))}
+                          </div>
+                          {toPickerTab === "project" ? (
+                            toProjectVisible.length === 0 ? (
+                              <p className="px-2 py-2.5 text-xs text-muted-foreground">
+                                No client emails saved for this project — add them in RFI Settings → Project Addresses.
+                              </p>
+                            ) : (
+                              <ul className="rfi-scroll max-h-56 space-y-0.5 overflow-y-auto">
+                                {toProjectVisible.map((email) => (
+                                  <li key={email}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setRecipientEmail(email);
+                                        setIsToPickerOpen(false);
+                                      }}
+                                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
+                                    >
+                                      <span className="truncate">{email}</span>
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            )
+                          ) : toFavoritesVisible.length === 0 ? (
                             <p className="px-2 py-2.5 text-xs text-muted-foreground">
                               No favorites yet — star a Send To address in RFI Settings, or just type a new one.
                             </p>
@@ -2573,7 +3090,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
         <div ref={fieldsRef} data-compact={isSidebarMinimized ? "true" : "false"}
           className="rfi-scroll rfi-cols rfi-stagger pb-1 pr-0.5">
           {/* ───────────── LEFT COLUMN (flattened into the grid) ───────────── */}
-          <div className="contents">
+          <div className="rfi-col-left">
             {/* CC only — the To field now lives in the header above. */}
             <Popover
               open={isCcListOpen}
@@ -2583,7 +3100,21 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
               }}
             >
             <PopoverPrimitive.Anchor asChild>
-            <section className="rfi-cell-cc rfi-panel rounded-xl border rfi-bd bg-background/60">
+            <section
+              onDragOver={handleCcDragOver}
+              onDragEnter={handleCcDragOver}
+              onDragLeave={handleCcDragLeave}
+              onDrop={handleCcDrop}
+              className={[
+                "rfi-cell-cc rfi-panel relative rounded-xl border rfi-bd bg-background/60 transition-[box-shadow,background-color] duration-200",
+                isCcDragOver ? "bg-primary/5 shadow-[0_0_0_2px_hsl(var(--primary)/0.55)]" : "",
+              ].join(" ")}
+            >
+              {isCcDragOver && (
+                <div className="pointer-events-none absolute inset-0 z-10 flex animate-in fade-in items-center justify-center rounded-xl border-2 border-dashed border-primary/60 bg-primary/10 text-xs font-bold text-primary">
+                  Drop to add to CC
+                </div>
+              )}
               <div className="flex items-start gap-2 px-3">
                 <Label htmlFor="rfi-cc" className={`${LABEL_CLASS} rfi-cc-lbl shrink-0`}>
                   CC
@@ -2670,22 +3201,28 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                   )}
                 </div>
 
-                <Popover open={isCcPickerOpen} onOpenChange={setIsCcPickerOpen}>
+                <Popover
+                  open={isCcPickerOpen}
+                  onOpenChange={(open) => {
+                    if (open) setCcPickerTab(projectCcContacts.length > 0 ? "project" : "favorites");
+                    setIsCcPickerOpen(open);
+                  }}
+                >
                   <PopoverTrigger asChild>
                     <button
                       type="button"
                       disabled={isBusy}
-                      title="Pick CC addresses"
+                      title="Saved CC addresses (Project · Favorites · Employees)"
                       className="rfi-cc-pick flex shrink-0 items-center gap-1 rounded-full border rfi-bd bg-background font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
                     >
-                      <Star className="h-3 w-3 text-amber-500" />
-                      Pick
+                      <Contact className="h-3 w-3 text-primary" />
+                      Saved
                       <ChevronDown className="h-3 w-3" />
                     </button>
                   </PopoverTrigger>
                   <PopoverContent align="end" collisionPadding={12} className="w-72 max-w-[calc(100vw-1.5rem)] p-2">
                     <div className="mb-2 flex gap-1 rounded-md bg-muted/50 p-0.5">
-                      {(["favorites", "employees"] as const).map((tab) => (
+                      {(["project", "favorites", "employees"] as const).map((tab) => (
                         <button
                           key={tab}
                           type="button"
@@ -2697,12 +3234,36 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                               : "text-muted-foreground hover:text-foreground",
                           ].join(" ")}
                         >
-                          {tab}
+                          {tab === "project" ? `Project (${ccProjectVisible.length})` : tab}
                         </button>
                       ))}
                     </div>
 
-                    {ccPickerTab === "employees" ? (
+                    {ccPickerTab === "project" ? (
+                      ccProjectVisible.length === 0 ? (
+                        <p className="px-2 py-2.5 text-xs text-muted-foreground">
+                          No client emails saved for this project — add them in RFI Settings → Project Addresses.
+                        </p>
+                      ) : (
+                        <ul className="rfi-scroll max-h-56 space-y-0.5 overflow-y-auto">
+                          {ccProjectVisible.map((email) => {
+                            const checked = ccEmails.some((e) => e.toLowerCase() === email.toLowerCase());
+                            return (
+                              <li key={email}>
+                                <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60">
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={() => toggleCcFavorite(email)}
+                                    className="h-4 w-4"
+                                  />
+                                  <span className="truncate">{email}</span>
+                                </label>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )
+                    ) : ccPickerTab === "employees" ? (
                       (() => {
                         const employeesWithEmail = employees.filter(
                           (emp): emp is EmployeeOption & { email: string } =>
@@ -2717,7 +3278,12 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                               const checked = ccEmails.some((c) => c.toLowerCase() === emp.email.toLowerCase());
                               return (
                                 <li key={emp.id}>
-                                  <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60">
+                                  <label
+                                    draggable
+                                    onDragStart={(e) => writeCcDrag(e, [emp.email.trim().toLowerCase()])}
+                                    title="Click to tick, or drag onto the CC box"
+                                    className="flex cursor-grab items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60 active:cursor-grabbing"
+                                  >
                                     <Checkbox
                                       checked={checked}
                                       onCheckedChange={() => toggleCcFavorite(emp.email)}
@@ -2763,6 +3329,15 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                   </PopoverContent>
                 </Popover>
               </div>
+
+              {/* My CC groups for this project - click or drag a bubble to CC all its members */}
+              <RfiCcGroupBubbles
+                groups={ccGroups}
+                selected={ccSet}
+                blocked={ccBlocked}
+                disabled={isBusy}
+                onToggle={toggleCcGroup}
+              />
             </section>
             </PopoverPrimitive.Anchor>
 
@@ -2778,13 +3353,15 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
 
             {/* Discipline · Priority — one slim row of compact pills (Team Scope lives in the header, above "To") */}
             <section
-              className="rfi-cell-classify rfi-classify"
+              className="rfi-cell-classify"
               data-compact={isSidebarMinimized ? "true" : "false"}
               aria-label="RFI classification"
             >
+              <div className="rfi-classify">
               <GlassSelect
                 label="Discipline"
                 className="rfi-disc"
+                dwellSelectMs={700}
                 value={discipline}
                 options={disciplineOptions}
                 onChange={setDiscipline}
@@ -2793,11 +3370,13 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
               <GlassSelect
                 label="Priority"
                 className="rfi-disc"
+                dwellSelectMs={700}
                 value={priority}
                 options={priorityOptions}
                 onChange={setPriority}
                 disabled={isBusy}
               />
+              </div>
               {!projectHasRfis && (
                 <label
                   className="rfi-start-num"
@@ -2825,29 +3404,119 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
             </section>
 
             {/* Subject */}
-            <section className="rfi-cell-subject space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="rfi-subject" className={LABEL_CLASS}>
+            <section className="rfi-cell-subject space-y-1.5">
+              <div className="rfi-inset">
+                <Label htmlFor="rfi-subject" className={`${LABEL_CLASS} rfi-inset-lbl`}>
                   Subject line <span className="text-destructive">*</span>
                 </Label>
-                <span className="rfi-xs font-mono text-muted-foreground/70">{subject.length}/200</span>
+                <span className="rfi-inset-count font-mono text-muted-foreground/70">{subject.length}/200</span>
+                <Input
+                  id="rfi-subject"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="e.g. Structural Beam Connection Drawing Specs"
+                  maxLength={200}
+                  disabled={isBusy}
+                  className={`${FIELD_CLASS} rfi-inset-input`}
+                />
               </div>
-              <Input
-                id="rfi-subject"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="e.g. Structural Beam Connection Drawing Specs"
-                maxLength={200}
-                disabled={isBusy}
-                className={FIELD_CLASS}
-              />
-              {/* Internal only: should the RFI travel by email or stay inside the app? */}
-              {isInternal && (
-                <div className="mt-2 space-y-1.5" role="radiogroup" aria-label="How should this RFI be exchanged?">
+              {/* Internal only, shown FIRST: how the person it is sent to ("Person B") handles it */}
+              {recipientIsOwner && (
+                <div className="mt-2 space-y-1.5" role="radiogroup" aria-label="What should the person you send it to do?">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Exchange this RFI
+                    How should it reach them?
                   </div>
-                  <div className="grid gap-1.5 sm:grid-cols-2">
+                  <div className="grid gap-1.5" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={!draftRouteOn}
+                      disabled={isBusy}
+                      onClick={() => setDraftRoute(false)}
+                      className={`rounded-lg border p-2 text-left transition-all disabled:opacity-60 ${
+                        !draftRouteOn
+                          ? "border-sky-500/60 bg-sky-500/10 ring-1 ring-sky-500/40"
+                          : "border-border/70 hover:bg-muted/40"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+                        <ClipboardCheck className="h-3.5 w-3.5 text-sky-600" /> Check &amp; approve
+                      </div>
+                      <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">
+                        They review it, then approve it or send it back to you.
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={draftRouteOn}
+                      disabled={isBusy}
+                      onClick={() => setDraftRoute(true)}
+                      className={`relative overflow-hidden rounded-lg border p-2 text-left transition-all disabled:opacity-60 ${
+                        draftRouteOn
+                          ? "border-violet-500/60 bg-gradient-to-br from-violet-500/15 via-indigo-500/10 to-emerald-500/10 ring-1 ring-violet-500/40"
+                          : "border-border/70 hover:bg-muted/40"
+                      }`}
+                    >
+                      <span
+                        className="mb-1 inline-block whitespace-nowrap rounded-full bg-violet-500/15 px-1.5 py-px text-[9px] font-bold uppercase text-violet-600"
+                        style={{ overflowWrap: "normal", wordBreak: "keep-all" }}
+                      >
+                        Fast
+                      </span>
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+                        <FastForward className="h-3.5 w-3.5 shrink-0 text-violet-600" /> Send as draft to Owner
+                      </div>
+                      <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">
+                        It goes straight to the Owner as a draft. They edit it and send it to the client.
+                      </p>
+                    </button>
+                  </div>
+                  {/* Where it goes: You -> person it is sent to -> Approval / Draft -> Owner */}
+                  <div className="rfi-route" role="img" aria-label={`Route: You, ${recipientEmail.trim() || "Person B"}, ${draftRouteOn ? "Draft" : "Approval"}, Owner`}>
+                    <span className="rfi-route-node">
+                      <User aria-hidden="true" />
+                      You
+                    </span>
+                    <span className="rfi-route-line" aria-hidden="true" />
+                    <span className="rfi-route-node rfi-route-mid" title={recipientEmail.trim() || "Person B"}>
+                      <Mail aria-hidden="true" />
+                      <span className="whitespace-nowrap">{recipientEmail.trim() || "Person B"}</span>
+                    </span>
+                    <span className="rfi-route-line" aria-hidden="true" />
+                    <span className={`rfi-route-node ${draftRouteOn ? "is-draft" : "is-approval"}`}>
+                      {draftRouteOn ? <Pencil aria-hidden="true" /> : <ClipboardCheck aria-hidden="true" />}
+                      {draftRouteOn ? "Draft" : "Approval"}
+                    </span>
+                    <span className="rfi-route-line" aria-hidden="true" />
+                    <span className="rfi-route-node is-owner">
+                      <Crown aria-hidden="true" />
+                      Owner
+                    </span>
+                  </div>
+                </div>
+              )}
+              {draftRouteOn && (
+                <p className="mt-2 flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
+                  <MessageSquare className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+                  A draft stays inside the app (no email). The Owner edits it and the email goes out only when they send it to the client.
+                </p>
+              )}
+
+              {/* Internal only: should the RFI travel by email or stay inside the app? */}
+              {isInternal && !draftRouteOn && (
+                <div className="mt-2 space-y-1.5" role="radiogroup" aria-label="How should this RFI be exchanged?">
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <span>Exchange this RFI</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 normal-case tracking-normal ${
+                        inAppOnly ? "bg-emerald-500/15 text-emerald-600" : "bg-sky-500/15 text-sky-600"
+                      }`}
+                    >
+                      Selected: {inAppOnly ? "Without mail (in-app only)" : "With mail (email sent)"}
+                    </span>
+                  </div>
+                  <div className="grid gap-1.5" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
                     <button
                       type="button"
                       role="radio"
@@ -2881,7 +3550,10 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                     >
                       <div className="flex items-center gap-1.5 text-[11px] font-semibold">
                         <MessageSquare className="h-3.5 w-3.5 text-emerald-600" /> Without mail
-                        <span className="ml-auto rounded-full bg-emerald-500/15 px-1.5 py-px text-[9px] font-bold uppercase text-emerald-600">
+                        <span
+                          className="ml-auto shrink-0 whitespace-nowrap rounded-full bg-emerald-500/15 px-1.5 py-px text-[9px] font-bold uppercase text-emerald-600"
+                          style={{ overflowWrap: "normal", wordBreak: "keep-all" }}
+                        >
                           In-app
                         </span>
                       </div>
@@ -2893,74 +3565,6 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                 </div>
               )}
 
-              {/* Internal only: how the person it is sent to ("Person B") handles it */}
-              {recipientIsOwner && (
-                <div className="mt-2 space-y-1.5" role="radiogroup" aria-label="What should the person you send it to do?">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    How should it reach them?
-                  </div>
-                  <div className="grid gap-1.5 sm:grid-cols-2">
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={!draftRouteOn}
-                      disabled={isBusy}
-                      onClick={() => setDraftRoute(false)}
-                      className={`rounded-lg border p-2 text-left transition-all disabled:opacity-60 ${
-                        !draftRouteOn
-                          ? "border-sky-500/60 bg-sky-500/10 ring-1 ring-sky-500/40"
-                          : "border-border/70 hover:bg-muted/40"
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 text-[11px] font-semibold">
-                        <ClipboardCheck className="h-3.5 w-3.5 text-sky-600" /> Check &amp; approve
-                      </div>
-                      <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">
-                        They review it, then approve it or send it back to you.
-                      </p>
-                    </button>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={draftRouteOn}
-                      disabled={isBusy}
-                      onClick={() => setDraftRoute(true)}
-                      className={`relative overflow-hidden rounded-lg border p-2 text-left transition-all disabled:opacity-60 ${
-                        draftRouteOn
-                          ? "border-violet-500/60 bg-gradient-to-br from-violet-500/15 via-indigo-500/10 to-emerald-500/10 ring-1 ring-violet-500/40"
-                          : "border-border/70 hover:bg-muted/40"
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 text-[11px] font-semibold">
-                        <FastForward className="h-3.5 w-3.5 text-violet-600" /> Send as draft to Owner
-                        <span className="ml-auto rounded-full bg-violet-500/15 px-1.5 py-px text-[9px] font-bold uppercase text-violet-600">
-                          Fast
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">
-                        It goes straight to the Owner as a draft. They edit it and send it to the client.
-                      </p>
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
-                    <span className="rounded-full border border-border px-1.5 py-px font-semibold">You</span>
-                    <span>→</span>
-                    <span className="max-w-[160px] truncate rounded-full border border-border px-1.5 py-px font-semibold">
-                      {recipientEmail.trim() || "Person B"}
-                    </span>
-                    <span>→</span>
-                    <span
-                      className={`rounded-full border px-1.5 py-px font-semibold ${
-                        draftRouteOn ? "border-violet-500/50 text-violet-600" : "border-border"
-                      }`}
-                    >
-                      {draftRouteOn ? "Draft" : "Approval"}
-                    </span>
-                    <span>→</span>
-                    <span className="rounded-full border border-border px-1.5 py-px font-semibold">Owner</span>
-                  </div>
-                </div>
-              )}
             
               {isInternal && !recipientIsOwner && recipientEmail.trim() && (
                 <p className="mt-2 text-[10.5px] text-muted-foreground">
@@ -2968,13 +3572,95 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                 </p>
               )}
             </section>
+
+            {/* Attachment — slim strip, stretches to fill any leftover height */}
+            <section className="rfi-cell-attach">
+              <input
+                id="rfi-attachment"
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={handleFileChange}
+                disabled={isBusy}
+                className="hidden"
+              />
+              <div className="rfi-attach-slot">
+                {!file ? (
+                  <label
+                    htmlFor="rfi-attachment"
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragging(true);
+                    }}
+                    onDragLeave={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsDragging(false);
+                    }}
+                    onDrop={handleDrop}
+                    onMouseEnter={() => setIsUploadHovered(true)}
+                    onMouseLeave={() => setIsUploadHovered(false)}
+                    className={[
+                      "rfi-drop rfi-drop-pad group relative flex cursor-pointer flex-row items-center justify-center rounded-xl border border-dashed text-left",
+                      isBusy ? "pointer-events-none opacity-60" : "",
+                      isDragging
+                        ? "rfi-drag-active"
+                        : "rfi-bd bg-background/30 hover:border-primary/50 hover:bg-accent/20",
+                    ].join(" ")}
+                  >
+                    <AnimatedUploadIcon
+                      size="md"
+                      className="rfi-up-ico shrink-0 transition-transform duration-200 group-hover:-translate-y-0.5"
+                      triggerParentHover
+                      isParentHovered={isUploadHovered || isDragging}
+                    />
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className={`${LABEL_CLASS} rfi-attach-lbl`}>
+                        Attachment (PDF) <span className="text-destructive">*</span>
+                      </span>
+                      <span className="rfi-sm font-medium text-foreground">
+                        <span className="font-semibold text-primary group-hover:underline">Click to upload</span> or drop a PDF
+                        <span className="rfi-xs font-normal text-muted-foreground/70"> · one file</span>
+                      </span>
+                    </span>
+                  </label>
+                ) : (
+                  <div className="animate-rfi-pop rfi-file-pad flex w-full items-center justify-between gap-2 rounded-xl border border-primary/40 bg-primary/10 shadow-sm">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <FileCheck className="rfi-file-ico shrink-0 text-primary" />
+                      <div className="flex min-w-0 flex-col gap-0.5">
+                        <span className={`${LABEL_CLASS} rfi-attach-lbl`}>
+                          Attachment (PDF) <span className="text-destructive">*</span>
+                        </span>
+                        <span className="rfi-sm truncate font-semibold text-foreground" title={file.name}>
+                          {file.name}
+                        </span>
+                        <span className="rfi-xs text-muted-foreground">
+                          {(file.size / (1024 * 1024)).toFixed(2)} MB
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      disabled={isBusy}
+                      onClick={clearFile}
+                      aria-label="Remove attachment"
+                      className="rfi-file-x shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </section>
           </div>
 
           {/* ───────────── RIGHT COLUMN (flattened into the grid) ───────────── */}
           <div className="contents">
             {/* Email body — full width of its column, grows to show the whole text */}
             <section className="rfi-cell-body">
-              <div className="flex flex-nowrap items-center justify-between gap-2">
+             <div className="rfi-body-frame">
+              <div className="rfi-body-head flex flex-nowrap items-center justify-between gap-2">
                 <Label className={`${LABEL_CLASS} flex min-w-0 items-center gap-1.5 whitespace-nowrap`}>
                   <span className="truncate">Email body</span>
                   {isBodyPreviewLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/60" />}
@@ -3021,7 +3707,7 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                 {!isEditingBody ? (
                   <div
                     onClick={() => !isBusy && startEditingBody()}
-                    className="rfi-scroll rfi-body-text cursor-text whitespace-pre-wrap break-words rounded-xl border rfi-bd bg-background/60 text-foreground/80 transition-colors hover:border-primary/40 hover:bg-accent/20"
+                    className="rfi-scroll rfi-body-text cursor-text whitespace-pre-wrap break-words text-foreground/80 transition-colors hover:bg-accent/20"
                   >
                     {emailBody || (isBodyPreviewLoading ? "Loading default email body…" : "—")}
                   </div>
@@ -3033,92 +3719,30 @@ export const RfiForm = ({ projectName, initialRecipientEmail, initialCcEmails, o
                     onChange={(e) => setEmailBodyDraft(e.target.value)}
                     disabled={isBusy}
                     placeholder="Email body sent along with the attachment…"
-                    className="rfi-scroll rfi-body-text w-full resize-none rounded-xl border-primary/40 bg-background focus-visible:ring-1 focus-visible:ring-primary/50"
+                    className="rfi-scroll rfi-body-text w-full resize-none"
                   />
                 )}
               </div>
-            </section>
-
-            {/* Attachment — slim strip, stretches to fill any leftover height */}
-            <section className="rfi-cell-attach">
-              <Label className={LABEL_CLASS}>
-                Attachment (PDF) <span className="text-destructive">*</span>
-              </Label>
-              <input
-                id="rfi-attachment"
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf,.pdf"
-                onChange={handleFileChange}
-                disabled={isBusy}
-                className="hidden"
-              />
-              <div className="rfi-attach-slot">
-                {!file ? (
-                  <label
-                    htmlFor="rfi-attachment"
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setIsDragging(true);
-                    }}
-                    onDragLeave={(e) => {
-                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsDragging(false);
-                    }}
-                    onDrop={handleDrop}
-                    onMouseEnter={() => setIsUploadHovered(true)}
-                    onMouseLeave={() => setIsUploadHovered(false)}
-                    className={[
-                      "rfi-drop rfi-drop-pad group relative flex cursor-pointer flex-row items-center justify-center rounded-xl border border-dashed text-left",
-                      isBusy ? "pointer-events-none opacity-60" : "",
-                      isDragging
-                        ? "rfi-drag-active"
-                        : "rfi-bd bg-background/30 hover:border-primary/50 hover:bg-accent/20",
-                    ].join(" ")}
-                  >
-                    <AnimatedUploadIcon
-                      size="md"
-                      className="rfi-up-ico shrink-0 transition-transform duration-200 group-hover:-translate-y-0.5"
-                      triggerParentHover
-                      isParentHovered={isUploadHovered || isDragging}
-                    />
-                    <span className="flex min-w-0 flex-col">
-                      <span className="rfi-sm font-medium text-foreground">
-                        <span className="font-semibold text-primary group-hover:underline">Click to upload</span> or drop a PDF
-                      </span>
-                      <span className="rfi-xs text-muted-foreground/70">One file · PDF only</span>
-                    </span>
-                  </label>
-                ) : (
-                  <div className="animate-rfi-pop rfi-file-pad flex w-full items-center justify-between gap-2 rounded-xl border border-primary/40 bg-primary/10 shadow-sm">
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <FileCheck className="rfi-file-ico shrink-0 text-primary" />
-                      <div className="flex min-w-0 flex-col">
-                        <span className="rfi-sm truncate font-semibold text-foreground" title={file.name}>
-                          {file.name}
-                        </span>
-                        <span className="rfi-xs text-muted-foreground">
-                          {(file.size / (1024 * 1024)).toFixed(2)} MB
-                        </span>
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      disabled={isBusy}
-                      onClick={clearFile}
-                      aria-label="Remove attachment"
-                      className="rfi-file-x shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-              </div>
+             </div>
             </section>
           </div>
         </div>
       </form>
+
+      {/* Outside the <form> on purpose: the dialog has its own form, and it must never submit this one. */}
+      <RfiImportOldDialog
+        open={importOldOpen}
+        onOpenChange={setImportOldOpen}
+        projectName={projectName}
+        coStyle={coStyle}
+        senderName={currentEmployee?.username ? formatDisplayName(currentEmployee.username) : undefined}
+        onImported={() => {
+          // The project now has an RFI, so "Start RFI #" no longer applies; the list and defaults reload.
+          setProjectHasRfis(true);
+          setStartingNumber("");
+          onSent();
+        }}
+      />
     </div>
   );
 };

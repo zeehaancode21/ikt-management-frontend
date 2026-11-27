@@ -44,9 +44,11 @@ export type RfiStatus =
   | "SENT"
   // OPEN is what every new RFI starts as (SENT is its old name, same meaning).
   | "OPEN"
-  // Internal workflow: checker approved the internal RFI / unsent external draft of the Owner.
+  // Internal workflow: the Checker approved the iRFI; it now waits for the Owner to send it to the client.
   | "INTERNAL_APPROVED"
-  | "DRAFTING";
+  | "DRAFTING"
+  // Only SOME of the questions were answered; the rest is still open.
+  | "PARTIALLY_ANSWERED";
 
 export const RFI_STATUSES: RfiStatus[] = [
   "DRAFT",
@@ -54,6 +56,7 @@ export const RFI_STATUSES: RfiStatus[] = [
   "ISSUED",
   "AWAITING_RESPONSE",
   "RESPONSE_RECEIVED",
+  "PARTIALLY_ANSWERED",
   "UNDER_REVIEW",
   "OUTSTANDING",
   "CLOSED",
@@ -90,7 +93,10 @@ export interface RfiAttachment {
 }
 
 // Matches backend RfiTimelineEventDto.java. `type` is one of:
-// RFI_CREATED | EMAIL_SENT | REPLY_RECEIVED | STATUS_CHANGED
+// RFI_CREATED | EMAIL_SENT | REPLY_RECEIVED | STATUS_CHANGED | PROCESS_TRANSITION
+// PROCESS_TRANSITION is the single marker row added when an internal iRFI is approved by the
+// Owner and sent to the client: everything above it is the internal history, everything below it
+// follows the external process.
 export interface RfiTimelineEvent {
   type: string;
   timestamp: string;
@@ -116,6 +122,72 @@ export interface RfiSyncResult {
   success: boolean;
   newMessagesCount: number;
   errorMessage?: string | null;
+  updatedRfi?: Rfi;
+}
+
+// ── Link from Inbox ─────────────────────────────────────────────────────
+// Match backend RfiInboxPageDto.java / RfiLinkEmailsResultDto.java.
+export type RfiInboxScope = "PARTICIPANTS" | "DOMAIN" | "ANYONE";
+
+export interface RfiInboxItem {
+  messageId: string;
+  threadId?: string | null;
+  fromName: string;
+  fromEmail?: string | null;
+  to?: string | null;
+  subject: string;
+  snippet?: string | null;
+  /** ISO local date-time, e.g. 2026-11-03T14:05:00 */
+  date?: string | null;
+  likelyHasAttachments: boolean;
+  /** Sender is on this RFI's To / CC list. */
+  fromParticipant: boolean;
+  alreadyLinked: boolean;
+  linkedToThisRfi: boolean;
+  linkedRfiNumber?: string | null;
+}
+
+/** ONE inbox mail in full (View window). Match backend RfiInboxMessageDto.java. */
+export interface RfiInboxMessage {
+  messageId: string;
+  threadId?: string | null;
+  from?: string | null;
+  to?: string | null;
+  cc?: string | null;
+  subject?: string | null;
+  /** ISO local date-time */
+  date?: string | null;
+  /** Full plain-text body (quoted history kept). */
+  bodyText?: string | null;
+  /** HTML body - render ONLY inside a sandboxed iframe. */
+  bodyHtml?: string | null;
+  truncated: boolean;
+  attachments: { filename: string; mimeType?: string | null; size: number }[];
+}
+
+export interface RfiInboxPage {
+  items: RfiInboxItem[];
+  nextPageToken?: string | null;
+  appliedScope: RfiInboxScope;
+  appliedFilterText: string;
+}
+
+// The statuses an OLD RFI can be added with ("Add old RFI"). Same names as the backend's RfiServiceImpl#OLD_RFI_STATUSES.
+export const OLD_RFI_STATUSES: RfiStatus[] = [
+  "OPEN",
+  "RESPONSE_RECEIVED",
+  "PARTIALLY_ANSWERED",
+  "UNDER_REVIEW",
+  "OUTSTANDING",
+  "RESUBMITTED",
+  "REOPENED",
+  "CLOSED",
+];
+
+export interface RfiLinkEmailsResult {
+  requested: number;
+  linked: number;
+  skipped: { messageId: string; reason: string }[];
   updatedRfi?: Rfi;
 }
 
@@ -153,8 +225,36 @@ export interface Rfi {
   sourceRfiId?: number | null;
   // On the approved internal RFI: the external draft / RFI generated from it.
   forwardedRfiId?: number | null;
+  // Chosen on the New RFI page: true = the person it was sent to ("Person B") converts it to a draft and
+  // sends it straight to the Owner (no approve step). false/absent = normal Checker review.
+  draftRoute?: boolean | null;
+  // ── Fast-track: converted to a draft and sent straight to the Owner (Checker skipped) ──
+  // Both null on the normal Checker-approved path.
+  directToOwnerBy?: string | null;
+  // The Checker who updated the email subject / body / attachment while approving, and what they changed
+  // (e.g. "subject, email body, attachment"). Shown to the Owner. Null = the Checker changed nothing.
+  checkerUpdateBy?: string | null;
+  checkerUpdateItems?: string | null;
+  directToOwnerAt?: string | null;
+  // ── Internal -> External transition (the SAME RFI converts in place) ──
+  // Set only on an RFI that started as an internal "iRFI" and was sent to the client by its Owner.
+  transitionedAt?: string | null;
+  transitionedBy?: string | null;
+  // The Drafter (sentBy becomes the Owner whose Gmail sent it to the client).
+  draftedBy?: string | null;
+  // The number it had while internal, e.g. "iRFI#005" (rfiNumber is now "RFI#005").
+  internalRfiNumber?: string | null;
   // What the logged-in user is on THIS RFI in the workflow; null when nothing.
   internalRole?: RfiInternalRole | null;
+  // Internal RFIs only, chosen when the RFI is created. true = "Without mail": the RFI and every reply
+  // stay inside the app (no email, no Gmail thread). false/absent = "With mail": everything goes by email
+  // inside ONE Gmail thread. Becomes false when the Owner sends the RFI to the client.
+  inAppOnly?: boolean;
+  // true = an OLD RFI: created before the project used this app and added with "Add old RFI" (only its latest
+  // status, subject and attachment were entered - not its history). Shown with an "Old RFI" tag everywhere.
+  // With mail (inAppOnly false): the email thread starts with the first update; it then goes to the saved To / CC.
+  // Without mail (inAppOnly true): every update stays inside the app.
+  legacyRfi?: boolean;
   createdAt: string;
   // Reflects Rfi.senderEmail / Rfi.senderName on the backend entity — the
   // sender actually used as Reply-To, plus the cosmetic display label.
@@ -166,6 +266,11 @@ export interface Rfi {
   responseReceivedAt?: string | null;
   // Optional free-text notes a user can add when reviewing a response.
   responseNotes?: string | null;
+ // types/rfi.ts - in the Rfi interface, right below lastUpdatedAt, add:
+  lastUpdatedAtUtc?: string | null;
+
+// (the viewerListRole line from before stays as it is:)
+  viewerListRole?: "TO" | "CC" | "FROM" | "DRAFT";
 }
 
 export const RFI_DISCIPLINES: RfiDiscipline[] = [
@@ -239,4 +344,78 @@ export interface RfiGmailSettings {
   // attention" (e.g. after a failed "Check token" call).
   tokenValid?: boolean;
   tokenExpiryDate?: string;
+}
+
+// ── Per-project Send To / CC addresses ────────────────────────────────────
+// Matches backend RfiProjectContactsDto (RfiProjectContactsController,
+// /api/rfi-settings/project-contacts). Plain lower-cased strings only.
+export interface RfiProjectContacts {
+  projectName: string;
+  /** The client's email addresses for this project - ONE list (no To / CC split). */
+  emails: string[];
+  /** Who saved it last (set by the server; the emails are shared by everybody with RFI access). */
+  updatedBy?: string | null;
+  /** LEGACY mirrors still sent by the server for older app versions. Do not use. */
+  to?: string[];
+  cc?: string[];
+}
+
+/** What the Settings screen sends when it saves one project's email list. */
+export interface RfiProjectContactsSave {
+  projectName: string;
+  emails: string[];
+}
+
+// ── Custom CC groups ─────────────────────────────────────────────────────
+// Matches backend RfiCcGroupDto (RfiCcGroupController, /api/rfi-settings/cc-groups).
+// PRIVATE to the logged-in user AND to one project: "my group 'Structural team' on project X".
+// Shown as a bubble in the CC area of Create RFI for that project only.
+
+/** Bubble colour keys accepted by the backend (RfiCcGroupService.COLORS). */
+export type RfiCcGroupColor = "teal" | "blue" | "violet" | "rose" | "amber" | "emerald" | "sky" | "orange";
+
+export const RFI_CC_GROUP_COLOR_KEYS: RfiCcGroupColor[] = [
+  "teal",
+  "blue",
+  "violet",
+  "rose",
+  "amber",
+  "emerald",
+  "sky",
+  "orange",
+];
+
+/** hex per colour key - used with the `${hex}1F` alpha-suffix trick for soft backgrounds. */
+export const RFI_CC_GROUP_COLORS: Record<RfiCcGroupColor, { label: string; hex: string }> = {
+  teal: { label: "Teal", hex: "#0d9488" },
+  blue: { label: "Blue", hex: "#2563eb" },
+  violet: { label: "Violet", hex: "#7c3aed" },
+  rose: { label: "Rose", hex: "#e11d48" },
+  amber: { label: "Amber", hex: "#d97706" },
+  emerald: { label: "Emerald", hex: "#059669" },
+  sky: { label: "Sky", hex: "#0284c7" },
+  orange: { label: "Orange", hex: "#ea580c" },
+};
+
+export const rfiCcGroupHex = (color?: string | null): string =>
+  RFI_CC_GROUP_COLORS[(color ?? "teal") as RfiCcGroupColor]?.hex ?? RFI_CC_GROUP_COLORS.teal.hex;
+
+export interface RfiCcGroup {
+  id: number;
+  projectName: string;
+  name: string;
+  /** lower-cased, A-Z, no duplicates (the server cleans them) */
+  emails: string[];
+  /** true = put in CC automatically when starting an RFI on this project */
+  autoSelect: boolean;
+  color: RfiCcGroupColor | string;
+}
+
+/** What Settings sends to create (projectName needed) or replace (id in the URL) a group. */
+export interface RfiCcGroupSave {
+  projectName?: string;
+  name: string;
+  emails: string[];
+  autoSelect: boolean;
+  color: string;
 }

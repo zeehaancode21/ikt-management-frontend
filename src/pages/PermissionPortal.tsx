@@ -34,6 +34,7 @@ import { Spinner, FullSpinner } from "@/components/Spinner";
 import { StatusBadge } from "@/components/StatusBadge";
 import { UsageAnalyticsChart } from "@/components/UsageAnalyticsChart";
 import { RejectReasonModal } from "@/components/RejectReasonModal";
+import { TimingTag, TimingColumn, getPermissionTiming, useNow } from "@/components/RequestTiming";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -629,9 +630,12 @@ const PermissionCard = ({
   onApprove,
   onReject,
   actingId,
+  showTiming = false,
 }: {
   p: Permission;
   showEmployee?: boolean;
+  // Owner views only: show the "Time passed" tag / upcoming countdown column.
+  showTiming?: boolean;
   onRequestChange?: (p: Permission) => void;
   onCancelReapproval?: (p: Permission) => void;
   cancelingId?: string | number | null;
@@ -643,12 +647,17 @@ const PermissionCard = ({
   const isReapproval = p.status?.toUpperCase() === "REAPPROVAL_PENDING";
   const isBusy = actingId === p.id;
   const isCanceling = cancelingId === p.id;
+  const now = useNow(showTiming);
+  const timing = showTiming ? getPermissionTiming(p, now) : null;
+  const awaitingDecision = ["PENDING", "REAPPROVAL_PENDING"].includes((p.status || "").toUpperCase());
 
   return (
     <div className="leave-card pfx-card rounded-xl border border-border/60 bg-card p-4 shadow-sm" data-status={(p.status || "").toLowerCase()}>
       <span className="pfx-shine" aria-hidden="true" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+      <div className="min-w-0 flex-1">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           {showEmployee && (
             <div
               className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400"
@@ -661,6 +670,7 @@ const PermissionCard = ({
           <span className={`inline-flex flex-shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${colors.bg} ${colors.text} ${colors.border}`}>
             {PERMISSION_TYPE_LABELS[p.permissionType] ?? p.permissionType}
           </span>
+          <TimingTag timing={timing} kind="permission" highlight={awaitingDecision} />
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
           <span className="pfx-badge-pop inline-flex items-center gap-1 rounded-lg bg-muted px-2.5 py-1 text-sm font-bold text-foreground">
@@ -748,6 +758,9 @@ const PermissionCard = ({
           )}
         </div>
       )}
+      </div>
+      <TimingColumn timing={timing} kind="permission" now={now} />
+      </div>
     </div>
   );
 };
@@ -1865,7 +1878,7 @@ const OwnerView = () => {
             ) : (
               <div className="space-y-3">
                 {permissions.map((p) => (
-                  <PermissionCard key={p.id} p={p} showEmployee onApprove={(perm) => act(perm.id, "APPROVED")} onReject={(perm) => setRejectTarget(perm)} actingId={actingId} />
+                  <PermissionCard key={p.id} p={p} showEmployee showTiming onApprove={(perm) => act(perm.id, "APPROVED")} onReject={(perm) => setRejectTarget(perm)} actingId={actingId} />
                 ))}
               </div>
             )}
@@ -2006,7 +2019,7 @@ const OwnerView = () => {
                 ) : (
                   <div className="space-y-3">
                     {filteredEmpPermissions.map((p) => (
-                      <PermissionCard key={p.id} p={p} onApprove={(perm) => act(perm.id, "APPROVED")} onReject={(perm) => setRejectTarget(perm)} actingId={actingId} />
+                      <PermissionCard key={p.id} p={p} showTiming onApprove={(perm) => act(perm.id, "APPROVED")} onReject={(perm) => setRejectTarget(perm)} actingId={actingId} />
                     ))}
                   </div>
                 )}

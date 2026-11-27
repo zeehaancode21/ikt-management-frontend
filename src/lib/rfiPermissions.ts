@@ -11,7 +11,8 @@ export const isRfiSender = (rfi: Rfi, authName?: string | null): boolean => {
   const me = norm(authName);
   if (!me) return false;
   const candidates = [rfi.senderName, rfi.sentBy, rfi.senderEmail?.split("@")[0]].map(norm).filter(Boolean);
-  return candidates.some((c) => c === me || c.includes(me) || me.includes(c));
+  // Exact match only (was a loose "contains" match, so user "al" matched sender "alex").
+  return candidates.some((c) => c === me);
 };
 
 /**
@@ -19,9 +20,13 @@ export const isRfiSender = (rfi: Rfi, authName?: string | null): boolean => {
  *  - anyone on the To or CC list (backend sets canModify = true), and
  *  - the sender of the RFI, even if they are not on To/CC.
  * Everyone else is view-only.
+ * A person the owner switched to RFI "View only" (Admin Console -> Access Control) can never
+ * modify anything: pass `viewOnly` (from useRfiAccess) and it overrides everything above.
  */
-export const canModifyRfi = (rfi: Rfi, authName?: string | null): boolean =>
-  rfi.canModify !== false || isRfiSender(rfi, authName);
+export const canModifyRfi = (rfi: Rfi, authName?: string | null, viewOnly: boolean = false): boolean =>
+  // The server already works out sender / To / CC / Owner rights and sends them as canModify, so
+  // that answer is final. The name-matching fallback is used only when an older server sends none.
+  !viewOnly && (typeof rfi.canModify === "boolean" ? rfi.canModify : isRfiSender(rfi, authName));
 
 /** True when two names are the same person (ignores case, spaces, dots and dashes). Exact match only. */
 export const isSameUser = (a?: string | null, b?: string | null): boolean => {

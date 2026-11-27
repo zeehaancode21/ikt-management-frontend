@@ -9,11 +9,19 @@ import { useModuleAccess } from "@/hooks/useModuleAccess";
    (sidebar, RequireRfiAccess, Dashboard) keeps working unchanged.
 
    • OWNER is always allowed.
-   • Everyone else needs the "RFI" tick in Admin Console -> Access Control.
+   • Everyone else needs "View only" or "Full access" for RFI in Admin Console -> Access Control.
+   • viewOnly = true hides/disables every control that would change an RFI (the backend refuses them too).
    • Fails CLOSED while loading / on error.
    ───────────────────────────────────────────────────────────────────── */
 
-export function useRfiAccess(): { allowed: boolean; loading: boolean; refresh: () => void } {
-  const { rfi, loading, refresh } = useModuleAccess();
-  return { allowed: rfi, loading, refresh };
+export function useRfiAccess(): {
+  /** May open the RFI module at all (true for both "View only" and "Full access"). */
+  allowed: boolean;
+  /** Owner switched this person to "View only": they can read RFIs but change nothing. */
+  viewOnly: boolean;
+  loading: boolean;
+  refresh: () => void;
+} {
+  const { rfi, rfiViewOnly, loading, refresh } = useModuleAccess();
+  return { allowed: rfi, viewOnly: rfi && rfiViewOnly, loading, refresh };
 }

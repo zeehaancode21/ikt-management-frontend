@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Navigate } from "react-router-dom";
 import api, { getErrorMessage } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { fetchProfilePicture } from "@/lib/profileApi";
 import { useNavigate } from "react-router-dom";
 import {
   AnimatedEmployeeTabIcon,
@@ -12,6 +13,10 @@ import {
   AnimatedAddEmployeeIcon,
   AnimatedAddEmployeeButtonIcon,
 } from "@/components/icons/AnimatedAdminConsoleTabIcons";
+import { designationOf, DESIGNATION_ORDER, NO_DESIGNATION } from "@/lib/designations";
+import { DesignationTile, DesignationMembers, DESIGNATION_TILES_CSS, type DesignationMember } from "@/components/DesignationTiles";
+import { ToastAction } from "@/components/ui/toast";
+import { confirmAsync } from "@/lib/confirm";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Project {
@@ -75,20 +80,6 @@ const SINGLE_NAME_SECTIONS: Record<string, string> = {
 // Roles whose system role / designation can be changed from the roster.
 const isEditableRole = (r?: string) => ["USER", "LEAD", "MANAGER"].includes(r?.toUpperCase() ?? "");
 
-// Designation = job function shown as a filter (Editor, Modeler, Checker, IT…).
-// It is derived from the free-text Role Name, so "Senior Editor" counts as Editor.
-const DESIGNATION_ORDER = ["Editor", "Modeler", "Checker", "IT"];
-const NO_DESIGNATION = "__none__";
-const designationOf = (em: { roleName?: string | null }): string => {
-  const name = em.roleName?.trim();
-  if (!name) return NO_DESIGNATION;
-  const l = name.toLowerCase();
-  if (l.includes("editor")) return "Editor";
-  if (l.includes("model")) return "Modeler";
-  if (l.includes("check")) return "Checker";
-  if (/\bit\b/.test(l)) return "IT";
-  return name;
-};
 const isRosterVisible = (em: { role: string; username: string }) => {
   const key = em.role?.toUpperCase() || "USER";
   const only = SINGLE_NAME_SECTIONS[key];
@@ -294,9 +285,11 @@ function ProjectEditModal({ project, onClose, onSaved }: {
       return;
     }
     if (nameChanged) {
-      const confirmed = window.confirm(
-        `Rename "${project.projectName}" to "${trimmedName}"?\n\nThis will also update this name on every existing work report, change order, document and status record that references it.`
-      );
+      const confirmed = await confirmAsync({
+        title: `Rename "${project.projectName}" to "${trimmedName}"?`,
+        description: "This will also update this name on every existing work report, change order, document and status record that references it.",
+        confirmLabel: "Rename",
+      });
       if (!confirmed) return;
     }
     setSaving(true);
@@ -1332,12 +1325,13 @@ function EmployeeDetailModal({ employee, onClose, onEdit, onDelete, canEdit, bus
         </button>
         <motion.div
           className="ro-detail-avatar"
+          style={{ overflow: "hidden" }}
           aria-hidden="true"
           initial={{ scale: 0, rotate: -25 }}
           animate={{ scale: 1, rotate: 0 }}
           transition={{ type: "spring", stiffness: 380, damping: 18, delay: 0.1 }}
         >
-          {initials(employee.username)}
+          <AvatarPhoto username={employee.username} fallback={initials(employee.username)} />
         </motion.div>
         <h3 id={titleId} className="ro-detail-name">{employee.username}</h3>
         <span className="ro-detail-badge">{employee.role}</span>
@@ -1445,11 +1439,42 @@ const ROSTER_CSS = `
   @media (prefers-reduced-motion: reduce) { .ro-stat-bar > span, .ro-chev, .ac-emp-hint { transition: none !important; } }
 `;
 
+// ─── Profile photo (DP) inside an avatar circle ──────────────────────────────
+// Shows the employee's uploaded profile picture; falls back to the given initials when they have
+// none (or it fails to load). The parent circle must clip (overflow: hidden). Pictures are fetched
+// once per person and cached in lib/profileApi, so lists do not re-download them.
+function AvatarPhoto({ username, fallback }: { username?: string; fallback: React.ReactNode }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setUrl(null);
+    if (username) {
+      fetchProfilePicture(username).then((u) => { if (alive) setUrl(u); });
+    }
+    return () => { alive = false; };
+  }, [username]);
+  if (!url) return <>{fallback}</>;
+  return (
+    <img
+      src={url}
+      alt=""
+      draggable={false}
+      onError={() => setUrl(null)}
+      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: "50%" }}
+    />
+  );
+}
+
 // ─── Access Control panel ─────────────────────────────────────────────────────
 // Owner-only switchboard: decides, per employee, which modules they can open.
-// Two ticks beside each name: "RFI" and "Projects" (the Dashboard page).
+// Beside each name: a three-way switch for RFI (No access / View only / Full access)
+// and a tick for "Projects" (the Dashboard page).
+//   No access   -> RFI module hidden and blocked
+//   View only   -> can open and read RFIs, but cannot change status, priority, reply, resubmit,
+//                  create RFIs, sync Gmail or edit settings (the backend refuses it too)
+//   Full access -> everything the RFI To/CC rules allow
 // Backed by GET /api/module-access (who has what) and
-// PUT /api/module-access/{id}  body { rfi?: boolean, projects?: boolean }.
+// PUT /api/module-access/{id}  body { rfiMode?: "NONE"|"VIEW_ONLY"|"ALL", projects?: boolean }.
 // Owners always have access to everything, so they are not listed.
 const RFI_CSS = `
   .rf-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
@@ -1475,21 +1500,34 @@ const RFI_CSS = `
   .rf-tick[data-on="true"] { border-color: #10b981; background: color-mix(in srgb, #10b981 10%, hsl(var(--background))); color: #059669; }
   .rf-tick[data-on="true"] .rf-box { background: #10b981; border-color: #10b981; }
   .rf-tick[data-on="true"] .rf-box svg { opacity: 1; transform: scale(1); }
+  .rf-seg { display: inline-flex; align-items: stretch; height: 34px; padding: 3px; gap: 2px; border-radius: 10px; border: 1px solid hsl(var(--border)); background: hsl(var(--muted) / .5); }
+  .rf-seg button { border: 0; background: transparent; padding: 0 11px; border-radius: 7px; font-size: 12px; font-weight: 600; color: hsl(var(--muted-foreground)); cursor: pointer; white-space: nowrap; transition: background-color .15s, color .15s, box-shadow .15s; }
+  .rf-seg button:hover:not(:disabled):not([aria-pressed="true"]) { color: hsl(var(--foreground)); }
+  .rf-seg button:disabled { cursor: wait; opacity: .6; }
+  .rf-seg button:focus-visible { outline: 2px solid #10b981; outline-offset: 1px; }
+  .rf-seg button[aria-pressed="true"][data-mode="NONE"] { background: hsl(var(--background)); color: hsl(var(--foreground)); box-shadow: 0 1px 3px rgb(0 0 0 / .12); }
+  .rf-seg button[aria-pressed="true"][data-mode="VIEW_ONLY"] { background: #f59e0b; color: #fff; box-shadow: 0 1px 3px rgb(245 158 11 / .45); }
+  .rf-seg button[aria-pressed="true"][data-mode="ALL"] { background: #10b981; color: #fff; box-shadow: 0 1px 3px rgb(16 185 129 / .45); }
+  .rf-group { display: inline-flex; align-items: center; gap: 6px; }
+  .rf-group-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: hsl(var(--muted-foreground)); }
+  .rf-row[data-rfi="VIEW_ONLY"] { border-color: #f59e0b66; background: color-mix(in srgb, #f59e0b 6%, hsl(var(--background))); }
   .rf-note { font-size: 12px; color: hsl(var(--muted-foreground)); margin: 14px 2px 0; }
   @media (max-width: 640px) {
     .rf-badge { display: none; }
     .rf-row { flex-wrap: wrap; }
-    .rf-ticks { width: 100%; padding-left: 52px; }
+    .rf-ticks { width: 100%; padding-left: 52px; flex-wrap: wrap; }
   }
   @media (prefers-reduced-motion: reduce) { .rf-row, .rf-tick, .rf-box, .rf-box svg { transition: none !important; } }
 `;
 
-type ModuleKey = "rfi" | "projects";
-type ModuleFlags = { rfi: boolean; projects: boolean };
-const ACCESS_MODULES: { key: ModuleKey; label: string }[] = [
-  { key: "rfi", label: "RFI" },
-  { key: "projects", label: "Projects" },
+type RfiMode = "NONE" | "VIEW_ONLY" | "ALL";
+type ModuleFlags = { rfiMode: RfiMode; projects: boolean };
+const RFI_MODES: { mode: RfiMode; label: string; hint: string }[] = [
+  { mode: "NONE", label: "No access", hint: "Cannot open the RFI module" },
+  { mode: "VIEW_ONLY", label: "View only", hint: "Can read RFIs but cannot change anything" },
+  { mode: "ALL", label: "Full access", hint: "Can use RFIs fully (status, priority, reply, create, sync)" },
 ];
+const RFI_MODE_LABEL: Record<RfiMode, string> = { NONE: "No access", VIEW_ONLY: "View only", ALL: "Full access" };
 
 function RfiAccessPanel({ employees }: { employees: Employee[] }) {
   const [grants, setGrants] = useState<Record<number, ModuleFlags>>({});
@@ -1502,10 +1540,14 @@ function RfiAccessPanel({ employees }: { employees: Employee[] }) {
     let alive = true;
     (async () => {
       try {
-        const { data } = await api.get<{ id: number; rfi: boolean; projects: boolean }[]>("/api/module-access");
+        const { data } = await api.get<{ id: number; rfi: boolean; rfiMode?: RfiMode; projects: boolean }[]>("/api/module-access");
         if (!alive) return;
         const next: Record<number, ModuleFlags> = {};
-        for (const g of data) next[g.id] = { rfi: !!g.rfi, projects: !!g.projects };
+        for (const g of data) {
+          // older backend (no rfiMode yet): rfi=true meant full access
+          const mode: RfiMode = g.rfiMode ?? (g.rfi ? "ALL" : "NONE");
+          next[g.id] = { rfiMode: mode, projects: !!g.projects };
+        }
         setGrants(next);
       } catch (err) {
         toast({ title: "Failed to load access", description: getErrorMessage(err), variant: "destructive" });
@@ -1516,45 +1558,71 @@ function RfiAccessPanel({ employees }: { employees: Employee[] }) {
     return () => { alive = false; };
   }, []);
 
-  const has = (id: number, key: ModuleKey) => !!grants[id]?.[key];
+  const rfiModeOf = (id: number): RfiMode => grants[id]?.rfiMode ?? "NONE";
+  const hasProjects = (id: number) => !!grants[id]?.projects;
 
-  const toggle = async (em: Employee, key: ModuleKey, label: string) => {
-    const busyKey = `${em.id}:${key}`;
-    if (busy.has(busyKey)) return;
-    const next = !has(em.id, key);
-    const apply = (on: boolean) =>
-      setGrants((prev) => ({
-        ...prev,
-        [em.id]: { rfi: false, projects: false, ...prev[em.id], [key]: on },
-      }));
-    const setBusyKey = (on: boolean) =>
-      setBusy((prev) => {
-        const copy = new Set(prev);
-        if (on) copy.add(busyKey); else copy.delete(busyKey);
-        return copy;
-      });
+  const setBusyKey = (busyKey: string, on: boolean) =>
+    setBusy((prev) => {
+      const copy = new Set(prev);
+      if (on) copy.add(busyKey); else copy.delete(busyKey);
+      return copy;
+    });
 
-    setBusyKey(true);
-    apply(next); // optimistic
+  const patch = (id: number, change: Partial<ModuleFlags>) =>
+    setGrants((prev) => ({
+      ...prev,
+      [id]: { rfiMode: "NONE", projects: false, ...prev[id], ...change },
+    }));
+
+  // RFI: pick one of three levels (saved straight away, rolled back if the server refuses).
+  const chooseRfiMode = async (em: Employee, next: RfiMode) => {
+    const busyKey = `${em.id}:rfi`;
+    const previous = rfiModeOf(em.id);
+    if (busy.has(busyKey) || previous === next) return;
+    setBusyKey(busyKey, true);
+    patch(em.id, { rfiMode: next }); // optimistic
     try {
-      await api.put(`/api/module-access/${em.id}`, { [key]: next });
-      toast({ title: next ? `✅ ${label} access given to ${em.username}` : `${label} access removed from ${em.username}` });
+      await api.put(`/api/module-access/${em.id}`, { rfiMode: next });
+      toast({
+        title:
+          next === "NONE" ? `RFI access removed from ${em.username}`
+          : next === "VIEW_ONLY" ? `👁 ${em.username} can now only view RFIs`
+          : `✅ Full RFI access given to ${em.username}`,
+      });
     } catch (err) {
-      apply(!next); // put it back
+      patch(em.id, { rfiMode: previous }); // put it back
       toast({ title: "Couldn't change access", description: getErrorMessage(err), variant: "destructive" });
     } finally {
-      setBusyKey(false);
+      setBusyKey(busyKey, false);
+    }
+  };
+
+  const toggleProjects = async (em: Employee) => {
+    const busyKey = `${em.id}:projects`;
+    if (busy.has(busyKey)) return;
+    const next = !hasProjects(em.id);
+    setBusyKey(busyKey, true);
+    patch(em.id, { projects: next }); // optimistic
+    try {
+      await api.put(`/api/module-access/${em.id}`, { projects: next });
+      toast({ title: next ? `✅ Projects access given to ${em.username}` : `Projects access removed from ${em.username}` });
+    } catch (err) {
+      patch(em.id, { projects: !next }); // put it back
+      toast({ title: "Couldn't change access", description: getErrorMessage(err), variant: "destructive" });
+    } finally {
+      setBusyKey(busyKey, false);
     }
   };
 
   const people = employees
     .filter((em) => em.role?.toUpperCase() !== "OWNER")
     .sort((a, b) => (a.username ?? "").localeCompare(b.username ?? "", undefined, { sensitivity: "base" }));
-  const rfiCount = people.filter((em) => has(em.id, "rfi")).length;
-  const projectsCount = people.filter((em) => has(em.id, "projects")).length;
+  const rfiFullCount = people.filter((em) => rfiModeOf(em.id) === "ALL").length;
+  const rfiViewCount = people.filter((em) => rfiModeOf(em.id) === "VIEW_ONLY").length;
+  const projectsCount = people.filter((em) => hasProjects(em.id)).length;
   const needle = q.trim().toLowerCase();
   const shown = people.filter((em) => {
-    const any = has(em.id, "rfi") || has(em.id, "projects");
+    const any = rfiModeOf(em.id) !== "NONE" || hasProjects(em.id);
     return (
       (view === "all" || (view === "with") === any) &&
       (!needle ||
@@ -1575,7 +1643,7 @@ function RfiAccessPanel({ employees }: { employees: Employee[] }) {
         </div>
         <div>
           <h3 className="ac-card-title">Access Control</h3>
-          <p className="ac-card-sub">Tick RFI and/or Projects for each employee. Changes apply immediately.</p>
+          <p className="ac-card-sub">Choose No access, View only or Full access for RFI, and tick Projects, for each employee. Changes apply immediately.</p>
         </div>
       </div>
 
@@ -1594,7 +1662,7 @@ function RfiAccessPanel({ employees }: { employees: Employee[] }) {
         </div>
         {!loading && (
           <span className="rf-summary" aria-live="polite">
-            <b>{rfiCount}</b> RFI · <b>{projectsCount}</b> Projects · of {people.length}
+            <b>{rfiFullCount}</b> RFI full · <b>{rfiViewCount}</b> RFI view-only · <b>{projectsCount}</b> Projects · of {people.length}
           </span>
         )}
       </div>
@@ -1610,10 +1678,11 @@ function RfiAccessPanel({ employees }: { employees: Employee[] }) {
         <div className="rf-list" role="list">
           {shown.map((em) => {
             const color = roleColor(em.role);
-            const any = has(em.id, "rfi") || has(em.id, "projects");
+            const rfiMode = rfiModeOf(em.id);
+            const any = rfiMode !== "NONE" || hasProjects(em.id);
             return (
-              <div className="rf-row" role="listitem" key={em.id} data-on={any}>
-                <span className="rf-av" aria-hidden="true" style={{ background: color + "1f", color, border: `2px solid ${color}55` }}>{initials(em.username)}</span>
+              <div className="rf-row" role="listitem" key={em.id} data-on={any} data-rfi={rfiMode}>
+                <span className="rf-av" aria-hidden="true" style={{ background: color + "1f", color, border: `2px solid ${color}55`, overflow: "hidden" }}><AvatarPhoto username={em.username} fallback={initials(em.username)} /></span>
                 <span className="rf-info">
                   <span className="rf-name" title={em.username}>{em.username}</span>
                   <span className="rf-sub" title={em.email}>{[em.roleName, em.email].filter(Boolean).join(" · ")}</span>
@@ -1622,26 +1691,40 @@ function RfiAccessPanel({ employees }: { employees: Employee[] }) {
                   {ROLE_SECTION_LABELS[em.role?.toUpperCase()] || em.role}
                 </span>
                 <span className="rf-ticks">
-                  {ACCESS_MODULES.map(({ key, label }) => {
-                    const on = has(em.id, key);
-                    return (
-                      <label className="rf-tick" key={key} data-on={on}>
-                        <input
-                          type="checkbox"
-                          checked={on}
-                          disabled={busy.has(`${em.id}:${key}`)}
-                          onChange={() => toggle(em, key, label)}
-                          aria-label={`${label} access for ${em.username}`}
-                        />
-                        <span className="rf-box" aria-hidden="true">
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        </span>
-                        {label}
-                      </label>
-                    );
-                  })}
+                  <span className="rf-group">
+                    <span className="rf-group-label" id={`rfi-level-${em.id}`}>RFI</span>
+                    <span className="rf-seg" role="group" aria-labelledby={`rfi-level-${em.id}`}>
+                      {RFI_MODES.map(({ mode, label, hint }) => (
+                        <button
+                          type="button"
+                          key={mode}
+                          data-mode={mode}
+                          aria-pressed={rfiMode === mode}
+                          disabled={busy.has(`${em.id}:rfi`)}
+                          title={hint}
+                          aria-label={`${RFI_MODE_LABEL[mode]} to RFI for ${em.username}`}
+                          onClick={() => chooseRfiMode(em, mode)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </span>
+                  </span>
+                  <label className="rf-tick" data-on={hasProjects(em.id)}>
+                    <input
+                      type="checkbox"
+                      checked={hasProjects(em.id)}
+                      disabled={busy.has(`${em.id}:projects`)}
+                      onChange={() => toggleProjects(em)}
+                      aria-label={`Projects access for ${em.username}`}
+                    />
+                    <span className="rf-box" aria-hidden="true">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </span>
+                    Projects
+                  </label>
                 </span>
               </div>
             );
@@ -1763,6 +1846,41 @@ function EmployeesTab() {
     }
   };
 
+  // Owner: take someone out of their designation tile. Only the designation label is
+  // cleared (the account stays); the toast offers Undo to put it back.
+  const removeFromDesignation = async (em: DesignationMember) => {
+    if (!isEditableRole(em.role)) {
+      toast({ title: "Can't change this account", description: "This account's designation can't be edited here.", variant: "destructive" });
+      return;
+    }
+    const previous = em.roleName ?? "";
+    try {
+      await api.put(`/employees/${em.id}`, { roleName: "" });
+      await load();
+      toast({
+        title: `${em.username} removed from ${designationOf(em)}`,
+        description: "Their designation is now unassigned.",
+        action: (
+          <ToastAction
+            altText={`Undo: restore ${em.username}'s designation`}
+            onClick={async () => {
+              try {
+                await api.put(`/employees/${em.id}`, { roleName: previous });
+                await load();
+              } catch (err) {
+                toast({ title: "Couldn't undo", description: getErrorMessage(err), variant: "destructive" });
+              }
+            }}
+          >
+            Undo
+          </ToastAction>
+        ),
+      });
+    } catch (err) {
+      toast({ title: "Failed to remove", description: getErrorMessage(err), variant: "destructive" });
+    }
+  };
+
   // Roster view: Owner shows only "noor", IT shows only "zeeshan"; Lead and
   // Employee sections show everyone as before.
   const visibleEmployees = employees.filter(isRosterVisible);
@@ -1867,6 +1985,7 @@ function EmployeesTab() {
     <div className="ac-tab-content">
       <style>{NEW_EMP_CSS}</style>
       <style>{ROSTER_CSS}</style>
+      <style>{DESIGNATION_TILES_CSS}</style>
       <ConfirmDialog
         open={deleteId !== null}
         message="Remove this employee from the system? This cannot be undone."
@@ -2232,23 +2351,34 @@ function EmployeesTab() {
                     })}
                   </div>
 
-                  <div className="ro-desig" role="group" aria-label="Filter employees by designation">
-                    <span className="ro-desig-label">Designation</span>
-                    <button type="button" className="ne-chip" data-on={designationFilter === null} aria-pressed={designationFilter === null} onClick={() => setDesignationFilter(null)}>All</button>
+                  <div className="dt-tiles" role="group" aria-label="Filter employees by designation">
+                    <DesignationTile name="All" label="All" count={visibleEmployees.length} on={designationFilter === null} onClick={() => setDesignationFilter(null)} />
                     {designationKeys.map((d) => (
-                      <button
+                      <DesignationTile
                         key={d}
-                        type="button"
-                        className="ne-chip"
-                        data-on={designationFilter === d}
-                        aria-pressed={designationFilter === d}
+                        name={d}
+                        label={d === NO_DESIGNATION ? "Unassigned" : d}
+                        count={designationCounts.get(d) ?? 0}
+                        on={designationFilter === d}
                         onClick={() => setDesignationFilter(designationFilter === d ? null : d)}
-                      >
-                        {d === NO_DESIGNATION ? "Unassigned" : d}
-                        <span className="ro-desig-count">{designationCounts.get(d) ?? 0}</span>
-                      </button>
+                      />
                     ))}
                   </div>
+
+                  <AnimatePresence initial={false}>
+                    {designationFilter && designationFilter !== NO_DESIGNATION && (
+                      <DesignationMembers
+                        key={designationFilter}
+                        name={designationFilter}
+                        label={designationFilter}
+                        members={visibleEmployees.filter((em) => designationOf(em) === designationFilter)}
+                        canRemove
+                        onRemove={removeFromDesignation}
+                        renderAvatar={(em) => <AvatarPhoto username={em.username} fallback={initials(em.username)} />}
+                        onClose={() => setDesignationFilter(null)}
+                      />
+                    )}
+                  </AnimatePresence>
 
                   <div className="ro-toolbar">
                     <div className="ro-seg" role="group" aria-label="Layout">
@@ -2402,12 +2532,12 @@ function EmployeesTab() {
 
                                         <motion.div
                                           className="ac-emp-avatar"
-                                          style={{ background: tileColor + "1f", color: tileColor, border: `2px solid ${tileColor}55`, boxShadow: `0 4px 12px ${tileColor}2e` }}
+                                          style={{ background: tileColor + "1f", color: tileColor, border: `2px solid ${tileColor}55`, boxShadow: `0 4px 12px ${tileColor}2e`, overflow: "hidden" }}
                                           aria-hidden="true"
                                           whileHover={{ scale: 1.08, rotate: 3 }}
                                           transition={{ type: "spring", stiffness: 400 }}
                                         >
-                                          {initials(em.username)}
+                                          <AvatarPhoto username={em.username} fallback={initials(em.username)} />
                                         </motion.div>
 
                                         <div className="ac-emp-info">

@@ -1,5 +1,7 @@
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { LucideIcon } from "lucide-react";
-import { Check, Filter, X } from "lucide-react";
+import { Check, ChevronDown, Filter, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   PRIORITY_LABELS,
@@ -14,13 +16,14 @@ import {
 import { RFI_DISCIPLINES, RFI_PRIORITIES, RFI_TEAM_TYPES, toRfiPriority, type Rfi } from "@/types/rfi";
 
 /**
- * Generic chip-style filter for any RFI attribute (Discipline, Team Scope).
- * Visually and behaviourally identical to RfiStatusFilter (same chip base
- * classes, same "All" chip + counts + Clear affordance) so all filter rows
- * in the RFI list read as one family — the only difference is that each
- * option is coloured from its own theme (getDisciplineTheme /
- * getTeamTypeTheme) instead of a fixed status colour map, and shows a small
- * Lucide icon instead of a plain dot.
+ * Compact filter tile for an RFI attribute (Discipline, Team Scope, Priority).
+ *
+ * At rest it is a single small tile showing the label and what is selected.
+ * Hovering it (or tapping it on touch devices) reveals a floating panel with
+ * every option as a multi-select card. The panel stays open while you pick
+ * several options; click the tile to pin it open, click outside / press Esc
+ * to close. The panel is rendered in a portal so it is never clipped by the
+ * collapsible "Filters" container.
  */
 
 export interface RfiAttributeOption {
@@ -76,10 +79,11 @@ export const buildPriorityOptions = (rfis: Rfi[]): RfiAttributeOption[] => {
   }));
 };
 
-const CHIP_BASE =
-  "inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-[11px] font-medium transition-all duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background";
-const CHIP_IDLE =
-  "border-border/70 bg-background/70 text-muted-foreground hover:border-border hover:bg-accent hover:text-foreground dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:bg-slate-800";
+const POP_CSS = `
+@keyframes rfa-pop{from{opacity:0;transform:translateY(-6px) scale(.97)}to{opacity:1;transform:none}}
+.rfa-pop{animation:rfa-pop .16s cubic-bezier(.16,1,.3,1) both;transform-origin:top left}
+@media (prefers-reduced-motion:reduce){.rfa-pop{animation:none}}
+`;
 
 interface Props {
   label: string;
@@ -105,89 +109,272 @@ export const RfiAttributeFilter = ({
   onClear,
   className,
 }: Props) => {
-  const isFiltered = selected.length > 0;
-  return (
-    <div
-      role="group"
-      aria-label={`Filter RFIs by ${label}`}
-      className={cn(
-        "flex flex-wrap items-center gap-1.5 rounded-lg border border-border/70 bg-card/60 px-2.5 py-1.5 shadow-sm backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/50",
-        className
-      )}
-    >
-      <span className="mr-0.5 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        <HeaderIcon className="h-3 w-3" /> {label}
-      </span>
+  const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; above: boolean } | null>(null);
+  const tileRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number | null>(null);
 
+  const isFiltered = selected.length > 0;
+  const selectedOpts = options.filter((o) => selected.includes(o.value));
+  const lead = selectedOpts[0]?.theme.accent;
+
+  const cancelClose = () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  };
+  const hide = useCallback(() => {
+    cancelClose();
+    setOpen(false);
+    setPinned(false);
+  }, []);
+  const scheduleClose = () => {
+    if (pinned) return;
+    cancelClose();
+    closeTimer.current = window.setTimeout(() => setOpen(false), 160);
+  };
+
+  // Position the floating panel under the tile (flip above if no room).
+  const place = useCallback(() => {
+    const el = tileRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = Math.min(Math.max(r.width, 270), window.innerWidth - 16);
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+    const panelH = panelRef.current?.offsetHeight ?? 260;
+    const above = r.bottom + panelH + 12 > window.innerHeight && r.top > panelH + 12;
+    setPos({ top: above ? r.top - 6 : r.bottom + 6, left, width, above });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (open) place();
+  }, [open, place, options.length, selected.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onScrollResize = () => place();
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (tileRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      hide();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        hide();
+        tileRef.current?.focus();
+      }
+    };
+    window.addEventListener("resize", onScrollResize);
+    window.addEventListener("scroll", onScrollResize, true);
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("resize", onScrollResize);
+      window.removeEventListener("scroll", onScrollResize, true);
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, place, hide]);
+
+  useEffect(() => () => cancelClose(), []);
+
+  const panelId = `rfa-${label.replace(/\s+/g, "-").toLowerCase()}`;
+
+  return (
+    <div role="group" aria-label={`Filter RFIs by ${label}`} className={cn("relative", className)}>
+      <style>{POP_CSS}</style>
+
+      {/* ── Tile (always visible) ── */}
       <button
+        ref={tileRef}
         type="button"
-        aria-pressed={!isFiltered}
-        onClick={onClear}
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+        onPointerEnter={(e) => {
+          if (e.pointerType === "mouse") {
+            cancelClose();
+            setOpen(true);
+          }
+        }}
+        onPointerLeave={(e) => {
+          if (e.pointerType === "mouse") scheduleClose();
+        }}
+        onClick={() => {
+          cancelClose();
+          if (open && pinned) hide();
+          else {
+            setOpen(true);
+            setPinned(true);
+          }
+        }}
+        style={isFiltered && lead ? { borderColor: `${lead}88`, boxShadow: `0 0 0 3px ${lead}1A` } : undefined}
         className={cn(
-          CHIP_BASE,
-          !isFiltered
-            ? "border-primary/40 bg-primary/15 font-semibold text-primary shadow-sm dark:bg-primary/25 dark:text-white"
-            : CHIP_IDLE
+          "group flex h-10 w-full items-center gap-2 rounded-xl border bg-card/70 px-3 text-left shadow-sm backdrop-blur-md transition-all duration-200",
+          "hover:-translate-y-px hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "dark:bg-slate-900/60",
+          isFiltered ? "" : "border-border/70 dark:border-slate-700",
+          open && "ring-2 ring-primary/30"
         )}
       >
-        {!isFiltered && <Check className="h-3 w-3" />}
-        All
-        <span className="rounded-full bg-background/60 px-1.5 text-[10px] tabular-nums dark:bg-slate-950/50">
-          {total}
+        <span
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-lg transition-colors"
+          style={{ backgroundColor: lead ? `${lead}22` : undefined, color: lead }}
+        >
+          <HeaderIcon className={cn("h-3.5 w-3.5", !lead && "text-muted-foreground")} />
         </span>
+
+        <span className="min-w-0 flex-1">
+          <span className="block text-[9px] font-bold uppercase leading-none tracking-wider text-muted-foreground">
+            {label}
+          </span>
+          <span className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold leading-none text-foreground">
+            {!isFiltered ? (
+              <span className="text-muted-foreground">All</span>
+            ) : (
+              <>
+                {selectedOpts.slice(0, 2).map((o) => (
+                  <span
+                    key={o.value}
+                    className="inline-flex max-w-[84px] items-center gap-1 truncate rounded-full px-1.5 py-px text-[10px]"
+                    style={{ backgroundColor: `${o.theme.accent}22`, color: o.theme.accent }}
+                  >
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: o.theme.accent }} />
+                    <span className="truncate">{o.label}</span>
+                  </span>
+                ))}
+                {selectedOpts.length > 2 && (
+                  <span className="text-[10px] text-muted-foreground">+{selectedOpts.length - 2}</span>
+                )}
+              </>
+            )}
+          </span>
+        </span>
+
+        {isFiltered && (
+          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold tabular-nums text-primary-foreground">
+            {selected.length}
+          </span>
+        )}
+        <ChevronDown
+          className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200", open && "rotate-180")}
+        />
       </button>
 
-      {options.map(({ value, label: optLabel, count, icon: Icon, theme }) => {
-        const active = selected.includes(value);
-        return (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onToggle(value)}
-            style={
-              active
-                ? {
-                    borderColor: theme.accent,
-                    backgroundColor: `${theme.accent}1A`,
-                    color: theme.accent,
-                  }
-                : undefined
-            }
-            className={cn(CHIP_BASE, active ? "font-semibold shadow-sm" : CHIP_IDLE)}
+      {/* ── Floating options panel (revealed on hover / tap) ── */}
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={panelRef}
+            id={panelId}
+            role="group"
+            aria-label={`${label} options`}
+            onPointerEnter={(e) => {
+              if (e.pointerType === "mouse") cancelClose();
+            }}
+            onPointerLeave={(e) => {
+              if (e.pointerType === "mouse") scheduleClose();
+            }}
+            style={{
+              position: "fixed",
+              left: pos.left,
+              top: pos.top,
+              width: pos.width,
+              transform: pos.above ? "translateY(-100%)" : undefined,
+              zIndex: 60,
+            }}
           >
-            {active ? (
-              <Check className="h-3 w-3" />
-            ) : (
-              <Icon className="h-3 w-3" style={{ color: theme.accent }} />
-            )}
-            {optLabel}
-            <span
-              className={cn(
-                "rounded-full px-1.5 text-[10px] tabular-nums",
-                active ? "bg-background/60 dark:bg-slate-950/50" : "bg-muted dark:bg-slate-800"
-              )}
-            >
-              {count}
-            </span>
-          </button>
-        );
-      })}
+            <div className="rfa-pop overflow-hidden rounded-2xl border border-border/70 bg-popover/95 text-popover-foreground shadow-2xl backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95">
+              <div className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2 dark:border-slate-700">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  <HeaderIcon className="h-3.5 w-3.5" /> {label}
+                </span>
+                <span className="text-[10px] text-muted-foreground">Select one or more</span>
+              </div>
 
-      {isFiltered && (
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground" aria-live="polite">
-            Showing {shown} of {total}
-          </span>
-          <button
-            type="button"
-            onClick={onClear}
-            className="inline-flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <X className="h-3 w-3" /> Clear
-          </button>
-        </div>
-      )}
+              <div className="max-h-64 space-y-1 overflow-y-auto p-2">
+                <button
+                  type="button"
+                  aria-pressed={!isFiltered}
+                  onClick={onClear}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-xl border px-2.5 py-1.5 text-left text-xs transition-all active:scale-[.98]",
+                    !isFiltered
+                      ? "border-primary/40 bg-primary/10 font-semibold text-primary"
+                      : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
+                  )}
+                >
+                  <span className="grid h-6 w-6 place-items-center rounded-lg bg-muted dark:bg-slate-800">
+                    <Filter className="h-3 w-3" />
+                  </span>
+                  <span className="flex-1">All {label.toLowerCase()}s</span>
+                  <span className="rounded-full bg-muted px-1.5 text-[10px] tabular-nums dark:bg-slate-800">{total}</span>
+                  {!isFiltered && <Check className="h-3.5 w-3.5" />}
+                </button>
+
+                {options.map(({ value, label: optLabel, count, icon: Icon, theme }) => {
+                  const active = selected.includes(value);
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      role="checkbox"
+                      aria-checked={active}
+                      onClick={() => onToggle(value)}
+                      style={
+                        active
+                          ? { borderColor: `${theme.accent}77`, backgroundColor: theme.soft, color: theme.accent }
+                          : undefined
+                      }
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-xl border px-2.5 py-1.5 text-left text-xs transition-all active:scale-[.98]",
+                        active ? "font-semibold" : "border-transparent text-foreground hover:bg-accent"
+                      )}
+                    >
+                      <span
+                        className="grid h-6 w-6 place-items-center rounded-lg"
+                        style={{ backgroundColor: `${theme.accent}22`, color: theme.accent }}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="flex-1 truncate">{optLabel}</span>
+                      <span className="rounded-full bg-background/60 px-1.5 text-[10px] tabular-nums text-muted-foreground dark:bg-slate-950/50">
+                        {count}
+                      </span>
+                      <span
+                        className={cn(
+                          "grid h-4 w-4 place-items-center rounded-md border transition-colors",
+                          !active && "border-border dark:border-slate-600"
+                        )}
+                        style={active ? { backgroundColor: theme.accent, borderColor: theme.accent } : undefined}
+                      >
+                        {active && <Check className="h-3 w-3 text-white" />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {isFiltered && (
+                <div className="flex items-center justify-between border-t border-border/60 px-3 py-1.5 dark:border-slate-700">
+                  <span className="text-[10px] text-muted-foreground" aria-live="polite">
+                    Showing {shown} of {total}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onClear}
+                    className="inline-flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <X className="h-3 w-3" /> Clear
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

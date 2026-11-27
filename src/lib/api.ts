@@ -14,6 +14,30 @@ const api = axios.create({
   },
 });
 
+// ─── Coalesce identical concurrent GETs ─────────────────────────────────────
+// If two components ask for the SAME url + params at the same moment (e.g. the RFI page and the
+// Projects section both reading /project-status/records), only ONE network request is made and
+// both get the answer. Nothing is stored afterwards (no memory growth): the entry is removed the
+// moment the request settles. Requests with an AbortSignal are never shared.
+const inflightGets = new Map<string, Promise<unknown>>();
+const rawGet = api.get.bind(api) as typeof api.get;
+api.get = ((url: string, config?: Record<string, unknown>) => {
+  if (config?.signal) return rawGet(url, config as never);
+  let key: string;
+  try {
+    key = `${localStorage.getItem("token") ?? ""}|${url}|${JSON.stringify(config?.params ?? {})}`;
+  } catch {
+    return rawGet(url, config as never);
+  }
+  const existing = inflightGets.get(key);
+  if (existing) return existing as ReturnType<typeof rawGet>;
+  const p = rawGet(url, config as never).finally(() => {
+    inflightGets.delete(key);
+  });
+  inflightGets.set(key, p);
+  return p;
+}) as typeof api.get;
+
 // ─── Request interceptor ────────────────────────────────────────────────────
 api.interceptors.request.use(
   (config) => {
@@ -57,12 +81,32 @@ api.interceptors.response.use(
       !config._retriedForColdStart
     ) {
       config._retriedForColdStart = true;
+      // UX only: tell the person why things are slow instead of looking frozen.
+      try {
+        window.dispatchEvent(new Event("app:server-waking"));
+      } catch {
+        /* ignore */
+      }
       await new Promise((resolve) => setTimeout(resolve, 3000));
       return api(config);
     }
 
     // Handle 401 Unauthorized — clear session and redirect to login
     if (error.response?.status === 401) {
+      // UX only: remember that this was an expired session (not a wrong password)
+      // and which page they were on, so Login can explain it and bring them back.
+      try {
+        if (
+          localStorage.getItem("token") &&
+          !window.location.pathname.includes("/login") &&
+          !window.location.pathname.startsWith("/share")
+        ) {
+          sessionStorage.setItem("session-expired", "1");
+          sessionStorage.setItem("return-to", window.location.pathname + window.location.search);
+        }
+      } catch {
+        /* storage blocked - skip the friendly notice */
+      }
       localStorage.removeItem("token");
       localStorage.removeItem("role");
       localStorage.removeItem("name");

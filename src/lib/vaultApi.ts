@@ -1,4 +1,5 @@
 import api from "./api";
+import { compressImageIfNeeded } from "./compressImage";
 
 export type DocType = "PAN_CARD" | "AADHAAR_CARD" | "TENTH_MARKSHEET" | "PU_MARKSHEET";
 
@@ -39,9 +40,11 @@ export const getOwnKycStatus = () => api.get<KycStatus>("/kyc/status/me").then((
 
 export const getOverview = () => api.get<KycStatus[]>("/kyc/overview").then((r) => r.data);
 
-export const uploadOwnDocument = (docType: DocType, file: File) => {
+export const uploadOwnDocument = async (docType: DocType, file: File) => {
+  // Photos of ID / marks cards are shrunk in the browser (still easy to read); PDFs are untouched.
+  const small = await compressImageIfNeeded(file, { maxSide: 1800, quality: 0.82, skipBelowBytes: 400 * 1024 });
   const form = new FormData();
-  form.append("file", file);
+  form.append("file", small);
   return api.post(`/kyc/documents/${docType}`, form, {
     headers: { "Content-Type": "multipart/form-data" },
   });

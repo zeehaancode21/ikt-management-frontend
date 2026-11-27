@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 
 import { logger } from "@/lib/logger";
+import { toast } from "@/hooks/use-toast";
+import { compressImageIfNeeded, CHAT_MAX_FILE_BYTES, CHAT_MAX_FILES } from "@/lib/compressImage";
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Message {
   id: number;
@@ -247,7 +249,7 @@ function FileAttachment({ attachment, isMine }: { attachment: Attachment; isMine
     } catch (error) {
       logger.error('Preview failed:', error);
       if (tab) tab.close();
-      alert(`Couldn't open "${attachment.originalName}". Please try downloading it instead.`);
+      toast({ title: `Couldn't open "${attachment.originalName}"`, description: "Please try downloading it instead.", variant: "destructive" });
     }
   };
 
@@ -988,20 +990,39 @@ export default function Messages() {
   }, [conversation, groupMessages, broadcasts]);
 
   // ── File upload handlers ─────────────────────────────────────────────────────
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      const validFiles = files.filter(file => {
-        const maxSize = 50 * 1024 * 1024;
-        if (file.size > maxSize) {
-          alert(`${file.name} exceeds 50MB limit`);
-          return false;
-        }
-        return true;
-      });
-      setSelectedFiles(prev => [...prev, ...validFiles]);
-    }
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files ? Array.from(e.target.files) : [];
+    // Clear the input first so the same file can be picked again later.
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (picked.length === 0) return;
+
+    const validFiles: File[] = [];
+    for (const original of picked) {
+      // Photos are shrunk in the browser first (saves database storage); other files are untouched.
+      const file = await compressImageIfNeeded(original);
+      if (file.size > CHAT_MAX_FILE_BYTES) {
+        toast({
+          title: `${original.name} is too large`,
+          description: `Files can be up to ${Math.round(CHAT_MAX_FILE_BYTES / (1024 * 1024))}MB.`,
+          variant: "destructive",
+        });
+        continue;
+      }
+      validFiles.push(file);
+    }
+    if (validFiles.length > 0) {
+      setSelectedFiles(prev => {
+        const room = Math.max(0, CHAT_MAX_FILES - prev.length);
+        if (validFiles.length > room) {
+          toast({
+            title: `Only ${CHAT_MAX_FILES} files per message`,
+            description: "Send the rest in another message.",
+            variant: "destructive",
+          });
+        }
+        return [...prev, ...validFiles.slice(0, room)];
+      });
+    }
   };
 
   const removeSelectedFile = (index: number) => {

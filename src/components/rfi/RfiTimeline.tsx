@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { useEffect, useState, type ComponentType } from "react";
+import { Fragment, useEffect, useState, type ComponentType } from "react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
@@ -7,6 +7,13 @@ import {
   History as HistoryIcon,
   Paperclip,
   ArrowRight,
+  ArrowRightLeft,
+  CheckCircle2,
+  FastForward,
+  Contrast,
+  Pencil,
+  Send,
+  Undo2,
 } from "lucide-react";
 import { downloadAttachment, previewAttachment } from "@/lib/attachmentActions";
 import { DownloadProgressButton } from "@/components/DownloadProgressButton";
@@ -28,7 +35,42 @@ interface Props {
   // True when the person viewing RECEIVED this RFI (not the sender): the first
   // email in the thread is then shown as "RFI Received" instead of "Email Sent".
   rfiReceived?: boolean;
+  // "Without mail" RFI: nothing was emailed, so messages are called "Message Sent" instead of "Email Sent".
+  inAppOnly?: boolean;
+  // Text typed in the popup's search box. Matching text in the timeline is highlighted.
+  searchQuery?: string;
+  // When true (and a search is active) only the timeline entries that contain a match are shown.
+  onlyMatches?: boolean;
 }
+
+/**
+ * Wraps every case-insensitive occurrence of `query` inside `text` in a <mark>.
+ * The popup counts/steps through these marks (they carry data-rfi-hit); the active one gets data-active="true".
+ */
+export const Highlight = ({ text, query }: { text?: string | null; query?: string }) => {
+  const value = text ?? "";
+  const q = (query ?? "").trim();
+  if (!q || !value) return <>{value}</>;
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = value.split(new RegExp(`(${escaped})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <mark
+            key={i}
+            data-rfi-hit=""
+            className="rounded-sm bg-yellow-300/80 px-0.5 text-black data-[active=true]:bg-orange-400 data-[active=true]:ring-2 data-[active=true]:ring-orange-500 dark:bg-yellow-400/50 dark:text-white dark:data-[active=true]:bg-orange-500/80"
+          >
+            {part}
+          </mark>
+        ) : (
+          <Fragment key={i}>{part}</Fragment>
+        )
+      )}
+    </>
+  );
+};
 
 // Watches document.documentElement's "dark" class and re-renders when it
 // changes, so animated icons can be told to render as solid white in dark
@@ -119,6 +161,12 @@ const RFI_RECEIVED_CONFIG: EventCfg = {
   forceWhiteInDark: true,
 };
 
+// Same look as "Email Sent", but for an RFI that never leaves the app.
+const IN_APP_SENT_CONFIG: EventCfg = {
+  ...EVENT_CONFIG.EMAIL_SENT,
+  label: "Message Sent",
+};
+
 const fallbackConfig: EventCfg = { 
   icon: HistoryIcon, 
   color: "text-muted-foreground bg-muted dark:bg-slate-800", 
@@ -154,6 +202,11 @@ const STATUS_CHANGE_META: Partial<Record<RfiStatus, EventCfg>> = {
     label: "Marked Outstanding",
     forceWhiteInDark: true,
   },
+  PARTIALLY_ANSWERED: {
+    icon: Contrast,
+    color: "text-blue-600 bg-blue-500/15 dark:bg-blue-500/20", // BLUE: some answers in, rest still open
+    label: "Partially Answered",
+  },
   RESUBMITTED: { 
     animated: true, 
     icon: AnimatedResubmitIcon, 
@@ -168,6 +221,63 @@ const STATUS_CHANGE_META: Partial<Record<RfiStatus, EventCfg>> = {
     label: "Reopened",
     forceWhiteInDark: true,
   },
+};
+
+// ── Internal journey (Drafter -> Checker -> Owner -> Client) ─────────────────────────────────
+// These milestones are stored as ordinary status-history rows. They used to be filtered out of
+// the timeline (no tile), so the Checker's approval and the Owner's edits were saved but never
+// shown. They are the "internal history" that stays on the RFI after it turns external.
+const INTERNAL_APPROVED_CFG: EventCfg = {
+  icon: CheckCircle2,
+  color: "text-lime-700 bg-lime-500/15 dark:bg-lime-500/20", // LIME: Checker approved
+  label: "Approved by Checker",
+};
+const DRAFT_EDITED_CFG: EventCfg = {
+  icon: Pencil,
+  color: "text-slate-600 bg-slate-500/15 dark:bg-slate-500/20", // SLATE: Owner edited before sending
+  label: "Edited by Owner",
+};
+const SENT_TO_CLIENT_CFG: EventCfg = {
+  icon: Send,
+  color: "text-indigo-600 bg-indigo-500/15 dark:bg-indigo-500/20", // INDIGO: went to the client
+  label: "Approved & sent to client",
+};
+
+const SENT_BACK_TO_CHECKER_CFG: EventCfg = {
+  icon: Undo2,
+  color: "text-amber-600 bg-amber-500/15 dark:bg-amber-500/20", // AMBER: Owner returned it to the Checker
+  label: "Sent back to Checker",
+};
+
+const DRAFT_TO_OWNER_CFG: EventCfg = {
+  icon: FastForward,
+  color: "text-violet-600 bg-violet-500/15 dark:bg-violet-500/20", // VIOLET: fast-tracked to the Owner
+  label: "Draft sent to Owner",
+};
+
+/** The tile for a status-history row, or undefined when that change is not shown on the timeline. */
+const statusChangeMeta = (e: RfiTimelineEvent): EventCfg | undefined => {
+  if (!e.toStatus) return undefined;
+  if (e.toStatus === "DRAFTING") {
+    // from === to is the Owner saving an edit while the draft waits to be sent
+    if (e.fromStatus === "DRAFTING") return DRAFT_EDITED_CFG;
+    // The Checker's approval now converts the iRFI into a Draft RFI (note starts "Approved by the Checker")
+    if ((e.message ?? "").startsWith("Approved by the Checker")) {
+      return { ...INTERNAL_APPROVED_CFG, label: "Approved by Checker (now Draft)" };
+    }
+    return DRAFT_TO_OWNER_CFG;
+  }
+  if (e.toStatus === "OPEN" && e.fromStatus === "DRAFTING") {
+    // The Owner returned the Draft to the Checker (nothing went to the client)
+    if ((e.message ?? "").startsWith("Sent back to the Checker")) return SENT_BACK_TO_CHECKER_CFG;
+    return { ...SENT_TO_CLIENT_CFG, label: "Sent to client" };
+  }
+  if (e.toStatus === "INTERNAL_APPROVED") {
+    // from === to is the Owner saving an edit while the iRFI waits to be sent
+    return e.fromStatus === "INTERNAL_APPROVED" ? DRAFT_EDITED_CFG : INTERNAL_APPROVED_CFG;
+  }
+  if (e.toStatus === "OPEN" && e.fromStatus === "INTERNAL_APPROVED") return SENT_TO_CLIENT_CFG;
+  return STATUS_CHANGE_META[e.toStatus];
 };
 
 function stripQuotedReply(message?: string | null): string {
@@ -186,7 +296,14 @@ function stripQuotedReply(message?: string | null): string {
   return kept.join("\n").trim();
 }
 
-export const RfiTimeline = ({ events, loading, rfiReceived = false }: Props) => {
+export const RfiTimeline = ({
+  events,
+  loading,
+  rfiReceived = false,
+  inAppOnly = false,
+  searchQuery = "",
+  onlyMatches = false,
+}: Props) => {
   const isDark = useIsDarkMode();
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   // Bumped per-row every time the tile is entered, so the icon fully
@@ -201,6 +318,24 @@ export const RfiTimeline = ({ events, loading, rfiReceived = false }: Props) => 
 
   const isSystemActor = (name?: string | null) => !!name && /^SYSTEM/i.test(name);
 
+  const q = searchQuery.trim().toLowerCase();
+  // Only the text this timeline actually shows is searched.
+  const eventMatches = (e: RfiTimelineEvent): boolean => {
+    if (!q) return false;
+    const haystack = [
+      e.sender,
+      e.recipient,
+      e.subject,
+      stripQuotedReply(e.message),
+      e.performedBy,
+      ...(e.attachments ?? []).map((a) => a.originalName),
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .toLowerCase();
+    return haystack.includes(q);
+  };
+
   const visibleEvents = events.filter((e) => {
     if (e.type === "RFI_CREATED") return false;
     if (e.type !== "STATUS_CHANGED") return true;
@@ -208,7 +343,7 @@ export const RfiTimeline = ({ events, loading, rfiReceived = false }: Props) => 
     // Only show status changes that have their own tile (Closed, Cancelled,
     // Under Review, Outstanding, Resubmitted, Reopened). Everything else,
     // e.g. the automatic Sent -> Response Received change, is hidden.
-    return !!e.toStatus && !!STATUS_CHANGE_META[e.toStatus];
+    return !!statusChangeMeta(e);
   });
 
   if (visibleEvents.length === 0) {
@@ -222,16 +357,59 @@ export const RfiTimeline = ({ events, loading, rfiReceived = false }: Props) => 
   // The first email in the thread IS the RFI itself.
   const firstEmailSentIdx = sorted.findIndex((e) => e.type === "EMAIL_SENT");
 
+  // An iRFI that was approved by the Owner and sent to the client carries ONE marker row.
+  // Everything before it is the internal history (kept in full); everything after it is the
+  // external process.
+  const transitionIdx = sorted.findIndex((e) => e.type === "PROCESS_TRANSITION");
+
   return (
     <ol className="relative space-y-4 pl-5">
       <div className="absolute left-[11px] top-1 bottom-1 w-px bg-border dark:bg-slate-700" aria-hidden />
+      {onlyMatches && q && !sorted.some(eventMatches) && (
+        <li className="py-4 text-center text-xs text-muted-foreground">No matching activity.</li>
+      )}
       {sorted.map((event, idx) => {
+        // "Only matches": hide the entries that don't contain the search text (indexes above stay stable).
+        if (onlyMatches && q && !eventMatches(event)) return null;
+        if (event.type === "PROCESS_TRANSITION") {
+          return (
+            <li key={`${event.type}-${event.timestamp}-${idx}`} className="relative pl-5">
+              <span className="absolute -left-5 top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500/15 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300">
+                <ArrowRightLeft className="h-3.5 w-3.5" />
+              </span>
+              <div className="rounded-md border-2 border-dashed border-indigo-500/50 bg-indigo-500/10 p-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                    Transitioned to External
+                  </span>
+                  <span className="text-[10px] text-muted-foreground dark:text-slate-400">
+                    {format(new Date(event.timestamp), "dd MMM yyyy, hh:mm a")}
+                  </span>
+                </div>
+                {event.message && (
+                  <p className="mt-1 whitespace-pre-wrap text-[11px] text-foreground dark:text-slate-200">
+                    <Highlight text={event.message} query={searchQuery} />
+                  </p>
+                )}
+                {event.performedBy && (
+                  <div className="mt-1 text-[10px] text-muted-foreground/80 dark:text-slate-500">by <Highlight text={event.performedBy} query={searchQuery} /></div>
+                )}
+              </div>
+              <div className="mt-1 text-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Everything above is the internal history
+              </div>
+            </li>
+          );
+        }
+        const isInternalPhase = transitionIdx !== -1 && idx < transitionIdx;
         const cfg =
           event.type === "STATUS_CHANGED" && event.toStatus
-            ? STATUS_CHANGE_META[event.toStatus] ?? EVENT_CONFIG.STATUS_CHANGED
+            ? statusChangeMeta(event) ?? EVENT_CONFIG.STATUS_CHANGED
             : event.type === "EMAIL_SENT" && idx === firstEmailSentIdx && (event.receivedByViewer ?? rfiReceived)
               ? RFI_RECEIVED_CONFIG
-              : EVENT_CONFIG[event.type] ?? fallbackConfig;
+              : event.type === "EMAIL_SENT" && inAppOnly
+                ? IN_APP_SENT_CONFIG
+                : EVENT_CONFIG[event.type] ?? fallbackConfig;
         const messageText = stripQuotedReply(event.message);
         const isTileHovered = hoveredIdx === idx;
         return (
@@ -262,15 +440,22 @@ export const RfiTimeline = ({ events, loading, rfiReceived = false }: Props) => 
 
             <div className="rounded-md border border-border/70 bg-card/60 p-2.5 dark:border-slate-700 dark:bg-slate-900/60">
               <div className="flex flex-wrap items-center justify-between gap-1">
-                <span className="text-[11px] font-semibold text-foreground dark:text-white">{cfg.label}</span>
+                <span className="flex items-center gap-1.5 text-[11px] font-semibold text-foreground dark:text-white">
+                  {cfg.label}
+                  {isInternalPhase && (
+                    <span className="rounded-full border border-slate-400/40 px-1.5 py-px text-[9px] font-semibold text-muted-foreground">
+                      Internal
+                    </span>
+                  )}
+                </span>
                 <span className="text-[10px] text-muted-foreground dark:text-slate-400">
-                  {format(new Date(event.timestamp), "dd MMM yyyy, HH:mm")}
+                  {format(new Date(event.timestamp), "dd MMM yyyy, hh:mm a")}
                 </span>
               </div>
 
               {event.type === "STATUS_CHANGED" ? (
                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-                  {event.fromStatus && (
+                  {event.fromStatus && event.fromStatus !== event.toStatus && (
                     <>
                       <StatusBadge status={rfiReceived ? statusForReceiver(event.fromStatus) : event.fromStatus} className="text-[9px] px-1.5 py-0" />
                       <ArrowRight className="h-3 w-3 text-muted-foreground dark:text-slate-500" />
@@ -284,15 +469,15 @@ export const RfiTimeline = ({ events, loading, rfiReceived = false }: Props) => 
 
               {(event.sender || event.recipient) && (
                 <div className="mt-1 text-[10px] text-muted-foreground dark:text-slate-400">
-                  {event.sender && <span>From: {event.sender}</span>}
+                  {event.sender && <span>From: <Highlight text={event.sender} query={searchQuery} /></span>}
                   {event.sender && event.recipient && <span className="mx-1">•</span>}
-                  {event.recipient && <span>To: {event.recipient}</span>}
+                  {event.recipient && <span>To: <Highlight text={event.recipient} query={searchQuery} /></span>}
                 </div>
               )}
 
               {event.subject && (
                 <div className="mt-1 text-[11px] font-medium text-foreground truncate dark:text-white">
-                  {event.subject}
+                  <Highlight text={event.subject} query={searchQuery} />
                 </div>
               )}
 
@@ -301,13 +486,13 @@ export const RfiTimeline = ({ events, loading, rfiReceived = false }: Props) => 
                   {event.type === "STATUS_CHANGED" && (
                     <span className="font-semibold text-foreground/80 dark:text-slate-300">Note: </span>
                   )}
-                  {messageText}
+                  <Highlight text={messageText} query={searchQuery} />
                 </p>
               )}
 
               {event.performedBy && (
                 <div className="mt-1 text-[10px] text-muted-foreground/80 dark:text-slate-500">
-                  by {event.performedBy}
+                  by <Highlight text={event.performedBy} query={searchQuery} />
                 </div>
               )}
 
@@ -320,7 +505,7 @@ export const RfiTimeline = ({ events, loading, rfiReceived = false }: Props) => 
                     >
                       <span className="flex min-w-0 flex-1 items-center gap-1 text-[10px] text-foreground dark:text-white">
                         <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground dark:text-slate-500" />
-                        <span className="truncate">{att.originalName}</span>
+                        <span className="truncate"><Highlight text={att.originalName} query={searchQuery} /></span>
                       </span>
 
                       <div className="flex shrink-0 items-center gap-1">

@@ -7,6 +7,7 @@ import { Spinner } from "@/components/Spinner";
 import {
   CheckCircle2,
   ChevronDown,
+  Contrast,
   Eye,
   Reply,
   Send,
@@ -20,6 +21,9 @@ import { AnimatedResubmitIcon } from "@/components/icons/Animatedresubmiticon";
 import { AnimatedReopenIcon } from "@/components/icons/Animatedreopenicon";
 import { AnimatedMarkOutstandingIcon } from "@/components/icons/Animatedmarkoutstandingicon";
 import { useAuth } from "@/context/AuthContext";
+import { SignOffOption, useSignOff } from "@/components/rfi/SignOffOption";
+import { ReplyTemplatePicker } from "@/components/rfi/ReplyTemplatePicker";
+import { useRfiAccess } from "@/hooks/useRfiAccess";
 import { canModifyRfi, isRfiReceivedByMe, isSameUser } from "@/lib/rfiPermissions";
 import { updateRfiStatus, resubmitRfi, reopenRfi, replyRfi, getErrorMessage } from "@/lib/rfiApi";
 import type { Rfi, RfiStatus } from "@/types/rfi";
@@ -31,7 +35,14 @@ type StatusIcon = React.ComponentType<{
   isParentHovered?: boolean;
   forceWhite?: boolean;
 }>;
-type ActionTheme = "emerald" | "rose" | "amber" | "orange" | "sky";
+type ActionTheme = "emerald" | "rose" | "amber" | "orange" | "sky" | "blue";
+
+// "Partially answered" icon: a half-filled circle. Takes the same props as the animated icons, uses the
+// button's own text colour (so it is white when the button is open) and turns with the button.
+const PartiallyAnsweredIcon: StatusIcon = ({ className, size = "sm" }) => {
+  const px = { sm: "h-3 w-3", md: "h-4 w-4", lg: "h-5 w-5", xl: "h-6 w-6" }[size];
+  return <Contrast className={`${px} ${className ?? ""}`} />;
+};
 
 // Watches document.documentElement's "dark" class and re-renders when it
 // changes, so icons can be told to render as solid white in dark mode.
@@ -58,6 +69,7 @@ const STATUS_LABELS: Record<RfiStatus, string> = {
   ISSUED: "Issued",
   AWAITING_RESPONSE: "Awaiting Response",
   RESPONSE_RECEIVED: "Response Received",
+  PARTIALLY_ANSWERED: "Partially Answered",
   UNDER_REVIEW: "Under Review",
   OUTSTANDING: "Outstanding",
   CLOSED: "Closed",
@@ -81,6 +93,7 @@ const STATUS_ACTIONS: {
   { status: "CANCELLED", label: "Cancel", icon: AnimatedCancelIcon, theme: "rose", forceWhiteInDark: true },
   { status: "UNDER_REVIEW", label: "Under Review", icon: AnimatedUnderReviewIcon, theme: "amber", forceWhiteInDark: true },
   { status: "OUTSTANDING", label: "Mark outstanding", icon: AnimatedMarkOutstandingIcon, theme: "orange" },
+  { status: "PARTIALLY_ANSWERED", label: "Partially answered", icon: PartiallyAnsweredIcon, theme: "blue" },
 ];
 
 type ActionThemeStyles = {
@@ -120,6 +133,12 @@ const THEME: { [key in ActionTheme]: ActionThemeStyles } = {
     softBg: "bg-sky-500/10",
     softText: "text-sky-600",
     border: "border-sky-500/30",
+  },
+  blue: {
+    solid: "bg-blue-600 hover:bg-blue-500 text-white",
+    softBg: "bg-blue-500/10",
+    softText: "text-blue-600",
+    border: "border-blue-500/30",
   },
 };
 
@@ -189,6 +208,7 @@ const ThreadComposerPanel = ({ mode, projectName, rfi, onCancel, onSubmitted }: 
   const [message, setMessage] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const sign = useSignOff();
   const fileInputId = useId();
   const copy = COMPOSER_COPY[mode];
 
@@ -208,16 +228,18 @@ const ThreadComposerPanel = ({ mode, projectName, rfi, onCancel, onSubmitted }: 
     }
     setSubmitting(true);
     try {
+      // The text that is emailed: what was typed + (optionally) "Regards, {username}".
+      const outgoing = sign.apply(message);
       // ← THIS IS THE KEY: Call resubmitRfi or reopenRfi with the message and files
       const updated =
         mode === "reply"
           ? await replyRfi(projectName, rfi.id, {
-              message: message.trim(),
+              message: outgoing,
               attachments: files,
               resubmit: false,
             })
           : await (mode === "resubmit" ? resubmitRfi : reopenRfi)(projectName, rfi.id, {
-              message: message.trim(),
+              message: outgoing,
               attachments: files,
             });
       toast({
@@ -262,6 +284,9 @@ const ThreadComposerPanel = ({ mode, projectName, rfi, onCancel, onSubmitted }: 
         </Button>
       </div>
 
+      {/* Saved snippets of THIS person: pick one instead of typing the same wording again */}
+      <ReplyTemplatePicker message={message} onUse={setMessage} disabled={submitting} />
+
       <Textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
@@ -275,6 +300,8 @@ const ThreadComposerPanel = ({ mode, projectName, rfi, onCancel, onSubmitted }: 
           You are on the CC list, so your reply sets the status to Resubmitted.
         </p>
       )}
+
+      <SignOffOption sign={sign} disabled={submitting} />
 
       <input
         id={fileInputId}
@@ -357,9 +384,14 @@ export const RfiStatusActions = ({ projectName, rfi, onChanged, lastActor }: Pro
   // The backend sends canModify=false for them and also blocks every write
   // with a 403, so this only makes the screen match: buttons are greyed out.
   // The sender of the RFI is also allowed to change it, even when not on To/CC.
+  // A person the owner switched to RFI "View only" (Admin Console -> Access Control) can never
+  // change anything, whatever their place on the RFI is.
   const { name: authName } = useAuth();
-  const readOnly = !canModifyRfi(rfi, authName);
-  const READ_ONLY_HINT = "View only - you are not the sender or on the To or CC list of this RFI";
+  const { viewOnly: accountViewOnly } = useRfiAccess();
+  const readOnly = !canModifyRfi(rfi, authName, accountViewOnly);
+  const READ_ONLY_HINT = accountViewOnly
+    ? "View only - the owner gave you view-only access to RFIs"
+    : "View only - you are not the sender or on the To or CC list of this RFI";
 
   const applyStatus = async (status: RfiStatus, statusNote?: string) => {
     if (readOnly) return;
@@ -390,6 +422,11 @@ export const RfiStatusActions = ({ projectName, rfi, onChanged, lastActor }: Pro
     if (readOnly) return;
     setActivePanel((current) => (current === panel ? null : panel));
   };
+
+  // While one action's panel is open, the OTHER action buttons are locked (greyed out, "not allowed" mouse
+  // cursor) until the person presses Cancel or finishes. The open button stays clickable to close its panel.
+  const lockedBy = (own: string) => activePanel !== null && activePanel !== own;
+  const NO_CLICK = "disabled:pointer-events-auto disabled:cursor-not-allowed";
 
   const setButtonHovered = (key: string, hovered: boolean) => {
     setButtonHoverState((prev) => ({ ...prev, [key]: hovered }));
@@ -431,8 +468,9 @@ export const RfiStatusActions = ({ projectName, rfi, onChanged, lastActor }: Pro
       {readOnly && (
         <div className="flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/30 p-2 text-[11px] text-muted-foreground dark:bg-slate-900/50">
           <Eye className="h-3.5 w-3.5 shrink-0" />
-          View only - you are not on the To or CC list of this RFI, so you cannot change its
-          status, reply or resubmit.
+          {accountViewOnly
+            ? "View only - you have view-only access to RFIs, so you cannot change the status, reply or resubmit."
+            : "View only - you are not on the To or CC list of this RFI, so you cannot change its status, reply or resubmit."}
         </div>
       )}
       <div className={`flex flex-wrap items-center gap-1.5 ${readOnly ? "opacity-60" : ""}`}>
@@ -451,8 +489,8 @@ export const RfiStatusActions = ({ projectName, rfi, onChanged, lastActor }: Pro
                   ${isOpen
                     ? `${t.solid} border-transparent shadow-md scale-[1.04]`
                     : "hover:scale-[1.04] hover:shadow-sm active:scale-95 dark:bg-slate-950 dark:border-slate-700 dark:hover:bg-slate-900"}
-                  dark:text-white`}
-                disabled={busyStatus !== null || readOnly}
+                  dark:text-white ${NO_CLICK}`}
+                disabled={busyStatus !== null || readOnly || lockedBy("REOPEN")}
                 title={readOnly ? READ_ONLY_HINT : undefined}
                 onMouseEnter={() => setButtonHovered("REOPEN", true)}
                 onMouseLeave={() => setButtonHovered("REOPEN", false)}
@@ -485,8 +523,8 @@ export const RfiStatusActions = ({ projectName, rfi, onChanged, lastActor }: Pro
                   ? `${t.solid} border-transparent shadow-md scale-[1.04]`
                   : "hover:scale-[1.04] hover:shadow-sm active:scale-95 dark:bg-slate-950 dark:border-slate-700 dark:hover:bg-slate-900"}
                 ${isCurrent ? "opacity-60" : ""}
-                dark:text-white`}
-              disabled={busyStatus !== null || isCurrent || readOnly}
+                dark:text-white ${NO_CLICK}`}
+              disabled={busyStatus !== null || isCurrent || readOnly || lockedBy(status)}
               onMouseEnter={() => setButtonHovered(status, true)}
               onMouseLeave={() => setButtonHovered(status, false)}
               onClick={() => toggleAction(status)}
@@ -523,8 +561,8 @@ export const RfiStatusActions = ({ projectName, rfi, onChanged, lastActor }: Pro
               ${activePanel === "REPLY"
                 ? "shadow-md scale-[1.04]"
                 : "hover:scale-[1.04] hover:shadow-sm active:scale-95 dark:bg-slate-950 dark:border-slate-700 dark:hover:bg-slate-900"}
-              dark:text-white`}
-            disabled={busyStatus !== null || readOnly}
+              dark:text-white ${NO_CLICK}`}
+            disabled={busyStatus !== null || readOnly || lockedBy("REPLY")}
             title={readOnly ? READ_ONLY_HINT : undefined}
             onClick={() => togglePanel("REPLY")}
           >
@@ -547,8 +585,8 @@ export const RfiStatusActions = ({ projectName, rfi, onChanged, lastActor }: Pro
                 ${isOpen
                   ? "shadow-md scale-[1.04]"
                   : "hover:scale-[1.04] hover:shadow-sm active:scale-95 dark:bg-slate-950 dark:border-slate-700 dark:hover:bg-slate-900"}
-                dark:text-white`}
-              disabled={busyStatus !== null || readOnly}
+                dark:text-white ${NO_CLICK}`}
+              disabled={busyStatus !== null || readOnly || lockedBy("RESUBMITTED")}
               title={readOnly ? READ_ONLY_HINT : undefined}
               onMouseEnter={() => setButtonHovered("RESUBMITTED", true)}
               onMouseLeave={() => setButtonHovered("RESUBMITTED", false)}

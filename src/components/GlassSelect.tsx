@@ -9,6 +9,8 @@ import { Check, ChevronDown } from "lucide-react";
 //
 // • Mouse: hover opens the menu, click keeps it open.
 // • Touch: tap opens it.
+// • Optional dwell-select (dwellSelectMs): keep the mouse on an option for that long and it is picked
+//   automatically, with a thin progress line showing the countdown. Moving away cancels it.
 // • Keyboard: Enter / Space / ↑ / ↓ open it, arrows move, Enter picks, Esc closes.
 // • The menu is rendered in a portal, so it is never clipped by a scrolling
 //   or overflow-hidden parent (like the RFI form).
@@ -33,6 +35,8 @@ interface GlassSelectProps<T extends string> {
   onChange: (value: T) => void;
   disabled?: boolean;
   className?: string;
+  /** Mouse only: hover an option this many ms and it gets selected (and the menu closes). Off when 0 / not set. */
+  dwellSelectMs?: number;
 }
 
 const GLASS_STYLES = `
@@ -189,7 +193,14 @@ const GLASS_STYLES = `
     animation: gs-item-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
     animation-delay: calc(var(--i, 0) * 26ms + 30ms);
   }
+  .gs-option { position: relative; overflow: hidden; }
   .gs-option + .gs-option { margin-top: 2px; }
+  /* dwell-select countdown: a thin line fills along the bottom while the pointer rests on the option */
+  .gs-option::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: 3px; height: 2.5px; border-radius: 99px; pointer-events: none;
+    background: var(--gs-accent, hsl(var(--primary))); transform: scaleX(0); transform-origin: left; opacity: 0; }
+  .gs-option[data-dwell="true"] { background: color-mix(in srgb, var(--gs-accent, hsl(var(--primary))) 12%, transparent); }
+  .gs-option[data-dwell="true"]::after { opacity: 1; animation: gs-dwell var(--gs-dwell, 2000ms) linear forwards; }
+  @keyframes gs-dwell { from { transform: scaleX(0); } to { transform: scaleX(1); } }
   .gs-option:hover, .gs-option:focus-visible { background: hsl(var(--foreground) / 0.08); }
   .gs-option:focus-visible { box-shadow: inset 0 0 0 1.5px hsl(var(--primary) / 0.5); }
   .gs-option:active { transform: scale(0.99); background: hsl(var(--foreground) / 0.12); }
@@ -213,6 +224,7 @@ const GLASS_STYLES = `
 
   @media (prefers-reduced-motion: reduce) {
     .gs-val, .gs-menu, .gs-option { animation: none !important; }
+    .gs-option[data-dwell="true"]::after { animation-duration: var(--gs-dwell, 2000ms) !important; }
     .gs-trigger, .gs-chev, .gs-check, .gs-option { transition-duration: 0.01ms !important; }
   }
 `;
@@ -235,6 +247,7 @@ export function GlassSelect<T extends string>({
   onChange,
   disabled,
   className,
+  dwellSelectMs = 0,
 }: GlassSelectProps<T>) {
   useGlassStyles();
 
@@ -243,11 +256,18 @@ export function GlassSelect<T extends string>({
   const keyboardRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const dwellTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [dwelling, setDwelling] = useState<T | null>(null); // option whose countdown is running
 
   const selected = options.find((o) => o.value === value) ?? options[0];
 
   const clearTimer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
+  };
+  const stopDwell = () => {
+    if (dwellTimer.current) clearTimeout(dwellTimer.current);
+    dwellTimer.current = null;
+    setDwelling(null);
   };
   const openMenu = (pin = false) => {
     clearTimer();
@@ -256,6 +276,7 @@ export function GlassSelect<T extends string>({
   };
   const closeMenu = () => {
     clearTimer();
+    stopDwell();
     pinnedRef.current = false;
     setOpen(false);
   };
@@ -265,7 +286,10 @@ export function GlassSelect<T extends string>({
     timerRef.current = setTimeout(closeMenu, 160);
   };
 
-  useEffect(() => clearTimer, []);
+  useEffect(() => () => {
+    clearTimer();
+    if (dwellTimer.current) clearTimeout(dwellTimer.current);
+  }, []);
   useEffect(() => {
     if (disabled) closeMenu();
   }, [disabled]);
@@ -282,6 +306,14 @@ export function GlassSelect<T extends string>({
   const handleSelect = (next: T) => {
     if (next !== value) onChange(next);
     closeMenu();
+  };
+
+  // Mouse rests on an option for dwellSelectMs -> pick it. (Already-selected option: nothing to do.)
+  const startDwell = (next: T) => {
+    stopDwell();
+    if (dwellSelectMs <= 0 || next === value) return;
+    setDwelling(next);
+    dwellTimer.current = setTimeout(() => handleSelect(next), dwellSelectMs);
   };
 
   const accent = selected?.accent;
@@ -382,7 +414,14 @@ export function GlassSelect<T extends string>({
               title={o.title}
               tabIndex={-1}
               className="gs-option"
-              style={{ "--i": i } as CSSProperties}
+              data-dwell={dwelling === o.value}
+              style={{ "--i": i, "--gs-dwell": `${dwellSelectMs}ms`, ...(o.accent ? { "--gs-accent": o.accent } : {}) } as CSSProperties}
+              onPointerEnter={(e) => {
+                if (e.pointerType === "mouse") startDwell(o.value);
+              }}
+              onPointerLeave={(e) => {
+                if (e.pointerType === "mouse") stopDwell();
+              }}
               onClick={() => handleSelect(o.value)}
             >
               {o.leading}

@@ -24,6 +24,7 @@ const styles: Record<string, string> = {
   ISSUED: "bg-indigo-500/15 text-indigo-600 border-indigo-500/30", // Indigo: Formally issued
   AWAITING_RESPONSE: "bg-amber-500/15 text-amber-600 border-amber-500/30", // Amber: Pending action from recipient
   RESPONSE_RECEIVED: "bg-teal-500/15 text-teal-600 border-teal-500/30", // Teal: Response in hand
+  PARTIALLY_ANSWERED: "bg-blue-500/15 text-blue-600 border-blue-500/30", // Blue: some answers in, rest still open
   UNDER_REVIEW: "bg-purple-500/15 text-purple-600 border-purple-500/30", // Purple: Active evaluation
   OUTSTANDING: "bg-orange-500/15 text-orange-600 border-orange-500/30", // Orange: High-priority/overdue
   CLOSED: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30", // Emerald: Successfully resolved
@@ -51,6 +52,7 @@ const labels: Record<string, string> = {
   ISSUED: "Issued",
   AWAITING_RESPONSE: "Awaiting Response",
   RESPONSE_RECEIVED: "Response Received",
+  PARTIALLY_ANSWERED: "Partially Answered",
   UNDER_REVIEW: "Under Review",
   OUTSTANDING: "Outstanding",
   CLOSED: "Closed",

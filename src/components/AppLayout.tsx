@@ -5,14 +5,20 @@ import { useAuth } from "@/context/AuthContext";
 import NotificationBell from "./NotificationBell";
 import { MessagingBadge } from "./MessagingBadge";
 import { ThemeToggle } from "./ThemeToggle";
+import { ThemeColorPicker } from "./ThemeColorPicker";
+import { AppGuide } from "./AppGuide";
 import { FloatingCalculator } from "./FloatingCalculator";
 import { FloatingNotepad } from "./FloatingNotepad";
+import { HeaderOwnerMailLink } from "./HeaderOwnerMailLink";
 import { HeaderDocumentLink } from "./HeaderDocumentLink";
 import { useState, useEffect, useRef } from "react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useRfiReplyCheck } from "@/hooks/useRfiReplyCheck";
 import { hardReload } from "./HardReloadButton";
 import { useHeaderShortcuts } from "@/hooks/useHeaderShortcuts";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { CommandPalette } from "./CommandPalette";
+import { OfflineBanner } from "./OfflineBanner";
 
 // ─── Display name formatter ────────────────────────────────────────────────
 const displayNameCache = new Map<string, string>();
@@ -62,6 +68,7 @@ export const AppLayout = () => {
   // Header shortcuts: Ctrl+M Messages, Ctrl+A Announcements, Ctrl+D Documents, Ctrl+N Notepad
   // (Ctrl+T theme lives in ThemeContext). Every one also works as Ctrl+Alt+<key>.
   useHeaderShortcuts();
+  usePageTitle();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [reloading, setReloading] = useState(false);
@@ -177,7 +184,9 @@ export const AppLayout = () => {
               title={`Welcome, ${formatDisplayName(user?.name || "User")} — click to hard reload (clears cache & loads the latest version)`}
               aria-label="Hard reload the app"
             >
-              Welcome, {formatDisplayName(user?.name || "User")} 👋
+              <span className="hdr-greet">Welcome,</span>{" "}
+              <span className="hdr-name">{formatDisplayName(user?.name || "User")}</span>{" "}
+              <span className="hdr-wave" aria-hidden="true">👋</span>
             </button>
           </h1>
 
@@ -196,16 +205,29 @@ export const AppLayout = () => {
             {/* ── MESSAGING BADGE ── */}
             <MessagingBadge />
 
+            {/* ── OWNER MAIL (opens the /owner-mail page, like Messages and Documents) — OWNER only ── */}
+            {isOwner && <HeaderOwnerMailLink />}
+
             {/* ── NOTEPAD ── */}
             <FloatingNotepad />
 
             {/* ── CALCULATOR ── */}
             <FloatingCalculator />
             
+            <CommandPalette />
+
+            {/* ── HOW TO USE THIS APP (the "i" guide, per role) ── */}
+            <AppGuide />
+
+            {/* ── THEME COLOUR (sidebar + accents) ── */}
+            <ThemeColorPicker />
+
             {/* ── DARK / LIGHT TOGGLE ── */}
             <ThemeToggle />
           </div>
         </header>
+
+        <OfflineBanner />
 
         {/* PAGE CONTENT */}
         <main
@@ -217,7 +239,7 @@ export const AppLayout = () => {
           <div
             className={`page-content ${
               location.pathname.includes("messages") ? "messages-content" : ""
-            }`}
+            } ${location.pathname.startsWith("/rfi") ? "rfi-content" : ""}`}
           >
             <Outlet />
           </div>
@@ -315,18 +337,56 @@ export const AppLayout = () => {
         .app-header {
           position: sticky;
           top: 0;
-          z-index: 10;
+          z-index: 200;
           flex-shrink: 0;
           display: flex;
           height: 56px;
           align-items: center;
           justify-content: space-between;
-          border-bottom: 1px solid hsl(var(--border));
-          background: hsl(var(--card));
+          border-bottom: 1px solid hsl(var(--foreground) / 0.08);
+          background: transparent;
           padding: 0 24px;
           gap: 12px;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+          box-shadow: 0 8px 30px -18px hsl(var(--primary) / 0.45), 0 1px 0 hsl(0 0% 100% / 0.04) inset;
+          /* IMPORTANT: must stay visible. The calculator / notepad panels are
+             position:fixed elements rendered inside the header; clipping here hides them. */
+          overflow: visible;
+        }
+
+        /* ── GLASS LAYER ─────────────────────────────────────────────
+           The blur lives on a pseudo-element (not on the header itself) so it
+           never becomes the containing block of any popup inside the header. */
+        .app-header::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          z-index: -2;
+          pointer-events: none;
           overflow: hidden;
+          background:
+            linear-gradient(115deg, hsl(var(--primary) / 0.16), hsl(var(--card) / 0.55) 38%, hsl(var(--card) / 0.45) 62%, hsl(var(--primary) / 0.12));
+          -webkit-backdrop-filter: blur(22px) saturate(180%);
+          backdrop-filter: blur(22px) saturate(180%);
+        }
+
+        /* ── LIVING AURORA: soft colour blobs drifting behind the glass ── */
+        .app-header::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          z-index: -1;
+          pointer-events: none;
+          background:
+            radial-gradient(38% 90% at 12% 50%, hsl(var(--primary) / 0.34), transparent 70%),
+            radial-gradient(32% 90% at 50% 30%, rgba(168, 85, 247, 0.22), transparent 70%),
+            radial-gradient(36% 90% at 88% 60%, rgba(6, 182, 212, 0.26), transparent 70%);
+          background-size: 130% 100%;
+          background-repeat: no-repeat;
+          animation: hdr-aurora 16s ease-in-out infinite alternate;
+        }
+        @keyframes hdr-aurora {
+          0%   { background-position: 0% 0; }
+          100% { background-position: 100% 0; }
         }
 
         .header-title {
@@ -361,8 +421,46 @@ export const AppLayout = () => {
         }
 
         .header-title-btn:hover:not(:disabled) {
-          background: hsl(var(--muted));
+          background: hsl(var(--foreground) / 0.09);
+          border-color: hsl(var(--primary) / 0.5);
+          box-shadow: 0 10px 24px -14px hsl(var(--primary) / 0.7), 0 0 0 3px hsl(var(--primary) / 0.12);
+          transform: translateY(-1px);
         }
+        .header-title-btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+
+        /* Greeting: glass pill, shimmering name, waving hand */
+        .header-title-btn {
+          border: 1px solid hsl(var(--foreground) / 0.1);
+          background: linear-gradient(180deg, hsl(var(--foreground) / 0.07), hsl(var(--foreground) / 0.02));
+          box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.28), 0 6px 18px -12px hsl(var(--foreground) / 0.5);
+          border-radius: 999px;
+          padding: 6px 16px;
+          margin-left: 0;
+          transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.3s ease, transform 0.25s ease;
+          animation: hdr-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+        }
+        .hdr-greet { opacity: 0.8; font-weight: 500; }
+        .hdr-name {
+          font-weight: 800;
+          letter-spacing: -0.01em;
+          background: linear-gradient(100deg, hsl(var(--primary)), #a855f7 35%, #06b6d4 65%, hsl(var(--primary)));
+          background-size: 250% 100%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          color: transparent;
+          animation: hdr-shimmer 6s linear infinite;
+        }
+        @keyframes hdr-shimmer { to { background-position: -250% 0; } }
+        .hdr-wave { display: inline-block; transform-origin: 70% 75%; animation: hdr-wave 2.6s ease-in-out 0.8s 2; }
+        .header-title-btn:hover .hdr-wave { animation: hdr-wave 1.2s ease-in-out infinite; }
+        @keyframes hdr-wave {
+          0%, 60%, 100% { transform: rotate(0); }
+          10%, 30% { transform: rotate(16deg); }
+          20%, 40% { transform: rotate(-10deg); }
+          50% { transform: rotate(8deg); }
+        }
+        @keyframes hdr-rise { from { opacity: 0; translate: 0 -8px; } }
 
         .header-title-btn:focus-visible {
           outline: 2px solid hsl(var(--ring));
@@ -388,6 +486,87 @@ export const AppLayout = () => {
         .header-actions > * {
           flex-shrink: 0;
         }
+
+        /* ── Icon row = one floating glass capsule ── */
+        .app-header .header-actions {
+          position: relative;
+          padding: 4px 10px;
+          gap: 10px;
+          border-radius: 18px;
+          border: 1px solid hsl(var(--foreground) / 0.1);
+          box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.3), 0 10px 26px -16px hsl(var(--foreground) / 0.55);
+          animation: hdr-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.08s backwards;
+        }
+        .app-header .header-actions::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          z-index: -1;
+          pointer-events: none;
+          border-radius: inherit;
+          background: linear-gradient(180deg, hsl(var(--foreground) / 0.08), hsl(var(--foreground) / 0.02));
+          -webkit-backdrop-filter: blur(14px) saturate(160%);
+          backdrop-filter: blur(14px) saturate(160%);
+        }
+        /* a light line that glides along the capsule's top edge */
+        .app-header .header-actions::after {
+          content: "";
+          position: absolute;
+          left: 14px;
+          right: 14px;
+          top: 0;
+          height: 1px;
+          pointer-events: none;
+          background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.85), transparent);
+          background-size: 40% 100%;
+          background-repeat: no-repeat;
+          animation: hdr-glide 5s ease-in-out infinite;
+        }
+        @keyframes hdr-glide { 0% { background-position: -50% 0; } 100% { background-position: 150% 0; } }
+
+        /* each icon floats in one after another */
+        .app-header .header-actions > *:not(.fc-panel):not(.np-panel) { animation: hdr-pop 0.5s cubic-bezier(0.34, 1.4, 0.64, 1) backwards; }
+        .app-header .header-actions > *:nth-child(1) { animation-delay: 0.15s; }
+        .app-header .header-actions > *:nth-child(2) { animation-delay: 0.21s; }
+        .app-header .header-actions > *:nth-child(3) { animation-delay: 0.27s; }
+        .app-header .header-actions > *:nth-child(4) { animation-delay: 0.33s; }
+        .app-header .header-actions > *:nth-child(5) { animation-delay: 0.39s; }
+        .app-header .header-actions > *:nth-child(6) { animation-delay: 0.45s; }
+        .app-header .header-actions > *:nth-child(7) { animation-delay: 0.51s; }
+        .app-header .header-actions > *:nth-child(n+8) { animation-delay: 0.57s; }
+        @keyframes hdr-pop { from { opacity: 0; translate: 0 -8px; scale: 0.7; } }
+
+        /* glass tile + glow under the pointer */
+        .app-header .header-actions .header-icon-btn {
+          border-radius: 12px;
+          border-color: transparent;
+          transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .app-header .header-actions .header-icon-btn:hover {
+          background: linear-gradient(180deg, hsl(var(--foreground) / 0.14), hsl(var(--foreground) / 0.05));
+          border-color: hsl(var(--primary) / 0.45);
+          box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.35), 0 10px 22px -10px hsl(var(--primary) / 0.75);
+          transform: translateY(-2px) scale(1.08);
+        }
+        .app-header .header-actions .header-icon-btn:active { transform: translateY(0) scale(0.94); }
+        .app-header .header-actions .header-icon-btn svg { transition: transform 0.3s ease; }
+        .app-header .header-actions .header-icon-btn:hover svg { transform: rotate(-8deg) scale(1.08); }
+
+        @media (prefers-reduced-motion: reduce) {
+          .app-header::after, .hdr-name, .hdr-wave, .header-title-btn,
+          .app-header .header-actions, .app-header .header-actions::after, .app-header .header-actions > * { animation: none !important; }
+          .header-title-btn, .app-header .header-actions .header-icon-btn, .app-header .header-actions .header-icon-btn svg { transition: none !important; }
+        }
+        /* room around the greeting pill so its glow is not cut off by the title's overflow */
+        .app-header .header-title { padding: 6px 8px 6px 2px; }
+        @media (max-width: 768px) {
+          .app-header .header-actions { padding: 3px 6px; gap: 4px; border-radius: 14px; }
+          .header-title-btn { padding: 4px 12px; border-radius: 16px; }
+        }
+        /* the dark theme gets a little more glow, a little less white */
+        .dark .app-header { border-bottom-color: hsl(0 0% 100% / 0.08); }
+        .dark .app-header::before { background: linear-gradient(115deg, hsl(var(--primary) / 0.22), hsl(var(--card) / 0.5) 38%, hsl(var(--card) / 0.4) 62%, hsl(var(--primary) / 0.16)); }
+        .dark .app-header .header-actions, .dark .header-title-btn { box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.12), 0 10px 26px -16px rgba(0,0,0,0.8); }
 
         /* Shared sizing/spacing/hover treatment for every top header
            icon control: theme toggle, document link, messaging, calculator,
@@ -438,6 +617,17 @@ export const AppLayout = () => {
         .page-main {
           overscroll-behavior: contain;
           -webkit-overflow-scrolling: touch;
+        }
+
+        /* RFI page: no empty space above the tab header or on the left / right / bottom.
+           (The RFI page keeps its own small gap.) Phones keep the safe area at the bottom. */
+        .page-content.rfi-content {
+          padding: 0;
+          padding-bottom: env(safe-area-inset-bottom, 0px);
+          /* Take exactly the height that is left under the header, so the RFI page can fill it
+             (no fixed "100vh minus a guess" any more, which left an empty strip at the bottom). */
+          height: 100%;
+          box-sizing: border-box;
         }
 
         /* Messages specific styles */

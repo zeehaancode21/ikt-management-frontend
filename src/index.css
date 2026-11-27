@@ -648,3 +648,12 @@ button,
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Keyboard focus ring ──────────────────────────────────────────────────
+   Visible only for keyboard users (:focus-visible), never on mouse clicks.
+   :where() keeps specificity at zero, so any component that already styles its
+   own focus (shadcn buttons/inputs) keeps winning. Pure CSS: no runtime cost. */
+:where(a, button, [role="button"], [role="tab"], [role="option"], summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}

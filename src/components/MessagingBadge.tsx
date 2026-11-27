@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useNotifications } from "@/context/NotificationsContext";
 import { useState, useEffect } from "react";
 import { AnimatedIconBase } from "@/components/icons/AnimatedIconbase";
@@ -7,6 +7,8 @@ import { useTheme } from "@/context/ThemeContext";
 export const MessagingBadge = () => {
   const { counts } = useNotifications();
   const { theme } = useTheme();
+  const location = useLocation();
+  const isActive = location.pathname.startsWith("/messages");
   const [animateBounce, setAnimateBounce] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -24,7 +26,8 @@ export const MessagingBadge = () => {
   return (
     <Link
       to="/messages"
-      className="messaging-badge-wrapper"
+      className={`messaging-badge-wrapper header-icon-btn ${isActive ? "active" : ""}`}
+      aria-current={isActive ? "page" : undefined}
       title={unreadCount > 0 ? `${unreadCount} unread messages (Ctrl+M)` : "Messages (Ctrl+M)"}
       aria-keyshortcuts="Control+M Control+Alt+M"
       onMouseEnter={() => setIsHovered(true)}
@@ -32,7 +35,7 @@ export const MessagingBadge = () => {
     >
       <div className="messaging-badge-container">
         <AnimatedIconBase
-          className="messaging-icon"
+          className={`messaging-icon hdr-icon-art ${theme === "dark" ? "hdr-icon-art-dark" : ""}`}
           pngSrc="/icons/message.png"
           animatedSrc="/icons/message.gif"
           alt="Messages"
@@ -40,7 +43,6 @@ export const MessagingBadge = () => {
           triggerParentHover
           isParentHovered={isHovered}
           whiteBackground="auto"
-          forceWhite={theme === "dark"}
         />
         {unreadCount > 0 && (
           <span
@@ -54,27 +56,14 @@ export const MessagingBadge = () => {
       <style>{`
         .messaging-badge-wrapper {
           position: relative;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
           text-decoration: none;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          height: 40px;
-          width: 40px;
-          border-radius: 8px;
           color: hsl(var(--foreground));
-          border: 1px solid transparent;
         }
 
-        .messaging-badge-wrapper:hover {
-          background: hsl(var(--muted) / 0.5);
-          border-color: hsl(var(--border));
-          transform: scale(1.05);
-        }
-
-        .messaging-badge-wrapper:active {
-          transform: scale(0.95);
+        /* current page: soft tinted tile with a ring (same as Owner Mail / Documents) */
+        .messaging-badge-wrapper.active {
+          background: hsl(var(--primary) / 0.12);
+          box-shadow: inset 0 0 0 1.5px hsl(var(--primary) / 0.45);
         }
 
         .messaging-badge-container {
@@ -84,13 +73,21 @@ export const MessagingBadge = () => {
           justify-content: center;
         }
 
-        .messaging-icon {
-          transition: all 0.3s ease;
+        /* Dark theme: a flat white silhouette turned the speech bubble into a plain blob.
+           Inverting keeps the inner detail (lines / dots) and the accent colours. */
+        .hdr-icon-art-dark {
+          filter: invert(1) hue-rotate(180deg) brightness(1.1) saturate(1.15);
         }
 
-        .messaging-badge-wrapper:hover .messaging-icon {
-          transform: scale(1.1);
+        .dark .messaging-badge-wrapper {
+          background: hsl(0 0% 100% / 0.04);
+          border-color: hsl(0 0% 100% / 0.08);
         }
+        .dark .messaging-badge-wrapper.active {
+          background: hsl(var(--primary) / 0.22);
+          box-shadow: inset 0 0 0 1.5px hsl(var(--primary) / 0.6), 0 6px 18px -8px hsl(var(--primary) / 0.7);
+        }
+        .dark .messaging-badge-count { border-color: hsl(var(--card)); }
 
         .messaging-badge-count {
           position: absolute;
@@ -141,11 +138,6 @@ export const MessagingBadge = () => {
         }
 
         @media (max-width: 768px) {
-          .messaging-badge-wrapper {
-            height: 36px;
-            width: 36px;
-          }
-
           .messaging-badge-count {
             min-width: 18px;
             height: 18px;
