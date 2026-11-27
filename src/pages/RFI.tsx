@@ -140,7 +140,19 @@ const RFI_PAGE_CSS = `
     background: linear-gradient(180deg, hsl(var(--muted) / 0.85), hsl(var(--muted) / 0.55));
     box-shadow: inset 0 1px 0 hsl(var(--background) / 0.7), 0 8px 20px -14px hsl(var(--foreground) / 0.35);
     animation: rfi-tabs-drop 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    /* Small screens: the strip never grows wider than the screen. It scrolls sideways (swipe or mouse wheel) and every tab
+       keeps its full size and stays clickable. Start-aligned, because a centred row that overflows cuts off its left side. */
+    max-width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
   }
+  .rfi-tabs-list::-webkit-scrollbar { display: none; }
+  .rfi-tabs-list > * { flex-shrink: 0; scroll-snap-align: center; }
   @keyframes rfi-tabs-drop {
     0%   { opacity: 0; transform: translateY(-8px) scale(0.97); }
     100% { opacity: 1; transform: translateY(0) scale(1); }
@@ -1038,6 +1050,16 @@ const RFI = () => {
 
   const handleViewAll = useCallback(() => setView("history"), []);
 
+  // The tab strip scrolls sideways on small screens: keep the selected tab in view (only the strip moves, never the page).
+  const tabsListRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const bar = tabsListRef.current;
+    const active = bar?.querySelector<HTMLElement>('[data-state="active"]');
+    if (!bar || !active || bar.scrollWidth <= bar.clientWidth) return;
+    const left = active.getBoundingClientRect().left - bar.getBoundingClientRect().left + bar.scrollLeft;
+    bar.scrollTo({ left: Math.max(0, left - (bar.clientWidth - active.offsetWidth) / 2), behavior: "smooth" });
+  }, [view]);
+
   // "Open RFIs" on a project card of the Projects section: pick that client + project
   // and land on its RFI list.
   const handleOpenProjectRfis = useCallback((clientName: string, projectName: string) => {
@@ -1078,8 +1100,8 @@ const RFI = () => {
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 rfi-toolbar-enter">
         {/* From lg up: tabs + client/project stay on ONE line, with the full client / project names visible */}
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 lg:flex-nowrap">
-          <Tabs value={view} onValueChange={(v) => setView(v as RfiView)} className="w-fit shrink-0">
-            <TabsList className="rfi-tabs-list">
+          <Tabs value={view} onValueChange={(v) => setView(v as RfiView)} className="w-fit max-w-full min-w-0 shrink-0">
+            <TabsList className="rfi-tabs-list" ref={tabsListRef}>
               <RfiTab value="history" title="Every RFI of this project with its status, replies and timeline" style={STYLE_HISTORY} active={view === "history"}>
                 RFIs
               </RfiTab>

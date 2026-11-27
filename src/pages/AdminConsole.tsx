@@ -1760,6 +1760,15 @@ function EmployeesTab() {
   // form ("add"). Defaults to the roster so owners land on "All Employees"
   // first and opt into "Add Employee" only when they need it.
   const [section, setSection] = useState<"list" | "add" | "access">("list");
+  // The tab bar scrolls sideways on small screens: keep the selected tab in view (only the bar moves, never the page).
+  const subtabsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const bar = subtabsRef.current;
+    const active = bar?.querySelector<HTMLElement>(".ac-subtab-btn.active");
+    if (!bar || !active || bar.scrollWidth <= bar.clientWidth) return;
+    const target = active.offsetLeft - (bar.clientWidth - active.offsetWidth) / 2;
+    bar.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+  }, [section]);
   const [showPw, setShowPw] = useState(false);
   // Roster controls: role filter (from the stat cards), layout, sort and collapsed sections.
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
@@ -2024,7 +2033,7 @@ function EmployeesTab() {
       </AnimatePresence>
 
       {/* Sub-section toggle: All Employees ↔ Add Employee */}
-      <div className="ac-subtabs" role="tablist" aria-label="Employee sections">
+      <div className="ac-subtabs" role="tablist" aria-label="Employee sections" ref={subtabsRef}>
         <motion.button
           type="button"
           className={`ac-subtab-btn ${section === "list" ? "active" : ""}`}
@@ -2768,9 +2777,33 @@ export default function AdminConsole() {
           border-radius: 20px;
         }
 
+        /* Small screens: the three tabs (All Employees / Add Employee / Access Control) no longer squeeze or get cut
+           off. The bar scrolls sideways with a swipe or the mouse wheel, every tab keeps its full size and stays
+           clickable, and the selected tab is scrolled into view. */
         @media (max-width: 560px) {
-          .ac-subtabs { width: 100%; }
-          .ac-subtab-btn { flex: 1; justify-content: center; }
+          .ac-subtabs {
+            position: relative; /* so the selected tab's position is measured from the bar */
+            display: flex;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            overflow-y: hidden;
+            overscroll-behavior-x: contain;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-x;
+            scroll-snap-type: x proximity;
+            scrollbar-width: none;
+          }
+          .ac-subtabs::-webkit-scrollbar { display: none; }
+          .ac-subtab-btn {
+            flex: 0 0 auto;
+            justify-content: center;
+            scroll-snap-align: center;
+            padding: 8px 14px;
+            touch-action: manipulation;
+          }
         }
 
         .ac-card {

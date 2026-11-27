@@ -694,18 +694,16 @@ export const AppLayout = () => {
             margin-left: 40px;
           }
 
-          /* Phones: let "Welcome, <name>" wrap onto two lines instead of
-             being cut off, so long names stay readable. */
+          /* Tablets / large phones: "Welcome, <name> 👋" stays on ONE tidy line; a very long name is
+             shortened with "..." instead of breaking the pill. (Small phones: see the 480px block.) */
           .header-title-btn {
-            display: -webkit-box;
-            -webkit-box-orient: vertical;
-            -webkit-line-clamp: 2;
-            white-space: normal;
-            word-break: break-word;
-            overflow-wrap: anywhere;
-            line-height: 1.2;
-            padding: 2px 6px;
-            margin-left: -6px;
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.25;
+            padding: 5px 12px;
+            margin-left: 0;
           }
 
           .header-actions {
@@ -783,8 +781,41 @@ export const AppLayout = () => {
             margin-left: 35px;
           }
 
+          /* Small phones: there is little room beside the icon row, so the greeting is laid out on purpose as a
+             compact two-line card: a small "Welcome," above, the name in bold below (shortened with "..." when
+             very long). Same size pill, nothing wraps by accident, the 👋 is dropped to save width. */
           .header-title-btn {
-            font-size: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 1px;
+            min-width: 0;
+            max-width: 100%;
+            padding: 4px 11px;
+            border-radius: 14px;
+            line-height: 1.15;
+            white-space: nowrap;
+            overflow: hidden;
+          }
+          .header-title-btn .hdr-greet {
+            display: block;
+            font-size: 9.5px;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            line-height: 1.1;
+            opacity: 0.7;
+          }
+          .header-title-btn .hdr-name {
+            display: block;
+            max-width: 100%;
+            font-size: 12.5px;
+            line-height: 1.2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .header-title-btn .hdr-wave {
+            display: none;
           }
 
           .page-content {
@@ -799,18 +830,25 @@ export const AppLayout = () => {
             gap: 2px;
           }
 
+          /* A tighter icon capsule leaves more room for the greeting beside it. */
+          .app-header .header-actions {
+            padding: 3px 4px;
+            gap: 1px;
+            border-radius: 12px;
+          }
+
           .app-header .header-actions .header-icon-btn,
           .app-header .header-actions .messaging-badge-wrapper {
-            width: 30px;
-            height: 30px;
-            min-width: 30px;
-            min-height: 30px;
+            width: 28px;
+            height: 28px;
+            min-width: 28px;
+            min-height: 28px;
             border-radius: 8px;
           }
 
           .app-header .header-actions .holiday-logo {
-            width: 30px;
-            height: 30px;
+            width: 28px;
+            height: 28px;
           }
         }
 
@@ -826,20 +864,27 @@ export const AppLayout = () => {
           }
 
           .header-title-btn {
-            font-size: 11px;
+            padding: 3px 9px;
+            border-radius: 12px;
+          }
+          .header-title-btn .hdr-greet {
+            font-size: 8.5px;
+          }
+          .header-title-btn .hdr-name {
+            font-size: 11.5px;
           }
 
           .app-header .header-actions .header-icon-btn,
           .app-header .header-actions .messaging-badge-wrapper {
-            width: 28px;
-            height: 28px;
-            min-width: 28px;
-            min-height: 28px;
+            width: 26px;
+            height: 26px;
+            min-width: 26px;
+            min-height: 26px;
           }
 
           .app-header .header-actions .holiday-logo {
-            width: 28px;
-            height: 28px;
+            width: 26px;
+            height: 26px;
           }
         }
 
